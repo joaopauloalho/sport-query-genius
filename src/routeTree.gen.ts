@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppResultadoRouteImport } from './routes/app.resultado'
+import { Route as AppExplorarRouteImport } from './routes/app.explorar'
 
 const AppRoute = AppRouteImport.update({
   id: '/app',
@@ -34,15 +35,22 @@ const AppResultadoRoute = AppResultadoRouteImport.update({
   path: '/resultado',
   getParentRoute: () => AppRoute,
 } as any)
+const AppExplorarRoute = AppExplorarRouteImport.update({
+  id: '/explorar',
+  path: '/explorar',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/explorar': typeof AppExplorarRoute
   '/app/resultado': typeof AppResultadoRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app/explorar': typeof AppExplorarRoute
   '/app/resultado': typeof AppResultadoRoute
   '/app': typeof AppIndexRoute
 }
@@ -50,15 +58,16 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/explorar': typeof AppExplorarRoute
   '/app/resultado': typeof AppResultadoRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/app/resultado' | '/app/'
+  fullPaths: '/' | '/app' | '/app/explorar' | '/app/resultado' | '/app/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app/resultado' | '/app'
-  id: '__root__' | '/' | '/app' | '/app/resultado' | '/app/'
+  to: '/' | '/app/explorar' | '/app/resultado' | '/app'
+  id: '__root__' | '/' | '/app' | '/app/explorar' | '/app/resultado' | '/app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -96,15 +105,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppResultadoRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/explorar': {
+      id: '/app/explorar'
+      path: '/explorar'
+      fullPath: '/app/explorar'
+      preLoaderRoute: typeof AppExplorarRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppExplorarRoute: typeof AppExplorarRoute
   AppResultadoRoute: typeof AppResultadoRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppExplorarRoute: AppExplorarRoute,
   AppResultadoRoute: AppResultadoRoute,
   AppIndexRoute: AppIndexRoute,
 }
