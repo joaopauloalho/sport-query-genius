@@ -16,6 +16,7 @@ import { Route as AppResultadoRouteImport } from './routes/app.resultado'
 import { Route as AppJogosRouteImport } from './routes/app.jogos'
 import { Route as AppJogadoresRouteImport } from './routes/app.jogadores'
 import { Route as AppExplorarRouteImport } from './routes/app.explorar'
+import { Route as AppEquipesRouteImport } from './routes/app.equipes'
 
 const AppRoute = AppRouteImport.update({
   id: '/app',
@@ -52,10 +53,16 @@ const AppExplorarRoute = AppExplorarRouteImport.update({
   path: '/explorar',
   getParentRoute: () => AppRoute,
 } as any)
+const AppEquipesRoute = AppEquipesRouteImport.update({
+  id: '/equipes',
+  path: '/equipes',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/equipes': typeof AppEquipesRoute
   '/app/explorar': typeof AppExplorarRoute
   '/app/jogadores': typeof AppJogadoresRoute
   '/app/jogos': typeof AppJogosRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app/equipes': typeof AppEquipesRoute
   '/app/explorar': typeof AppExplorarRoute
   '/app/jogadores': typeof AppJogadoresRoute
   '/app/jogos': typeof AppJogosRoute
@@ -74,6 +82,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/equipes': typeof AppEquipesRoute
   '/app/explorar': typeof AppExplorarRoute
   '/app/jogadores': typeof AppJogadoresRoute
   '/app/jogos': typeof AppJogosRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/app/equipes'
     | '/app/explorar'
     | '/app/jogadores'
     | '/app/jogos'
@@ -93,6 +103,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/app/equipes'
     | '/app/explorar'
     | '/app/jogadores'
     | '/app/jogos'
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/app/equipes'
     | '/app/explorar'
     | '/app/jogadores'
     | '/app/jogos'
@@ -165,10 +177,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppExplorarRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/equipes': {
+      id: '/app/equipes'
+      path: '/equipes'
+      fullPath: '/app/equipes'
+      preLoaderRoute: typeof AppEquipesRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppEquipesRoute: typeof AppEquipesRoute
   AppExplorarRoute: typeof AppExplorarRoute
   AppJogadoresRoute: typeof AppJogadoresRoute
   AppJogosRoute: typeof AppJogosRoute
@@ -177,6 +197,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppEquipesRoute: AppEquipesRoute,
   AppExplorarRoute: AppExplorarRoute,
   AppJogadoresRoute: AppJogadoresRoute,
   AppJogosRoute: AppJogosRoute,
