@@ -34,7 +34,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Scoutly AI — Dados esportivos sem horas de pesquisa" },
       {
         property: "og:description",
-        content: "Pergunte qualquer coisa sobre esportes. Encontre em segundos o que levaria horas para pesquisar.",
+        content: "Faça perguntas em linguagem natural e transforme estatísticas esportivas em respostas, gráficos e insights. Para jornalistas, criadores e analistas.",
       },
     ],
   }),
