@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppResultadoRouteImport } from './routes/app.resultado'
+import { Route as AppJogosRouteImport } from './routes/app.jogos'
 import { Route as AppExplorarRouteImport } from './routes/app.explorar'
 
 const AppRoute = AppRouteImport.update({
@@ -35,6 +36,11 @@ const AppResultadoRoute = AppResultadoRouteImport.update({
   path: '/resultado',
   getParentRoute: () => AppRoute,
 } as any)
+const AppJogosRoute = AppJogosRouteImport.update({
+  id: '/jogos',
+  path: '/jogos',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppExplorarRoute = AppExplorarRouteImport.update({
   id: '/explorar',
   path: '/explorar',
@@ -45,12 +51,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/app/explorar': typeof AppExplorarRoute
+  '/app/jogos': typeof AppJogosRoute
   '/app/resultado': typeof AppResultadoRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app/explorar': typeof AppExplorarRoute
+  '/app/jogos': typeof AppJogosRoute
   '/app/resultado': typeof AppResultadoRoute
   '/app': typeof AppIndexRoute
 }
@@ -59,15 +67,29 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/app/explorar': typeof AppExplorarRoute
+  '/app/jogos': typeof AppJogosRoute
   '/app/resultado': typeof AppResultadoRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/app/explorar' | '/app/resultado' | '/app/'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/app/explorar'
+    | '/app/jogos'
+    | '/app/resultado'
+    | '/app/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app/explorar' | '/app/resultado' | '/app'
-  id: '__root__' | '/' | '/app' | '/app/explorar' | '/app/resultado' | '/app/'
+  to: '/' | '/app/explorar' | '/app/jogos' | '/app/resultado' | '/app'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/app/explorar'
+    | '/app/jogos'
+    | '/app/resultado'
+    | '/app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -105,6 +127,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppResultadoRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/jogos': {
+      id: '/app/jogos'
+      path: '/jogos'
+      fullPath: '/app/jogos'
+      preLoaderRoute: typeof AppJogosRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/explorar': {
       id: '/app/explorar'
       path: '/explorar'
@@ -117,12 +146,14 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppExplorarRoute: typeof AppExplorarRoute
+  AppJogosRoute: typeof AppJogosRoute
   AppResultadoRoute: typeof AppResultadoRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppExplorarRoute: AppExplorarRoute,
+  AppJogosRoute: AppJogosRoute,
   AppResultadoRoute: AppResultadoRoute,
   AppIndexRoute: AppIndexRoute,
 }
