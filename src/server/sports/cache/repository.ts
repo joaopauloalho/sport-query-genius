@@ -15,7 +15,10 @@ export interface CachedMetricValue {
 }
 
 export interface SportsCacheRepository {
-  getTeamByNormalizedName(provider: string, normalizedName: string): Promise<CachedTeamIdentity | null>;
+  getTeamByNormalizedName(
+    provider: string,
+    normalizedName: string,
+  ): Promise<CachedTeamIdentity | null>;
   getTeamById(provider: string, teamId: number): Promise<CachedTeamIdentity | null>;
   upsertTeam(provider: string, team: ResolvedTeam): Promise<void>;
   listRecentFixtures(provider: string, teamId: number, limit: number): Promise<ProviderFixture[]>;

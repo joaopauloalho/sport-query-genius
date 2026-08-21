@@ -205,13 +205,19 @@ test("A. primeira busca em cache vazio chama provider e persiste fixtures/métri
     name: "BSD",
     team: TEAM_BSD,
     fixtures,
-    metrics: new Map([[101, 4], [102, 6]]),
+    metrics: new Map([
+      [101, 4],
+      [102, 6],
+    ]),
   });
   const repository = new MemorySportsCacheRepository();
 
   const matches = await loadSample(provider, repository);
 
-  assert.deepEqual(matches.map((item) => item?.value), [4, 6]);
+  assert.deepEqual(
+    matches.map((item) => item?.value),
+    [4, 6],
+  );
   assert.deepEqual(provider.calls, { resolve: 1, fixtures: 1, metrics: 2 });
   assert.equal(repository.fixtures.size, 2);
   assert.equal(repository.metrics.size, 2);
@@ -223,7 +229,10 @@ test("B. segunda busca idêntica usa cache e não chama provider novamente", asy
     name: "BSD",
     team: TEAM_BSD,
     fixtures,
-    metrics: new Map([[101, 4], [102, 6]]),
+    metrics: new Map([
+      [101, 4],
+      [102, 6],
+    ]),
   });
   const repository = new MemorySportsCacheRepository();
 
@@ -231,7 +240,10 @@ test("B. segunda busca idêntica usa cache e não chama provider novamente", asy
   const callsAfterFirst = structuredClone(provider.calls);
   const second = await loadSample(provider, repository);
 
-  assert.deepEqual(second.map((item) => item?.value), [4, 6]);
+  assert.deepEqual(
+    second.map((item) => item?.value),
+    [4, 6],
+  );
   assert.deepEqual(provider.calls, callsAfterFirst);
 });
 
@@ -240,7 +252,10 @@ test("C. pergunta diferente average -> total reutiliza as mesmas fixtures e só 
     name: "BSD",
     team: TEAM_BSD,
     fixtures: basicFixtures(),
-    metrics: new Map([[101, 4], [102, 6]]),
+    metrics: new Map([
+      [101, 4],
+      [102, 6],
+    ]),
   });
   const repository = new MemorySportsCacheRepository();
 
@@ -296,7 +311,12 @@ test("E. valor null permanece ausente e nunca é convertido em zero", async () =
 test("F. cache stale consulta provider e atualiza a métrica", async () => {
   const targetFixture = fixture({ id: 203, date: "2026-06-01T18:00:00.000Z" });
   const metrics = new Map([[203, 4]]);
-  const provider = new FakeProvider({ name: "BSD", team: TEAM_BSD, fixtures: [targetFixture], metrics });
+  const provider = new FakeProvider({
+    name: "BSD",
+    team: TEAM_BSD,
+    fixtures: [targetFixture],
+    metrics,
+  });
   const repository = new MemorySportsCacheRepository();
 
   await loadSample(provider, repository, 1);
@@ -404,8 +424,14 @@ test("I. filtros home/away/competição continuam sendo aplicados sobre fixtures
     competitionNames: ["Brasileirão Série A"],
   });
 
-  assert.deepEqual(home.map((item) => item.id), [401]);
-  assert.deepEqual(away.map((item) => item.id), [402]);
+  assert.deepEqual(
+    home.map((item) => item.id),
+    [401],
+  );
+  assert.deepEqual(
+    away.map((item) => item.id),
+    [402],
+  );
   assert.equal(provider.calls.fixtures, 1);
 });
 

@@ -3,11 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { QueryIntentInput } from "@/server/analysis/intent-schema";
 import type { ProviderFixture, ResolvedTeam } from "../provider";
 import { normalizeCacheName } from "./cache-policy";
-import type {
-  CachedMetricValue,
-  CachedTeamIdentity,
-  SportsCacheRepository,
-} from "./repository";
+import type { CachedMetricValue, CachedTeamIdentity, SportsCacheRepository } from "./repository";
 
 const TEAMS_TABLE = "sports_provider_teams";
 const FIXTURES_TABLE = "sports_fixtures";
@@ -29,8 +25,7 @@ function mapTeam(row: Record<string, unknown>): CachedTeamIdentity {
     name: String(row.name ?? ""),
     country: String(row.country ?? ""),
     fetchedAt: String(row.fetched_at),
-    fixturesFetchedAt:
-      typeof row.fixtures_fetched_at === "string" ? row.fixtures_fetched_at : null,
+    fixturesFetchedAt: typeof row.fixtures_fetched_at === "string" ? row.fixtures_fetched_at : null,
     fixturesRequestedCount: asNumber(row.fixtures_requested_count ?? 0),
     fixturesReturnedCount: asNumber(row.fixtures_returned_count ?? 0),
   };

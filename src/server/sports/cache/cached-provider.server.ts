@@ -101,7 +101,9 @@ export class CachedSportsDataProvider implements SportsDataProvider {
       );
 
       if (cached.ok && cached.value) {
-        if (isFreshTimestamp(cached.value.fetchedAt, SPORTS_CACHE_TTL_MS.teamIdentity, this.now())) {
+        if (
+          isFreshTimestamp(cached.value.fetchedAt, SPORTS_CACHE_TTL_MS.teamIdentity, this.now())
+        ) {
           console.info("[sports-cache] hit", {
             provider: this.name,
             kind: "team",

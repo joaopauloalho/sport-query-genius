@@ -13,7 +13,7 @@ const FILTERED_HISTORY_LIMIT = 200;
 function hasFixtureFilters(filters?: TeamFixtureFilters): boolean {
   return Boolean(
     (filters?.venue && filters.venue !== "all") ||
-      (filters?.competitionNames && filters.competitionNames.length > 0),
+    (filters?.competitionNames && filters.competitionNames.length > 0),
   );
 }
 
