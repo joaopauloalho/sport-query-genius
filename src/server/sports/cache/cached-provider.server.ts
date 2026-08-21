@@ -6,7 +6,7 @@ import {
   isFreshTimestamp,
   metricTtlMs,
   normalizeCacheName,
-} from "./cache-policy";
+} from "./cache-policy.ts";
 import type { SportsCacheRepository } from "./repository";
 
 type CacheRead<T> = { ok: true; value: T } | { ok: false };
