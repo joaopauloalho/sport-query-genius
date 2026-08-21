@@ -29,8 +29,8 @@ import {
 } from "@/components/ui/dialog";
 import { getCompetition, getSport } from "@/data/sports";
 import { toCsv, type AnalysisResult } from "@/lib/analysis";
+import { analyzeQuestion } from "@/lib/analysis.functions";
 import { useScoutly } from "@/lib/store";
-import { analyzeQuestion } from "@/server/analysis.functions";
 
 export const Route = createFileRoute("/app/resultado")({
   validateSearch: (search: Record<string, unknown>) => ({ q: String(search.q ?? "") }),
