@@ -8,6 +8,9 @@ import type { ProviderFixture, ResolvedTeam, SportsDataProvider } from "../provi
 const API_FOOTBALL_BASE_URL = "https://v3.football.api-sports.io";
 const TIMEOUT_MS = 15_000;
 
+type ApiFootballAuthHeader = "x-apisports-key" | "x-rapidapi-key";
+type ApiFootballErrorKind = "auth" | "limit" | "plan" | "parameter" | "provider";
+
 const teamSearchSchema = z.object({
   response: z.array(
     z.object({
@@ -75,6 +78,68 @@ function hasApiErrors(errors: unknown): boolean {
   return Boolean(errors);
 }
 
+function serializeApiErrors(errors: unknown): string {
+  try {
+    return JSON.stringify(errors).toLowerCase();
+  } catch {
+    return String(errors).toLowerCase();
+  }
+}
+
+function classifyApiError(errors: unknown): ApiFootballErrorKind {
+  const serialized = serializeApiErrors(errors);
+
+  if (/request|limit|rate|quota|too many/.test(serialized)) return "limit";
+  if (/token|api.?key|authentication|unauthorized|forbidden|subscribe|subscription|access denied/.test(serialized)) {
+    return "auth";
+  }
+  if (/plan|upgrade|paid/.test(serialized)) return "plan";
+  if (/parameter|required|invalid|field/.test(serialized)) return "parameter";
+  return "provider";
+}
+
+function safeErrorForLog(errors: unknown, apiKey: string): string {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(errors);
+  } catch {
+    serialized = String(errors);
+  }
+
+  return serialized.replaceAll(apiKey, "[redacted]").slice(0, 800);
+}
+
+function pipelineErrorFor(kind: ApiFootballErrorKind): AnalysisPipelineError {
+  if (kind === "limit") {
+    return new AnalysisPipelineError(
+      "API_LIMIT_REACHED",
+      "O limite de requisições da API-FOOTBALL foi atingido.",
+    );
+  }
+  if (kind === "auth") {
+    return new AnalysisPipelineError(
+      "PROVIDER_UNAVAILABLE",
+      "A chave da API-FOOTBALL não foi aceita. Confirme se a chave é da API-Sports/API-FOOTBALL ou do RapidAPI.",
+    );
+  }
+  if (kind === "plan") {
+    return new AnalysisPipelineError(
+      "PROVIDER_UNAVAILABLE",
+      "A API-FOOTBALL recusou esta consulta por restrição do plano ou da assinatura.",
+    );
+  }
+  if (kind === "parameter") {
+    return new AnalysisPipelineError(
+      "PROVIDER_UNAVAILABLE",
+      "A API-FOOTBALL recusou um parâmetro da consulta. O servidor registrou o motivo de forma sanitizada.",
+    );
+  }
+  return new AnalysisPipelineError(
+    "PROVIDER_UNAVAILABLE",
+    "A API-FOOTBALL recusou a consulta solicitada.",
+  );
+}
+
 export class ApiFootballProvider implements SportsDataProvider {
   readonly name = "API-FOOTBALL";
 
@@ -92,64 +157,106 @@ export class ApiFootballProvider implements SportsDataProvider {
       url.searchParams.set(key, String(value));
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const performRequest = async (authHeader: ApiFootballAuthHeader) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        headers: { "x-apisports-key": apiKey },
-        signal: controller.signal,
-      });
-    } catch {
-      throw new AnalysisPipelineError(
-        "PROVIDER_UNAVAILABLE",
-        "A API-FOOTBALL não respondeu à consulta.",
-      );
-    } finally {
-      clearTimeout(timeout);
-    }
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: { [authHeader]: apiKey },
+          signal: controller.signal,
+        });
+      } catch {
+        throw new AnalysisPipelineError(
+          "PROVIDER_UNAVAILABLE",
+          "A API-FOOTBALL não respondeu à consulta.",
+        );
+      } finally {
+        clearTimeout(timeout);
+      }
 
-    if (response.status === 429) {
-      throw new AnalysisPipelineError(
-        "API_LIMIT_REACHED",
-        "O limite de requisições da API-FOOTBALL foi atingido.",
-      );
-    }
-
-    if (!response.ok) {
-      throw new AnalysisPipelineError(
-        "PROVIDER_UNAVAILABLE",
-        `A API-FOOTBALL retornou uma falha de serviço (HTTP ${response.status}).`,
-      );
-    }
-
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      throw new AnalysisPipelineError(
-        "PROVIDER_UNAVAILABLE",
-        "A API-FOOTBALL retornou uma resposta inválida.",
-      );
-    }
-
-    const errorCarrier = z.object({ errors: z.unknown().optional() }).safeParse(payload);
-    if (errorCarrier.success && hasApiErrors(errorCarrier.data.errors)) {
-      const serialized = JSON.stringify(errorCarrier.data.errors).toLowerCase();
-      if (serialized.includes("request") || serialized.includes("limit") || serialized.includes("rate")) {
+      if (response.status === 429) {
         throw new AnalysisPipelineError(
           "API_LIMIT_REACHED",
           "O limite de requisições da API-FOOTBALL foi atingido.",
         );
       }
-      throw new AnalysisPipelineError(
-        "PROVIDER_UNAVAILABLE",
-        "A API-FOOTBALL recusou a consulta solicitada.",
-      );
+
+      if (!response.ok) {
+        console.warn("[api-football] HTTP failure", {
+          path,
+          authHeader,
+          status: response.status,
+          remaining: response.headers.get("x-ratelimit-requests-remaining"),
+        });
+        throw new AnalysisPipelineError(
+          "PROVIDER_UNAVAILABLE",
+          `A API-FOOTBALL retornou uma falha de serviço (HTTP ${response.status}).`,
+        );
+      }
+
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new AnalysisPipelineError(
+          "PROVIDER_UNAVAILABLE",
+          "A API-FOOTBALL retornou uma resposta inválida.",
+        );
+      }
+
+      return {
+        payload,
+        remaining: response.headers.get("x-ratelimit-requests-remaining"),
+      };
+    };
+
+    let result = await performRequest("x-apisports-key");
+    let errorCarrier = z.object({ errors: z.unknown().optional() }).safeParse(result.payload);
+
+    if (errorCarrier.success && hasApiErrors(errorCarrier.data.errors)) {
+      const kind = classifyApiError(errorCarrier.data.errors);
+
+      console.warn("[api-football] API error", {
+        path,
+        authHeader: "x-apisports-key",
+        kind,
+        remaining: result.remaining,
+        detail: safeErrorForLog(errorCarrier.data.errors, apiKey),
+      });
+
+      // API-Sports currently documents x-apisports-key. Older/RapidAPI-issued keys can use
+      // x-rapidapi-key against the same allow-listed API host. Retry only on auth/subscription
+      // failures so normal provider errors never duplicate calls unnecessarily.
+      if (kind === "auth") {
+        result = await performRequest("x-rapidapi-key");
+        errorCarrier = z.object({ errors: z.unknown().optional() }).safeParse(result.payload);
+
+        if (!(errorCarrier.success && hasApiErrors(errorCarrier.data.errors))) {
+          console.info("[api-football] alternate auth header accepted", {
+            path,
+            authHeader: "x-rapidapi-key",
+            remaining: result.remaining,
+          });
+          return result.payload;
+        }
+
+        const fallbackKind = classifyApiError(errorCarrier.data.errors);
+        console.warn("[api-football] API error after auth fallback", {
+          path,
+          authHeader: "x-rapidapi-key",
+          kind: fallbackKind,
+          remaining: result.remaining,
+          detail: safeErrorForLog(errorCarrier.data.errors, apiKey),
+        });
+        throw pipelineErrorFor(fallbackKind);
+      }
+
+      throw pipelineErrorFor(kind);
     }
 
-    return payload;
+    return result.payload;
   }
 
   async resolveTeam(name: string): Promise<ResolvedTeam> {
