@@ -41,7 +41,11 @@ function readTeam(record: Record<string, unknown>, side: "home" | "away") {
   }
 
   const id = readNumber(record, [`${side}_team_id`, `${side}_id`]);
-  const name = readString(record, [`${side}_team_name`, `${side}_name`]);
+  const name = readString(record, [
+    `${side}_team`,
+    `${side}_team_name`,
+    `${side}_name`,
+  ]);
   return id !== null && name ? { id, name } : null;
 }
 
