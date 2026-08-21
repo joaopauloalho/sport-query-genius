@@ -26,8 +26,8 @@ function TeamsPage() {
         </span>
         <h1 className="mt-5 text-2xl font-bold">Perfis de equipes</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          O perfil agregado desta rota ainda combinava cadastro e métricas demonstrativas. A tela foi
-          desativada para que nenhum número simulado pareça informação real.
+          O perfil agregado desta rota ainda combinava cadastro e métricas demonstrativas. A tela
+          foi desativada para que nenhum número simulado pareça informação real.
         </p>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
           A análise real de equipes continua disponível pela busca principal, incluindo período,
