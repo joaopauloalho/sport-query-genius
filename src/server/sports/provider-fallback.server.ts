@@ -229,10 +229,8 @@ export class FootballProviderOrchestrator {
     selection: ProviderSelection,
     metric: QueryIntentInput["metric"],
   ): Promise<MatchRecord[]> {
-    const attempts = await mapWithConcurrency(
-      selection.fixtures,
-      METRIC_CONCURRENCY,
-      (fixture) => this.getMetricAttempt(selection.provider, fixture, selection.team.id, metric),
+    const attempts = await mapWithConcurrency(selection.fixtures, METRIC_CONCURRENCY, (fixture) =>
+      this.getMetricAttempt(selection.provider, fixture, selection.team.id, metric),
     );
 
     const missingIndexes = attempts
