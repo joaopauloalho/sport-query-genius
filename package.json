@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "bun run lint && bun run typecheck && bun scripts/phase2a-build-validation.ts && vite build",
+    "build": "bun run typecheck && bun scripts/phase2a-build-validation.ts && vite build && bun run lint",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
