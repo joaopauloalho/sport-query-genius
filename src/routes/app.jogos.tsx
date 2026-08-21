@@ -9,7 +9,8 @@ export const Route = createFileRoute("/app/jogos")({
       { title: "Jogos — Em breve — Scoutly AI" },
       {
         name: "description",
-        content: "A listagem de jogos está temporariamente indisponível até ser conectada aos providers reais.",
+        content:
+          "A listagem de jogos está temporariamente indisponível até ser conectada aos providers reais.",
       },
     ],
   }),
@@ -25,10 +26,12 @@ function MatchesPage() {
         </span>
         <h1 className="mt-5 text-2xl font-bold">Jogos</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          A lista de partidas desta tela ainda era alimentada por fixtures demonstrativas. Ela foi desativada até existir uma integração real adequada para navegação por jogos.
+          A lista de partidas desta tela ainda era alimentada por fixtures demonstrativas. Ela foi
+          desativada até existir uma integração real adequada para navegação por jogos.
         </p>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Você já pode analisar partidas qualificadas de uma equipe por meio das consultas reais de período, competição e mando.
+          Você já pode analisar partidas qualificadas de uma equipe por meio das consultas reais de
+          período, competição e mando.
         </p>
         <Button className="mt-6 gap-2" asChild>
           <Link to="/app">
