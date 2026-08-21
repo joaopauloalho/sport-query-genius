@@ -102,7 +102,7 @@ Automated Phase 3A tests prove:
 9. home/away/competition filtering still applies over cached fixture history;
 10. missing statistics never get invented to complete a sample.
 
-The existing Phase 2B suite remains part of Phase 3A CI.
+The existing Phase 2B suite remains part of Phase 3A CI. The strict lint gate is scoped to Phase 3A files touched by this change; the repository-wide lint is diagnostic only so legacy formatting debt is not silently expanded into this phase.
 
 ## Real Supabase validation status
 
