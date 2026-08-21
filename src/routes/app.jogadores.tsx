@@ -9,7 +9,8 @@ export const Route = createFileRoute("/app/jogadores")({
       { title: "Jogadores — Em breve — Scoutly AI" },
       {
         name: "description",
-        content: "Análises e comparações de jogadores ainda não possuem backend real e estão temporariamente indisponíveis.",
+        content:
+          "Análises e comparações de jogadores ainda não possuem backend real e estão temporariamente indisponíveis.",
       },
     ],
   }),
@@ -25,7 +26,9 @@ function PlayersPage() {
         </span>
         <h1 className="mt-5 text-2xl font-bold">Jogadores</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Perfis, estatísticas e comparações de jogadores ainda não têm backend real. Esta área foi desativada para não exibir números gerados ou demonstrativos como se fossem dados dos providers.
+          Perfis, estatísticas e comparações de jogadores ainda não têm backend real. Esta área foi
+          desativada para não exibir números gerados ou demonstrativos como se fossem dados dos
+          providers.
         </p>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
           Nesta fase, o produto suporta somente análises de equipes de futebol.
