@@ -1,315 +1,209 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import {
   ArrowRight,
   BarChart3,
   Check,
-  Clock,
-  FileSpreadsheet,
-  LineChart,
+  Download,
+  Filter,
   Newspaper,
-  ScanSearch,
   ShieldCheck,
   Sparkles,
   Table2,
-  Users,
 } from "lucide-react";
 
 import { Logo } from "@/components/scoutly/logo";
-import { MetricCard } from "@/components/scoutly/metric-card";
-import { PerformanceChart } from "@/components/scoutly/performance-chart";
-import { DemoBadge, MethodologyNote, SourceBadge } from "@/components/scoutly/source-badge";
 import { Button } from "@/components/ui/button";
-import { PLANS } from "@/data/sports";
-import { runAnalysis } from "@/lib/analysis";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Scoutly AI — Dados esportivos sem horas de pesquisa" },
+      { title: "Scoutly AI — Análise real de equipes de futebol" },
       {
         name: "description",
         content:
-          "Faça perguntas em linguagem natural e transforme estatísticas esportivas em respostas, gráficos e insights. Para jornalistas, criadores e analistas.",
+          "Faça perguntas em linguagem natural sobre equipes de futebol e receba análises com dados reais, filtros, gráficos, partidas e fontes identificadas.",
       },
-      { property: "og:title", content: "Scoutly AI — Dados esportivos sem horas de pesquisa" },
+      { property: "og:title", content: "Scoutly AI — Análise real de equipes de futebol" },
       {
         property: "og:description",
-        content: "Faça perguntas em linguagem natural e transforme estatísticas esportivas em respostas, gráficos e insights. Para jornalistas, criadores e analistas.",
+        content: "Análises de equipes de futebol com dados reais, filtros e fontes identificadas.",
       },
     ],
   }),
   component: Landing,
 });
 
-const DEMO_QUESTION = "Qual foi a média de escanteios do Corinthians nos últimos 20 jogos?";
-
-const PROBLEMS = [
-  "Abrir dezenas de partidas uma a uma",
-  "Copiar números para uma planilha",
-  "Fazer cálculos manuais",
-  "Montar gráficos do zero",
-  "Comparar telas diferentes",
-  "Revisar tudo antes de publicar",
+const CAPABILITIES = [
+  {
+    icon: Sparkles,
+    title: "Perguntas em linguagem natural",
+    text: "Descreva a equipe e a métrica que quer analisar sem montar consultas técnicas.",
+  },
+  {
+    icon: Filter,
+    title: "Filtros reais",
+    text: "Use períodos de 5, 10, 15 ou 20 partidas, competição e mando de campo.",
+  },
+  {
+    icon: BarChart3,
+    title: "Cálculo determinístico",
+    text: "Médias, totais, medianas e tendências são calculados sobre as partidas qualificadas.",
+  },
+  {
+    icon: Table2,
+    title: "Partidas visíveis",
+    text: "Confira a amostra usada no cálculo em tabela, sem esconder quais jogos entraram na análise.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Fonte e atualização",
+    text: "O resultado identifica o provider utilizado e a última atualização dos dados.",
+  },
+  {
+    icon: Download,
+    title: "Exportação CSV",
+    text: "Exporte a análise atual para continuar o trabalho em planilhas ou relatórios.",
+  },
 ];
 
-const SOLUTIONS = [
-  "Uma pergunta em linguagem natural",
-  "Parâmetros identificados automaticamente",
-  "Cálculo feito no backend sobre dados estruturados",
-  "Resposta, números, gráfico e tabela na mesma tela",
-  "Período, amostra e fonte sempre visíveis",
-  "Análises salvas e organizadas em workspaces",
+const FLOW = [
+  "A pergunta é interpretada no servidor.",
+  "Os filtros explícitos da interface prevalecem sobre a inferência.",
+  "BSD é usado como provider principal quando configurado, com fallback controlado para API-Football.",
+  "O backend calcula o resultado e devolve amostra, gráfico, tabela, fonte e eventuais erros sem preencher lacunas com mock.",
 ];
 
-const USE_CASES = [
-  { icon: Newspaper, title: "Jornalismo esportivo", text: "Números checáveis para matérias e reportagens com prazo curto." },
-  { icon: Sparkles, title: "Produção de conteúdo", text: "Pautas, cortes e roteiros baseados em estatísticas reais." },
-  { icon: LineChart, title: "Análise esportiva", text: "Leitura de tendências de desempenho por período e mando de campo." },
-  { icon: Users, title: "Pesquisa de jogadores", text: "Perfis, médias recentes e comparações lado a lado." },
-  { icon: BarChart3, title: "Acompanhamento de equipes", text: "Forma recente, desempenho em casa e fora, evolução por competição." },
-  { icon: FileSpreadsheet, title: "Relatórios e exportação", text: "Tabelas detalhadas prontas para exportar em CSV." },
+const LIMITATIONS = [
+  "O backend real atual cobre análises de equipes de futebol.",
+  "Jogadores, tênis e basquete ainda não estão disponíveis.",
+  "Explorar, perfis navegáveis de equipes e listagem de jogos aguardam integrações reais próprias.",
+  "Conta, sincronização em nuvem, cobrança e planos ainda não foram implementados.",
 ];
 
 function Landing() {
-  const navigate = useNavigate();
-  const outcome = runAnalysis(DEMO_QUESTION);
-  const demo = outcome.ok ? outcome.result : null;
-
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <Logo />
           <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
-            <a href="#problema" className="transition-colors hover:text-foreground">Problema</a>
-            <a href="#solucao" className="transition-colors hover:text-foreground">Solução</a>
-            <a href="#casos" className="transition-colors hover:text-foreground">Casos de uso</a>
-            <Link to="/precos" className="transition-colors hover:text-foreground">Planos</Link>
+            <a href="#funciona" className="transition-colors hover:text-foreground">
+              Funciona hoje
+            </a>
+            <a href="#como-funciona" className="transition-colors hover:text-foreground">
+              Como funciona
+            </a>
+            <a href="#limites" className="transition-colors hover:text-foreground">
+              Limites atuais
+            </a>
           </nav>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/auth">Entrar</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link to="/app">Começar gratuitamente</Link>
-            </Button>
-          </div>
+          <Button size="sm" asChild>
+            <Link to="/app">Abrir análise</Link>
+          </Button>
         </div>
       </header>
 
       <main>
-        {/* Hero */}
-        <section className="hero-glow relative overflow-hidden px-4 pt-20 pb-16 sm:px-6">
+        <section className="hero-glow relative overflow-hidden px-4 pt-20 pb-20 sm:px-6">
           <div className="mx-auto max-w-3xl text-center">
-            <DemoBadge className="animate-fade" />
+            <span className="inline-flex items-center gap-2 rounded-full border border-lime/40 bg-lime/10 px-3 py-1 text-xs font-semibold tracking-wide text-lime uppercase">
+              <ShieldCheck className="size-3.5" /> Dados reais · futebol
+            </span>
             <h1 className="animate-rise mt-6 text-4xl leading-[1.08] font-bold text-balance sm:text-6xl">
-              Dados esportivos sem <span className="text-gradient">horas de pesquisa</span>.
+              Analise equipes de futebol sem <span className="text-gradient">horas de pesquisa</span>.
             </h1>
-            <p className="animate-rise mx-auto mt-5 max-w-xl text-base text-pretty text-muted-foreground sm:text-lg">
-              Faça perguntas em linguagem natural e transforme estatísticas esportivas em respostas,
-              gráficos e insights.
+            <p className="animate-rise mx-auto mt-5 max-w-2xl text-base text-pretty text-muted-foreground sm:text-lg">
+              Faça uma pergunta, escolha período, competição e mando e receba números calculados sobre partidas reais, com fonte e amostra identificadas.
             </p>
             <div className="animate-rise mt-8 flex flex-wrap justify-center gap-3">
-              <Button size="lg" className="gap-2" onClick={() => navigate({ to: "/app" })}>
-                Começar gratuitamente
-                <ArrowRight className="size-4" />
+              <Button size="lg" className="gap-2" asChild>
+                <Link to="/app">
+                  Fazer uma análise
+                  <ArrowRight className="size-4" />
+                </Link>
               </Button>
               <Button size="lg" variant="outline" asChild>
-                <a href="#demonstracao">Ver demonstração</a>
+                <a href="#funciona">Ver o que funciona</a>
               </Button>
             </div>
             <p className="mt-5 text-sm text-muted-foreground">
-              Pergunte qualquer coisa sobre esportes. Encontre em segundos o que levaria horas para pesquisar.
+              Sem login e sem cobrança nesta fase. Recursos ainda não suportados ficam fora da navegação principal.
             </p>
           </div>
         </section>
 
-        {/* Demonstração */}
-        <section id="demonstracao" className="px-4 pb-20 sm:px-6">
+        <section id="funciona" className="border-t border-border/60 px-4 py-20 sm:px-6">
           <div className="mx-auto max-w-5xl">
-            <div className="surface-card glow-ring overflow-hidden">
-              <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
-                <ScanSearch className="size-4 shrink-0 text-primary" />
-                <p className="min-w-0 flex-1 truncate text-sm font-medium">{DEMO_QUESTION}</p>
-                <DemoBadge />
-              </div>
-
-              {demo && (
-                <div className="space-y-6 p-5 sm:p-6">
-                  <div>
-                    <p className="font-display text-xl font-semibold text-balance sm:text-2xl">
-                      {demo.answer.summary}
-                    </p>
-                    <p className="mt-2 text-sm text-muted-foreground">{demo.answer.explanation}</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <MetricCard label="Média" value={demo.statistics.average} emphasis />
-                    <MetricCard label="Mediana" value={demo.statistics.median} />
-                    <MetricCard label="Máximo" value={demo.statistics.maximum} />
-                    <MetricCard label="Jogos" value={demo.statistics.sample_size} />
-                  </div>
-
-                  <PerformanceChart data={demo.chart_data} average={demo.statistics.average} height={240} />
-
-                  <ul className="grid gap-2 sm:grid-cols-2">
-                    {demo.insights.slice(0, 4).map((i) => (
-                      <li key={i} className="flex items-start gap-2 rounded-lg bg-secondary/50 p-3 text-sm">
-                        <Sparkles className="mt-0.5 size-4 shrink-0 text-lime" />
-                        {i}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-                    <SourceBadge />
-                    <Button variant="outline" size="sm" className="gap-1.5" asChild>
-                      <Link to="/app">
-                        <Table2 className="size-4" />
-                        Ver análise completa
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              )}
+            <div className="text-center">
+              <h2 className="text-3xl font-bold">O que funciona hoje</h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
+                A superfície do produto mostra somente capacidades conectadas ao motor real de análise.
+              </p>
             </div>
-            <MethodologyNote className="mx-auto mt-4 max-w-2xl justify-center text-center" />
-          </div>
-        </section>
-
-        {/* Problema / Solução */}
-        <section id="problema" className="border-t border-border/60 px-4 py-20 sm:px-6">
-          <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-2">
-            <div className="surface-card p-6">
-              <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                <Clock className="size-4" /> Hoje você precisa
-              </span>
-              <ul className="mt-5 space-y-3">
-                {PROBLEMS.map((p) => (
-                  <li key={p} className="flex items-start gap-3 text-sm text-muted-foreground">
-                    <span className="mt-2 size-1.5 shrink-0 rounded-full bg-destructive/70" />
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div id="solucao" className="surface-card border-primary/30 bg-primary/5 p-6">
-              <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-primary uppercase">
-                <Sparkles className="size-4" /> Com a Scoutly AI
-              </span>
-              <ul className="mt-5 space-y-3">
-                {SOLUTIONS.map((s) => (
-                  <li key={s} className="flex items-start gap-3 text-sm">
-                    <Check className="mt-0.5 size-4 shrink-0 text-lime" />
-                    {s}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </section>
-
-        {/* Casos de uso */}
-        <section id="casos" className="px-4 pb-20 sm:px-6">
-          <div className="mx-auto max-w-5xl">
-            <h2 className="text-center text-3xl font-bold">Feito para quem trabalha com esporte</h2>
-            <p className="mx-auto mt-3 max-w-lg text-center text-sm text-muted-foreground">
-              Criadores de conteúdo, jornalistas, analistas independentes, scouts e equipes de mídia.
-            </p>
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {USE_CASES.map((c) => (
-                <div key={c.title} className="surface-card p-5 transition-colors hover:border-primary/40">
-                  <c.icon className="size-5 text-primary" />
-                  <h3 className="mt-4 text-base font-semibold">{c.title}</h3>
-                  <p className="mt-1.5 text-sm text-muted-foreground">{c.text}</p>
+              {CAPABILITIES.map((capability) => (
+                <div key={capability.title} className="surface-card p-5">
+                  <capability.icon className="size-5 text-primary" />
+                  <h3 className="mt-4 text-base font-semibold">{capability.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{capability.text}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Confiança */}
-        <section className="border-t border-border/60 px-4 py-20 sm:px-6">
+        <section id="como-funciona" className="px-4 pb-20 sm:px-6">
+          <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+            <div>
+              <Newspaper className="size-7 text-primary" />
+              <h2 className="mt-4 text-3xl font-bold">Do texto ao número verificável</h2>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                A inteligência artificial interpreta a intenção. A estatística final não é inventada por ela: o cálculo acontece no backend sobre dados estruturados dos providers disponíveis.
+              </p>
+            </div>
+            <ol className="surface-card space-y-4 p-6">
+              {FLOW.map((step, index) => (
+                <li key={step} className="flex items-start gap-3 text-sm">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                    {index + 1}
+                  </span>
+                  <span className="pt-0.5 text-muted-foreground">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section id="limites" className="border-t border-border/60 px-4 py-20 sm:px-6">
           <div className="mx-auto max-w-5xl">
-            <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr] lg:items-center">
-              <div>
-                <ShieldCheck className="size-7 text-lime" />
-                <h2 className="mt-4 text-3xl font-bold">Transparência em cada número</h2>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  A inteligência artificial interpreta e explica. Os cálculos acontecem no backend, sobre dados
-                  estruturados. Nenhuma estatística é inventada.
-                </p>
-              </div>
-              <ul className="grid gap-3 sm:grid-cols-2">
-                {[
-                  "Dados estruturados por partida",
-                  "Fontes sempre identificadas",
-                  "Cálculos realizados no backend",
-                  "Período e amostra explícitos",
-                  "Aviso quando faltam dados",
-                  "Nenhuma estatística inventada",
-                ].map((i) => (
-                  <li key={i} className="surface-card flex items-start gap-2 p-3 text-sm">
+            <div className="surface-card border-primary/20 p-6 sm:p-8">
+              <h2 className="text-2xl font-bold">Limites atuais, sem esconder o que falta</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Estes recursos ficam fora da experiência principal até possuírem implementação real adequada.
+              </p>
+              <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+                {LIMITATIONS.map((item) => (
+                  <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
                     <Check className="mt-0.5 size-4 shrink-0 text-lime" />
-                    {i}
+                    {item}
                   </li>
                 ))}
               </ul>
+              <Button className="mt-7 gap-2" asChild>
+                <Link to="/app">
+                  Abrir o que já funciona
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
             </div>
           </div>
-        </section>
-
-        {/* Planos */}
-        <section className="px-4 pb-20 sm:px-6">
-          <div className="mx-auto max-w-5xl">
-            <h2 className="text-center text-3xl font-bold">Planos</h2>
-            <p className="mt-3 text-center text-sm text-muted-foreground">
-              Preços provisórios para o MVP.
-            </p>
-            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {PLANS.map((p) => (
-                <div
-                  key={p.id}
-                  className={`surface-card flex flex-col p-5 ${p.highlight ? "border-primary/50 glow-ring" : ""}`}
-                >
-                  <h3 className="text-sm font-semibold text-muted-foreground">{p.name}</h3>
-                  <p className="mt-2 font-display text-2xl font-bold">{p.price}</p>
-                  <p className="text-xs text-muted-foreground">{p.period}</p>
-                  <ul className="mt-4 flex-1 space-y-2 text-sm">
-                    {p.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-muted-foreground">
-                        <Check className="mt-0.5 size-3.5 shrink-0 text-lime" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button className="mt-5" variant={p.highlight ? "default" : "outline"} asChild>
-                    <Link to="/precos">{p.cta}</Link>
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA final */}
-        <section className="hero-glow border-t border-border/60 px-4 py-24 text-center sm:px-6">
-          <h2 className="mx-auto max-w-2xl text-3xl font-bold text-balance sm:text-4xl">
-            Pare de procurar jogo por jogo. Comece a perguntar.
-          </h2>
-          <Button size="lg" className="mt-8 gap-2" asChild>
-            <Link to="/app">
-              Começar gratuitamente
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
         </section>
       </main>
 
       <footer className="border-t border-border/60 px-4 py-8 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 text-center text-xs text-muted-foreground sm:flex-row sm:justify-between sm:text-left">
           <Logo />
-          <p>Scoutly AI — plataforma de análise e pesquisa esportiva. Dados demonstrativos no MVP.</p>
+          <p>Scoutly AI — análises reais de equipes de futebol com fonte, filtros e amostra explícitos.</p>
         </div>
       </footer>
     </div>
