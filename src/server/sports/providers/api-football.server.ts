@@ -142,7 +142,10 @@ function classifyHttpFailure(status: number, payload: unknown): ApiFootballError
 export class ApiFootballProvider implements SportsDataProvider {
   readonly name = "API-FOOTBALL";
 
-  private async request(path: "/teams" | "/fixtures" | "/fixtures/statistics", params: Record<string, string | number>) {
+  private async request(
+    path: "/teams" | "/fixtures" | "/fixtures/statistics",
+    params: Record<string, string | number>,
+  ) {
     const apiKey = process.env.API_FOOTBALL_KEY;
     if (!apiKey) {
       throw new AnalysisPipelineError(
@@ -266,9 +269,7 @@ export class ApiFootballProvider implements SportsDataProvider {
   }
 
   async resolveTeam(name: string): Promise<ResolvedTeam> {
-    const payload = teamSearchSchema.parse(
-      await this.request("/teams", { search: name }),
-    );
+    const payload = teamSearchSchema.parse(await this.request("/teams", { search: name }));
 
     if (payload.response.length === 0) {
       throw new AnalysisPipelineError(
@@ -316,7 +317,12 @@ export class ApiFootballProvider implements SportsDataProvider {
           away: entry.teams.away,
           goals: entry.goals,
         }))
-        .filter((fixture) => COMPLETED_FIXTURE_STATUSES.includes(fixture.status as (typeof COMPLETED_FIXTURE_STATUSES)[number]))
+        .filter(
+          (fixture) =>
+            COMPLETED_FIXTURE_STATUSES.includes(
+              fixture.status as (typeof COMPLETED_FIXTURE_STATUSES)[number],
+            ),
+        )
         .sort((a, b) => a.timestamp - b.timestamp);
     };
 
@@ -332,7 +338,11 @@ export class ApiFootballProvider implements SportsDataProvider {
       const previousSeason = currentSeason - 1;
       const previousFrom = new Date(Date.UTC(previousSeason, 0, 1));
       const previousTo = new Date(Date.UTC(previousSeason, 11, 31, 23, 59, 59));
-      const previousFixtures = await loadCompletedFixtures(previousSeason, previousFrom, previousTo);
+      const previousFixtures = await loadCompletedFixtures(
+        previousSeason,
+        previousFrom,
+        previousTo,
+      );
 
       const byFixtureId = new Map<number, ProviderFixture>();
       for (const fixture of [...previousFixtures, ...fixtures]) {
@@ -368,8 +378,7 @@ export class ApiFootballProvider implements SportsDataProvider {
         }),
       );
       const teamBlock =
-        payload.response.find((entry) => entry.team.id === teamId) ??
-        payload.response[0];
+        payload.response.find((entry) => entry.team.id === teamId) ?? payload.response[0];
 
       if (!teamBlock) return null;
 
