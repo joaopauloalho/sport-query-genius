@@ -1,15 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  Bookmark,
-  BookmarkCheck,
-  Calendar,
-  Download,
-  RefreshCw,
-  Share2,
-  Sparkles,
-  Trophy,
-} from "lucide-react";
+import { Calendar, Download, RefreshCw, Sparkles, Trophy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -17,17 +8,15 @@ import { MatchesTable } from "@/components/scoutly/matches-table";
 import { MetricCard } from "@/components/scoutly/metric-card";
 import { PerformanceChart } from "@/components/scoutly/performance-chart";
 import { SmartSearch } from "@/components/scoutly/smart-search";
-import { DemoBadge, MethodologyNote, RealDataBadge, SourceBadge } from "@/components/scoutly/source-badge";
+import {
+  DemoBadge,
+  MethodologyNote,
+  RealDataBadge,
+  SourceBadge,
+} from "@/components/scoutly/source-badge";
 import { EmptyState, ProcessingSteps } from "@/components/scoutly/states";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { getCompetition, getSport } from "@/data/sports";
+import { getCompetition } from "@/data/sports";
 import { toCsv, type AnalysisResult } from "@/lib/analysis";
 import {
   SUPPORTED_MATCH_COUNTS,
@@ -72,9 +61,12 @@ export const Route = createFileRoute("/app/resultado")({
   head: () => ({
     meta: [
       { title: "Resultado da análise — Scoutly AI" },
-      { name: "description", content: "Resposta, números, gráfico, tabela e insights da sua pergunta esportiva." },
+      {
+        name: "description",
+        content: "Resposta, números, gráfico, tabela e fonte da sua análise real de futebol.",
+      },
       { property: "og:title", content: "Resultado da análise — Scoutly AI" },
-      { property: "og:description", content: "Análise esportiva estruturada gerada pela Scoutly AI." },
+      { property: "og:description", content: "Análise de futebol calculada sobre dados estruturados." },
     ],
   }),
   component: ResultPage,
@@ -84,12 +76,12 @@ const ERROR_TITLES: Record<string, string> = {
   TEAM_NOT_FOUND: "Time não encontrado",
   QUESTION_NOT_UNDERSTOOD: "Pergunta não compreendida",
   UNSUPPORTED_METRIC: "Métrica não suportada",
-  UNSUPPORTED_FILTER: "Filtro ainda não suportado",
-  API_LIMIT_REACHED: "Limite da API atingido",
-  PROVIDER_UNAVAILABLE: "Serviço de dados esportivos indisponível",
+  UNSUPPORTED_FILTER: "Filtro não suportado",
+  API_LIMIT_REACHED: "Limite do provider atingido",
+  PROVIDER_UNAVAILABLE: "Provider indisponível",
   DATA_INSUFFICIENT: "Dados insuficientes",
-  DEEPSEEK_ERROR: "Erro ao interpretar pergunta",
-  INVALID_DEEPSEEK_OUTPUT: "Saída inválida do DeepSeek",
+  DEEPSEEK_ERROR: "DeepSeek indisponível",
+  INVALID_DEEPSEEK_OUTPUT: "Resposta inválida do DeepSeek",
 };
 
 type ResultError = { code?: string; reason: string };
@@ -98,12 +90,11 @@ function ResultPage() {
   const { q, match_count, competition, venue, invalid_match_count } = Route.useSearch();
   const navigate = useNavigate();
   const analyze = useServerFn(analyzeQuestion);
-  const { registerAnalysis, toggleSaved, isSaved, workspaces, addToWorkspace } = useScoutly();
+  const { registerAnalysis } = useScoutly();
 
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<ResultError | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
 
   const requestOverrides = useMemo<AnalysisOverrides | undefined>(() => {
     const overrides: AnalysisOverrides = {};
@@ -159,7 +150,7 @@ function ResultPage() {
       .catch(() => {
         if (!alive) return;
         setError({
-          reason: "Não foi possível concluir a análise agora. Nenhuma estatística foi estimada ou inventada.",
+          reason: "Não foi possível concluir a análise agora. Nenhuma estatística foi estimada ou substituída por mock.",
         });
       })
       .finally(() => {
@@ -197,45 +188,47 @@ function ResultPage() {
   if (error || !result) {
     return (
       <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-14 sm:px-6">
-        <SmartSearch defaultValue={q} showFilters={false} size="sm" onSubmit={(question) => ask(question)} />
+        <SmartSearch
+          defaultValue={q}
+          showFilters={false}
+          size="sm"
+          onSubmit={(question) => ask(question)}
+        />
         <EmptyState
-          title={error?.code ? (ERROR_TITLES[error.code] ?? "Não foi possível analisar") : "Não foi possível analisar"}
+          title={
+            error?.code
+              ? (ERROR_TITLES[error.code] ?? "Não foi possível analisar")
+              : "Não foi possível analisar"
+          }
           description={error?.reason ?? "Tente reformular a pergunta."}
         />
       </div>
     );
   }
 
-  const sport = getSport(result.intent.sport);
   const competitionLabel =
     getCompetition(result.intent.competition)?.name ?? result.intent.competition ?? null;
-  const saved = isSaved(result.cache_key);
 
   function exportCsv() {
     if (!result) return;
     const blob = new Blob([toCsv(result)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `scoutly-${result.cache_key.replace(/\|/g, "-")}.csv`;
-    a.click();
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `scoutly-${result.cache_key.replace(/\|/g, "-")}.csv`;
+    anchor.click();
     URL.revokeObjectURL(url);
     toast.success("CSV exportado.");
   }
 
-  function copyShareLink() {
-    if (!result) return;
-    const params = new URLSearchParams({ q: result.question });
-    if (match_count !== undefined) params.set("match_count", String(match_count));
-    if (competition !== undefined) params.set("competition", competition);
-    if (venue !== undefined) params.set("venue", venue);
-    navigator.clipboard?.writeText(`${window.location.origin}/app/resultado?${params.toString()}`);
-    toast.success("Link copiado.");
-  }
-
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-8 sm:px-6 sm:py-10">
-      <SmartSearch defaultValue={q} showFilters={false} size="sm" onSubmit={(question) => ask(question)} />
+      <SmartSearch
+        defaultValue={q}
+        showFilters={false}
+        size="sm"
+        onSubmit={(question) => ask(question)}
+      />
 
       <header className="surface-card p-5">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:justify-between">
@@ -244,36 +237,41 @@ function ResultPage() {
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <Trophy className="size-3.5" />
-                {sport.name}
-                {competitionLabel ? ` · ${competitionLabel}` : ""}
+                Futebol{competitionLabel ? ` · ${competitionLabel}` : ""}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Calendar className="size-3.5" />
                 {result.statistics.sample_size} partidas analisadas
-                {result.intent.venue !== "all" && (result.intent.venue === "home" ? " · em casa" : " · fora de casa")}
+                {result.intent.venue !== "all" &&
+                  (result.intent.venue === "home" ? " · em casa" : " · fora de casa")}
               </span>
               <span>
                 Consulta em{" "}
-                {new Date(result.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                {new Date(result.created_at).toLocaleString("pt-BR", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
               </span>
             </div>
           </div>
-          {result.demo ? <DemoBadge className="shrink-0" /> : <RealDataBadge className="shrink-0" />}
+          {result.demo ? (
+            <DemoBadge className="shrink-0" />
+          ) : (
+            <RealDataBadge className="shrink-0" />
+          )}
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button size="sm" variant={saved ? "default" : "outline"} className="gap-1.5" onClick={() => toggleSaved(result)}>
-            {saved ? <BookmarkCheck className="size-4" /> : <Bookmark className="size-4" />}
-            {saved ? "Salva" : "Salvar"}
-          </Button>
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShareOpen(true)}>
-            <Share2 className="size-4" /> Compartilhar
-          </Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={exportCsv}>
             <Download className="size-4" /> Exportar CSV
           </Button>
-          <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => ask(q, requestOverrides)}>
-            <RefreshCw className="size-4" /> Atualizar
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5"
+            onClick={() => ask(q, requestOverrides)}
+          >
+            <RefreshCw className="size-4" /> Atualizar dados
           </Button>
         </div>
       </header>
@@ -286,7 +284,9 @@ function ResultPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted-foreground uppercase">Números principais</h2>
+        <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+          Números principais
+        </h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard label="Média" value={result.statistics.average} emphasis />
           <MetricCard label="Mediana" value={result.statistics.median} />
@@ -300,7 +300,11 @@ function ResultPage() {
             trend={result.statistics.trend}
             hint="Últimos 5 jogos vs. período"
           />
-          <MetricCard label="Unidade" value={result.answer.unit.split(" ")[0]} hint={result.intent.metric_label} />
+          <MetricCard
+            label="Unidade"
+            value={result.answer.unit.split(" ")[0]}
+            hint={result.intent.metric_label}
+          />
         </div>
       </section>
 
@@ -314,7 +318,11 @@ function ResultPage() {
 
       <section className="surface-card p-5">
         <h2 className="mb-4 text-sm font-semibold">Partidas analisadas</h2>
-        <MatchesTable matches={result.matches} metricLabel={result.intent.metric_label} onExport={exportCsv} />
+        <MatchesTable
+          matches={result.matches}
+          metricLabel={result.intent.metric_label}
+          onExport={exportCsv}
+        />
       </section>
 
       <section className="surface-card p-5">
@@ -354,46 +362,20 @@ function ResultPage() {
         <h2 className="text-sm font-semibold">Confiança nos dados</h2>
         <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
           <span>Jogos analisados: {result.statistics.sample_size}</span>
-          <span>Mando de campo: {result.intent.venue === "all" ? "todos" : result.intent.venue === "home" ? "casa" : "fora"}</span>
+          <span>
+            Mando de campo:{" "}
+            {result.intent.venue === "all"
+              ? "todos"
+              : result.intent.venue === "home"
+                ? "casa"
+                : "fora"}
+          </span>
           <span>Competição: {competitionLabel ?? "todas"}</span>
           <span>Dados ausentes: {result.source.missing}</span>
         </div>
         <SourceBadge provider={result.source.provider} updatedAt={result.source.updated_at} />
         <MethodologyNote />
       </section>
-
-      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Compartilhar análise</DialogTitle>
-            <DialogDescription>
-              Copie o link ou adicione esta análise a um workspace.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Button variant="outline" className="w-full" onClick={copyShareLink}>
-              Copiar link
-            </Button>
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Adicionar a um workspace</p>
-              {workspaces.map((workspace) => (
-                <Button
-                  key={workspace.id}
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => {
-                    addToWorkspace(workspace.id, result);
-                    setShareOpen(false);
-                    toast.success(`Análise adicionada a ${workspace.name}.`);
-                  }}
-                >
-                  {workspace.name}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
