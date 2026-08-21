@@ -119,11 +119,41 @@ Validated on 2026-08-21 against the dedicated Supabase project:
 - `authenticated` has no direct SELECT/INSERT/UPDATE/DELETE access
 - backend `service_role` has the required SELECT/INSERT/UPDATE/DELETE access
 - security advisor reports only INFO `rls_enabled_no_policy`, expected for backend-only tables with no browser grants
-- performance advisor reports only INFO `unused_index`, expected while the cache tables are new and empty
+- performance advisor reports only INFO `unused_index`, expected for a newly created cache before workload accumulation
 
-The remaining real gate is runtime cache validation after the server-only Supabase environment variables are available to a Phase 3A deployment:
+### Real cache smoke test
 
-1. `Qual foi a média de escanteios do Corinthians nos últimos 5 jogos?`
-2. Repeat the same query and confirm fixture/stat cache hits plus avoided provider calls.
-3. `Qual foi o total de escanteios do Corinthians nos últimos 5 jogos?`
-4. Confirm the same cached fixtures/stats are reused and only deterministic aggregation changes.
+The Phase 3A Preview was validated with all required server-side environment variables present. The test logged only presence booleans; no secret value was printed.
+
+Cold execution:
+
+`Qual foi a média de escanteios do Corinthians nos últimos 5 jogos?`
+
+- provider/team: BSD / Corinthians (`provider_team_id = 167`)
+- fixture IDs: `207965`, `7217`, `207957`, `7211`, `207936`
+- cache misses: team, fixture feed, and five corner metrics
+- external sports-provider calls: 7 (`resolveTeam`, `getRecentTeamFixtures`, five `getFixtureMetric`)
+- persisted: 1 team, 5 fixtures, 5 metrics
+- corner values persisted: 3, 3, 0, 2, 9 across the five selected fixtures
+- deterministic average: 3.4
+
+Immediate identical execution:
+
+- same five fixture IDs
+- seven cache hits: team, fixture feed, five metrics
+- external sports-provider calls: 0
+- no fixture or metric re-download
+- deterministic average remains 3.4
+
+Aggregation reuse:
+
+`Qual foi o total de escanteios do Corinthians nos últimos 5 jogos?`
+
+- same five fixture IDs and the same five persisted metrics
+- seven cache hits
+- external sports-provider calls: 0
+- no new fixture/metric persistence
+- only deterministic aggregation changed
+- deterministic total: 17
+
+The real zero for fixture `207957` remained `0` in `sports_fixture_team_metrics`, proving that zero is not confused with missing data. API-Football remained configured as controlled fallback but was not required for this sample because BSD satisfied all selected fixtures/metrics.
