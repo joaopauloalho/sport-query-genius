@@ -55,7 +55,10 @@ export const Route = createFileRoute("/app/resultado")({
       competition,
       venue,
       invalid_match_count:
-        rawMatchCount !== undefined && rawMatchCount !== null && rawMatchCount !== "" && !match_count,
+        rawMatchCount !== undefined &&
+        rawMatchCount !== null &&
+        rawMatchCount !== "" &&
+        !match_count,
     };
   },
   head: () => ({
@@ -66,7 +69,10 @@ export const Route = createFileRoute("/app/resultado")({
         content: "Resposta, números, gráfico, tabela e fonte da sua análise real de futebol.",
       },
       { property: "og:title", content: "Resultado da análise — Scoutly AI" },
-      { property: "og:description", content: "Análise de futebol calculada sobre dados estruturados." },
+      {
+        property: "og:description",
+        content: "Análise de futebol calculada sobre dados estruturados.",
+      },
     ],
   }),
   component: ResultPage,
@@ -99,7 +105,8 @@ function ResultPage() {
   const requestOverrides = useMemo<AnalysisOverrides | undefined>(() => {
     const overrides: AnalysisOverrides = {};
     if (match_count !== undefined) overrides.match_count = match_count;
-    if (competition !== undefined) overrides.competition = competition === "all" ? null : competition;
+    if (competition !== undefined)
+      overrides.competition = competition === "all" ? null : competition;
     if (venue !== undefined) overrides.venue = venue;
     return Object.keys(overrides).length > 0 ? overrides : undefined;
   }, [match_count, competition, venue]);
@@ -150,7 +157,8 @@ function ResultPage() {
       .catch(() => {
         if (!alive) return;
         setError({
-          reason: "Não foi possível concluir a análise agora. Nenhuma estatística foi estimada ou substituída por mock.",
+          reason:
+            "Não foi possível concluir a análise agora. Nenhuma estatística foi estimada ou substituída por mock.",
         });
       })
       .finally(() => {
@@ -296,7 +304,9 @@ function ResultPage() {
           <MetricCard label="Jogos analisados" value={result.statistics.sample_size} />
           <MetricCard
             label="Tendência recente"
-            value={result.statistics.trend > 0 ? `+${result.statistics.trend}` : result.statistics.trend}
+            value={
+              result.statistics.trend > 0 ? `+${result.statistics.trend}` : result.statistics.trend
+            }
             trend={result.statistics.trend}
             hint="Últimos 5 jogos vs. período"
           />
@@ -337,7 +347,8 @@ function ResultPage() {
           ))}
         </ul>
         <p className="mt-4 text-xs text-muted-foreground">
-          Observações estatísticas sobre o período analisado. Não representam previsão de eventos futuros.
+          Observações estatísticas sobre o período analisado. Não representam previsão de eventos
+          futuros.
         </p>
       </section>
 
