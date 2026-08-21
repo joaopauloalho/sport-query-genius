@@ -1,14 +1,14 @@
 import type { MatchRecord } from "@/data/sports";
 import type { QueryIntent } from "@/lib/analysis";
 import { ApiFootballProvider } from "@/server/sports/providers/api-football.server";
-import { BsdFootballProvider } from "@/server/sports/providers/bsd-football.server";
+import { BsdFootballSearchProvider } from "@/server/sports/providers/bsd-football-search.server";
 
 import { parseIntentWithDeepSeek } from "./deepseek.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type ServerAnalysisOutcome } from "./errors";
 
 function createFootballProvider() {
-  if (process.env.BSD_FOOTBALL_KEY) return new BsdFootballProvider();
+  if (process.env.BSD_FOOTBALL_KEY) return new BsdFootballSearchProvider();
   return new ApiFootballProvider();
 }
 
