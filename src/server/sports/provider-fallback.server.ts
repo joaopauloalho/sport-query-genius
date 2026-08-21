@@ -1,5 +1,5 @@
 import type { MatchRecord } from "@/data/sports";
-import { AnalysisPipelineError } from "@/server/analysis/errors";
+import { AnalysisPipelineError } from "../analysis/errors.ts";
 import type { QueryIntentInput } from "@/server/analysis/intent-schema";
 import type {
   ProviderFixture,
