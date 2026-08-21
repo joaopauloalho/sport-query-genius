@@ -29,7 +29,7 @@ export const Route = createFileRoute("/app/")({
 });
 
 const SUGGESTIONS = [
-  { icon: Trophy, label: "Corinthians · escanteios", question: "Qual a média de escanteios do Corinthians nos últimos 10 jogos?" },
+  { icon: Trophy, label: "Corinthians · escanteios", question: "Qual a média de escanteios do Corinthians nos últimos 5 jogos?" },
   { icon: Target, label: "Flamengo · finalizações", question: "Qual a média de finalizações do Flamengo nos últimos 5 jogos?" },
   { icon: BarChart3, label: "Palmeiras · cartões", question: "Qual a média de cartões do Palmeiras nos últimos 10 jogos?" },
   { icon: Trophy, label: "Real Madrid · gols", question: "Qual a média de gols do Real Madrid nos últimos 10 jogos?" },
@@ -38,12 +38,12 @@ const SUGGESTIONS = [
 ];
 
 const FEATURED_ANALYSES = [
-  { title: "Escanteios do Corinthians", question: "Qual foi a média de escanteios do Corinthians nos últimos 20 jogos?", tag: "Futebol · Equipe" },
-  { title: "Finalizações do Flamengo", question: "Qual foi a média de finalizações do Flamengo nos últimos 10 jogos?", tag: "Futebol · Equipe" },
+  { title: "Escanteios do Corinthians", question: "Qual foi a média de escanteios do Corinthians nos últimos 5 jogos?", tag: "Futebol · Equipe" },
+  { title: "Finalizações do Flamengo", question: "Qual foi a média de finalizações do Flamengo nos últimos 5 jogos?", tag: "Futebol · Equipe" },
   { title: "Cartões do Palmeiras", question: "Qual foi a média de cartões do Palmeiras nos últimos 10 jogos?", tag: "Futebol · Equipe" },
   { title: "Gols do Real Madrid", question: "Qual foi o total de gols do Real Madrid nos últimos 10 jogos?", tag: "Futebol · Equipe" },
   { title: "Liverpool no alvo", question: "Qual foi a média de finalizações no alvo do Liverpool nos últimos 5 jogos?", tag: "Futebol · Equipe" },
-  { title: "Corinthians fora de casa", question: "Qual foi a média de escanteios do Corinthians nos últimos 5 jogos fora de casa?", tag: "Futebol · Casa/Fora" },
+  { title: "Corinthians em casa", question: "Qual foi a média de escanteios do Corinthians nos últimos 5 jogos em casa?", tag: "Futebol · Casa/Fora" },
 ];
 
 function Dashboard() {
