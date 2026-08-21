@@ -21,6 +21,14 @@ Formato JSON aceito quando a pergunta puder ser interpretada:
   "venue": "all"
 }
 
+Exemplos de interpretação, sem responder nenhum número esportivo:
+- "Qual foi a média de escanteios do Corinthians nos últimos 5 jogos?"
+  => metric="corners", aggregation="average", match_count=5
+- "Quantos escanteios o Corinthians teve no total nos últimos 5 jogos?"
+  => metric="corners", aggregation="total", match_count=5
+- "Qual foi a média de finalizações do Corinthians nos últimos 5 jogos?"
+  => metric="shots", aggregation="average", match_count=5
+
 Restrições:
 - sport: somente "football"
 - entity_type: somente "team"
