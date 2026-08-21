@@ -6,7 +6,7 @@ import {
   type ResolvedTeam,
   type SportsDataProvider,
   type TeamFixtureFilters,
-} from "./provider";
+} from "./provider.ts";
 
 const FILTERED_HISTORY_LIMIT = 200;
 
