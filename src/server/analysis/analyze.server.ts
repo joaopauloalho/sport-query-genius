@@ -5,6 +5,7 @@ import {
   type SupportedMatchCount,
 } from "@/lib/analysis-request";
 import type { QueryIntent } from "@/lib/analysis";
+import { withSportsCache } from "@/server/sports/cache/sports-cache.server";
 import { FilteredSportsDataProvider } from "@/server/sports/filtered-provider.server";
 import { FootballProviderOrchestrator } from "@/server/sports/provider-fallback.server";
 import { ApiFootballProvider } from "@/server/sports/providers/api-football.server";
@@ -51,13 +52,13 @@ const normalizeCompetition = (value: string) =>
 function createFootballOrchestrator(): FootballProviderOrchestrator {
   if (process.env.BSD_FOOTBALL_KEY) {
     return new FootballProviderOrchestrator(
-      new FilteredSportsDataProvider(new BsdFootballV3Provider()),
-      new FilteredSportsDataProvider(new ApiFootballProvider()),
+      new FilteredSportsDataProvider(withSportsCache(new BsdFootballV3Provider())),
+      new FilteredSportsDataProvider(withSportsCache(new ApiFootballProvider())),
     );
   }
 
   return new FootballProviderOrchestrator(
-    new FilteredSportsDataProvider(new ApiFootballProvider()),
+    new FilteredSportsDataProvider(withSportsCache(new ApiFootballProvider())),
   );
 }
 
