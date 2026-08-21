@@ -1,10 +1,4 @@
-export type ApiFootballErrorKind =
-  | "account"
-  | "auth"
-  | "limit"
-  | "plan"
-  | "parameter"
-  | "provider";
+export type ApiFootballErrorKind = "account" | "auth" | "limit" | "plan" | "parameter" | "provider";
 
 function serializeApiErrors(errors: unknown): string {
   try {
