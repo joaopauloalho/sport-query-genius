@@ -1,0 +1,54 @@
+name: Phase 2B Validation
+
+on:
+  push:
+    branches:
+      - feat/phase-2b-provider-fallback
+  pull_request:
+    paths:
+      - "src/server/analysis/**"
+      - "src/server/sports/**"
+      - "tests/phase2b/**"
+      - "package.json"
+      - ".github/workflows/phase2b-validation.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Phase 2B unit tests
+        run: bun run test:phase2b
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build
+        run: bun run build
+
+      - name: Global lint diagnostic
+        continue-on-error: true
+        run: bun run lint
+
+      - name: Lint Phase 2B files
+        run: >-
+          bunx eslint
+          src/server/analysis/analyze.server.ts
+          src/server/analysis/overrides.ts
+          src/server/sports/provider-fallback.server.ts
+          src/server/sports/providers/api-football-errors.ts
+          src/server/sports/providers/api-football.server.ts
+          tests/phase2b/provider-fallback.test.mjs

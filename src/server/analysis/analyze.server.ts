@@ -1,20 +1,20 @@
-import { COMPETITIONS, type MatchRecord } from "@/data/sports";
+import { COMPETITIONS } from "@/data/sports";
 import {
   SUPPORTED_MATCH_COUNTS,
-  type AnalysisOverrides,
   type AnalysisRequest,
   type SupportedMatchCount,
 } from "@/lib/analysis-request";
 import type { QueryIntent } from "@/lib/analysis";
+import { FilteredSportsDataProvider } from "@/server/sports/filtered-provider.server";
+import { FootballProviderOrchestrator } from "@/server/sports/provider-fallback.server";
 import { ApiFootballProvider } from "@/server/sports/providers/api-football.server";
 import { BsdFootballV3Provider } from "@/server/sports/providers/bsd-football-v3.server";
-import { FilteredSportsDataProvider } from "@/server/sports/filtered-provider.server";
-import type { ProviderFixture, SportsDataProvider } from "@/server/sports/provider";
 
 import { parseIntentWithDeepSeek } from "./deepseek.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type ServerAnalysisOutcome } from "./errors";
 import type { QueryIntentInput } from "./intent-schema";
+import { applyOverrides } from "./overrides";
 
 const METRIC_LABELS = {
   corners: "Escanteios",
@@ -48,11 +48,17 @@ const normalizeCompetition = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-function createFootballProvider(): SportsDataProvider {
-  const provider = process.env.BSD_FOOTBALL_KEY
-    ? new BsdFootballV3Provider()
-    : new ApiFootballProvider();
-  return new FilteredSportsDataProvider(provider);
+function createFootballOrchestrator(): FootballProviderOrchestrator {
+  if (process.env.BSD_FOOTBALL_KEY) {
+    return new FootballProviderOrchestrator(
+      new FilteredSportsDataProvider(new BsdFootballV3Provider()),
+      new FilteredSportsDataProvider(new ApiFootballProvider()),
+    );
+  }
+
+  return new FootballProviderOrchestrator(
+    new FilteredSportsDataProvider(new ApiFootballProvider()),
+  );
 }
 
 function assertSupportedExplicitPeriod(question: string): void {
@@ -73,27 +79,6 @@ function assertSupportedExplicitPeriod(question: string): void {
   }
 }
 
-function applyOverrides(
-  parsedIntent: QueryIntentInput,
-  overrides?: AnalysisOverrides,
-): QueryIntentInput {
-  if (!overrides) return parsedIntent;
-
-  const competitionWasOverridden = Object.prototype.hasOwnProperty.call(
-    overrides,
-    "competition",
-  );
-
-  return {
-    ...parsedIntent,
-    match_count: overrides.match_count ?? parsedIntent.match_count,
-    competition: competitionWasOverridden
-      ? (overrides.competition ?? null)
-      : parsedIntent.competition,
-    venue: overrides.venue ?? parsedIntent.venue,
-  };
-}
-
 function resolveCompetition(value: string | null): {
   intentValue: string | null;
   providerNames: readonly string[] | null;
@@ -101,7 +86,9 @@ function resolveCompetition(value: string | null): {
   if (value === null) return { intentValue: null, providerNames: null };
 
   const normalized = normalizeCompetition(value);
-  const footballCompetitions = COMPETITIONS.filter((competition) => competition.sport === "football");
+  const footballCompetitions = COMPETITIONS.filter(
+    (competition) => competition.sport === "football",
+  );
   const known = footballCompetitions.find((competition) => {
     if (normalizeCompetition(competition.id) === normalized) return true;
     if (normalizeCompetition(competition.name) === normalized) return true;
@@ -121,28 +108,6 @@ function resolveCompetition(value: string | null): {
   };
 }
 
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  limit: number,
-  worker: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let cursor = 0;
-
-  async function runWorker() {
-    while (true) {
-      const index = cursor;
-      cursor += 1;
-      if (index >= items.length) return;
-      results[index] = await worker(items[index], index);
-    }
-  }
-
-  const workerCount = Math.min(Math.max(1, limit), items.length);
-  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
-  return results;
-}
-
 function filterDescription(intent: QueryIntentInput, competition: string | null): string {
   const parts: string[] = [];
   if (intent.venue === "home") parts.push("em casa");
@@ -151,7 +116,9 @@ function filterDescription(intent: QueryIntentInput, competition: string | null)
   return parts.length ? ` ${parts.join(" e ")}` : "";
 }
 
-export async function analyzeQuestionServer(request: AnalysisRequest): Promise<ServerAnalysisOutcome> {
+export async function analyzeQuestionServer(
+  request: AnalysisRequest,
+): Promise<ServerAnalysisOutcome> {
   try {
     assertSupportedExplicitPeriod(request.question);
 
@@ -159,43 +126,40 @@ export async function analyzeQuestionServer(request: AnalysisRequest): Promise<S
     const effectiveIntent = applyOverrides(parsedIntent, request.overrides);
     const competition = resolveCompetition(effectiveIntent.competition);
 
-    const provider = createFootballProvider();
-    const team = await provider.resolveTeam(effectiveIntent.entity_name);
-    const fixtures = await provider.getRecentTeamFixtures(team.id, effectiveIntent.match_count, {
-      venue: effectiveIntent.venue,
-      competitionNames: competition.providerNames,
-    });
-
-    if (fixtures.length < effectiveIntent.match_count) {
-      throw new AnalysisPipelineError(
-        "DATA_INSUFFICIENT",
-        `A ${provider.name} retornou apenas ${fixtures.length} partidas concluídas${filterDescription(effectiveIntent, competition.intentValue)} para a amostra pedida. Nenhuma partida de outro filtro foi usada para completar a amostra.`,
-      );
-    }
-
-    const selectedFixtures = fixtures.slice(-effectiveIntent.match_count);
-    const metricResults = await mapWithConcurrency<ProviderFixture, MatchRecord | null>(
-      selectedFixtures,
-      4,
-      (fixture) => provider.getFixtureMetric(fixture, team.id, effectiveIntent.metric),
+    const orchestrator = createFootballOrchestrator();
+    const selection = await orchestrator.selectTeamFixtures(
+      effectiveIntent.entity_name,
+      effectiveIntent.match_count,
+      {
+        venue: effectiveIntent.venue,
+        competitionNames: competition.providerNames,
+      },
     );
-    const matches = metricResults.filter((match): match is MatchRecord => match !== null);
 
-    if (matches.length < effectiveIntent.match_count) {
+    if (selection.fixtures.length < effectiveIntent.match_count) {
       throw new AnalysisPipelineError(
         "DATA_INSUFFICIENT",
-        `A ${provider.name} não forneceu a estatística "${effectiveIntent.metric}" em todas as ${effectiveIntent.match_count} partidas selecionadas. Nenhum valor ausente foi estimado.`,
+        `A ${selection.provider.name} retornou apenas ${selection.fixtures.length} partidas concluídas${filterDescription(effectiveIntent, competition.intentValue)} para a amostra pedida. Nenhuma partida de outro filtro foi usada para completar a amostra.`,
       );
     }
+
+    const selectedFixtures = selection.fixtures.slice(-effectiveIntent.match_count);
+    const matches = await orchestrator.getSelectedFixtureMetrics(
+      { ...selection, fixtures: selectedFixtures },
+      effectiveIntent.metric,
+    );
 
     const intent: QueryIntent = {
       ...effectiveIntent,
       competition: competition.intentValue,
-      entity_name: team.name,
-      entity_id: String(team.id),
+      entity_name: selection.team.name,
+      entity_id: String(selection.team.id),
       metric_label: METRIC_LABELS[effectiveIntent.metric],
       compare_with: null,
     };
+
+    const providersUsed = Array.from(new Set(matches.map((match) => match.source)));
+    const providerLabel = providersUsed.join(" + ");
 
     return {
       ok: true,
@@ -203,7 +167,7 @@ export async function analyzeQuestionServer(request: AnalysisRequest): Promise<S
         question: request.question,
         intent,
         matches,
-        provider: provider.name,
+        provider: providerLabel,
       }),
     };
   } catch (error) {

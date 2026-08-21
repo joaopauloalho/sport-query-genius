@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test:phase2b": "node --experimental-transform-types --test tests/phase2b/*.test.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {
