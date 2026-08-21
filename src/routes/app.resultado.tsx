@@ -224,6 +224,7 @@ function ResultPage() {
   }
 
   function copyShareLink() {
+    if (!result) return;
     const params = new URLSearchParams({ q: result.question });
     if (match_count !== undefined) params.set("match_count", String(match_count));
     if (competition !== undefined) params.set("competition", competition);
