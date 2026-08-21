@@ -14,6 +14,24 @@ function serializeApiErrors(errors: unknown): string {
   }
 }
 
+function hasErrorValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === "") return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length > 0;
+  return true;
+}
+
+export function getApiFootballErrorPayload(payload: unknown): unknown | null {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null;
+  const record = payload as Record<string, unknown>;
+
+  for (const key of ["errors", "error", "message"] as const) {
+    if (hasErrorValue(record[key])) return record[key];
+  }
+
+  return null;
+}
+
 export function classifyApiFootballError(errors: unknown): ApiFootballErrorKind {
   const serialized = serializeApiErrors(errors);
 
