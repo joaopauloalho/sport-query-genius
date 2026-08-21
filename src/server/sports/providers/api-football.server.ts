@@ -317,11 +317,10 @@ export class ApiFootballProvider implements SportsDataProvider {
           away: entry.teams.away,
           goals: entry.goals,
         }))
-        .filter(
-          (fixture) =>
-            COMPLETED_FIXTURE_STATUSES.includes(
-              fixture.status as (typeof COMPLETED_FIXTURE_STATUSES)[number],
-            ),
+        .filter((fixture) =>
+          COMPLETED_FIXTURE_STATUSES.includes(
+            fixture.status as (typeof COMPLETED_FIXTURE_STATUSES)[number],
+          ),
         )
         .sort((a, b) => a.timestamp - b.timestamp);
     };
