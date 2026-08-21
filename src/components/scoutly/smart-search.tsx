@@ -1,9 +1,14 @@
-import { ArrowRight, Home, Mic, Search, Sparkles } from "lucide-react";
+import { ArrowRight, Home, Search, Sparkles } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { COMPETITIONS, SPORTS } from "@/data/sports";
 import {
   SUPPORTED_MATCH_COUNTS,
@@ -37,7 +42,9 @@ export const PLACEHOLDER =
   "Ex.: Qual foi a média de escanteios do Corinthians nos últimos 20 jogos?";
 
 const FOOTBALL_SPORTS = SPORTS.filter((sport) => sport.id === "football");
-const FOOTBALL_COMPETITIONS = COMPETITIONS.filter((competition) => competition.sport === "football");
+const FOOTBALL_COMPETITIONS = COMPETITIONS.filter(
+  (competition) => competition.sport === "football",
+);
 
 export function SmartSearch({
   onSubmit,
@@ -97,23 +104,13 @@ export function SmartSearch({
           aria-label="Pergunta de análise esportiva"
           autoFocus={autoFocus}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(event) => setValue(event.target.value)}
           placeholder={PLACEHOLDER}
           className={cn(
             "min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground",
             size === "lg" ? "py-2 text-base" : "text-sm",
           )}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Pesquisar por voz"
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-          onClick={() => toast.info("Entrada por voz chega na próxima versão do MVP.")}
-        >
-          <Mic className="size-4.5" />
-        </Button>
         <Button type="submit" size={size === "lg" ? "default" : "sm"} className="shrink-0 gap-1.5">
           Analisar
           <ArrowRight className="size-4" />
@@ -124,7 +121,10 @@ export function SmartSearch({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Sparkles className="size-3.5 text-muted-foreground" />
           <Select value={filters.sport}>
-            <SelectTrigger className="h-8 w-auto min-w-[8rem] rounded-full text-xs" aria-label="Esporte">
+            <SelectTrigger
+              className="h-8 w-auto min-w-[8rem] rounded-full text-xs"
+              aria-label="Esporte"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -143,7 +143,10 @@ export function SmartSearch({
               setExplicit({ ...explicit, period: true });
             }}
           >
-            <SelectTrigger className="h-8 w-auto min-w-[9rem] rounded-full text-xs" aria-label="Período">
+            <SelectTrigger
+              className="h-8 w-auto min-w-[9rem] rounded-full text-xs"
+              aria-label="Período"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -162,7 +165,10 @@ export function SmartSearch({
               setExplicit({ ...explicit, competition: true });
             }}
           >
-            <SelectTrigger className="h-8 w-auto min-w-[10rem] rounded-full text-xs" aria-label="Competição">
+            <SelectTrigger
+              className="h-8 w-auto min-w-[10rem] rounded-full text-xs"
+              aria-label="Competição"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -182,7 +188,10 @@ export function SmartSearch({
               setExplicit({ ...explicit, venue: true });
             }}
           >
-            <SelectTrigger className="h-8 w-auto min-w-[8.5rem] rounded-full text-xs" aria-label="Mando">
+            <SelectTrigger
+              className="h-8 w-auto min-w-[8.5rem] rounded-full text-xs"
+              aria-label="Mando"
+            >
               <Home className="mr-1 size-3.5" />
               <SelectValue />
             </SelectTrigger>

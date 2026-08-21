@@ -19,7 +19,7 @@ function AppLayout() {
             <div className="min-w-0 flex-1" />
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-lime/40 bg-lime/10 px-2.5 py-1 text-[0.7rem] font-semibold tracking-wide text-lime uppercase">
               <CheckCircle2 className="size-3" />
-              Fase 1 · consultas reais
+              Futebol · consultas reais
             </span>
           </header>
           <main className="flex-1">
