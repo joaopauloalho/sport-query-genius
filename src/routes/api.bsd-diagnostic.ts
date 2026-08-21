@@ -2,13 +2,19 @@ import { createFileRoute } from "@tanstack/react-router";
 
 const BASE_URL = "https://sports.bzzoiro.com/api/v2";
 const TEAM_ID = 167;
+const LATEST_EVENT_IDS = [207965, 7217, 207957, 7211, 207936] as const;
 
-function summarize(payload: unknown) {
-  const root = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>) : null;
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+
+function summarizeEvents(payload: unknown) {
+  const root = asRecord(payload);
   const results = root && Array.isArray(root.results) ? root.results : Array.isArray(payload) ? payload : [];
   const safeResults = results.slice(0, 12).map((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
-    const r = item as Record<string, unknown>;
+    const r = asRecord(item);
+    if (!r) return item;
     return {
       id: r.id,
       event_date: r.event_date,
@@ -30,9 +36,38 @@ function summarize(payload: unknown) {
   };
 }
 
-async function fetchBsd(path: string) {
+function pickStatFields(value: unknown) {
+  const record = asRecord(value);
+  if (!record) return null;
+  return Object.fromEntries(
+    Object.entries(record).filter(([key, statValue]) =>
+      /(corner|shot|card)/i.test(key) &&
+      (typeof statValue === "string" || typeof statValue === "number" || statValue === null),
+    ),
+  );
+}
+
+function summarizeStats(payload: unknown) {
+  const root = asRecord(payload);
+  const stats = root ? asRecord(root.stats) : null;
+  const home = stats ? asRecord(stats.home) : null;
+  const away = stats ? asRecord(stats.away) : null;
+  const shotmap = root && Array.isArray(root.shotmap) ? root.shotmap : [];
+
+  return {
+    event_id: root?.event_id ?? null,
+    rootKeys: root ? Object.keys(root) : [],
+    homeKeys: home ? Object.keys(home) : [],
+    awayKeys: away ? Object.keys(away) : [],
+    homeRelevant: pickStatFields(home),
+    awayRelevant: pickStatFields(away),
+    shotmapCount: shotmap.length,
+  };
+}
+
+async function fetchJson(path: string) {
   const apiKey = process.env.BSD_FOOTBALL_KEY;
-  if (!apiKey) return { error: "missing_key" };
+  if (!apiKey) return { status: 0, ok: false, payload: null as unknown };
 
   const response = await fetch(`${BASE_URL}${path}`, {
     headers: { Authorization: `Token ${apiKey}` },
@@ -45,34 +80,41 @@ async function fetchBsd(path: string) {
     payload = null;
   }
 
-  return {
-    status: response.status,
-    ok: response.ok,
-    data: summarize(payload),
-  };
+  return { status: response.status, ok: response.ok, payload };
 }
 
 export const Route = createFileRoute("/api/bsd-diagnostic")({
   server: {
     handlers: {
       GET: async () => {
-        const queries = {
-          teamFixturesDefault: `/teams/${TEAM_ID}/fixtures/?limit=200&offset=0`,
-          teamFixturesFinished: `/teams/${TEAM_ID}/fixtures/?status=finished&limit=200&offset=0`,
-          eventsTeamWindow: `/events/?team_id=${TEAM_ID}&date_from=2026-06-01&date_to=2026-08-21&limit=200&offset=0`,
-          eventsTeamWindowFinished: `/events/?team_id=${TEAM_ID}&status=finished&date_from=2026-06-01&date_to=2026-08-21&limit=200&offset=0`,
-          eventsTeamNameWindow: `/events/?team_name=Corinthians&date_from=2026-06-01&date_to=2026-08-21&limit=200&offset=0`,
-        } as const;
+        const eventsPath = `/events/?team_id=${TEAM_ID}&status=finished&date_from=2026-06-01&date_to=2026-08-21&limit=200&offset=0`;
+        const eventsResponse = await fetchJson(eventsPath);
 
-        const entries = await Promise.all(
-          Object.entries(queries).map(async ([key, path]) => [key, await fetchBsd(path)] as const),
+        const statsEntries = await Promise.all(
+          LATEST_EVENT_IDS.map(async (eventId) => {
+            const response = await fetchJson(`/events/${eventId}/stats/`);
+            return [
+              String(eventId),
+              {
+                status: response.status,
+                ok: response.ok,
+                data: summarizeStats(response.payload),
+              },
+            ] as const;
+          }),
         );
 
-        return Response.json(Object.fromEntries(entries), {
-          headers: {
-            "Cache-Control": "no-store",
+        return Response.json(
+          {
+            events: {
+              status: eventsResponse.status,
+              ok: eventsResponse.ok,
+              data: summarizeEvents(eventsResponse.payload),
+            },
+            stats: Object.fromEntries(statsEntries),
           },
-        });
+          { headers: { "Cache-Control": "no-store" } },
+        );
       },
     },
   },
