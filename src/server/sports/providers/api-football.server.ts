@@ -289,16 +289,15 @@ export class ApiFootballProvider implements SportsDataProvider {
 
   async getRecentTeamFixtures(teamId: number, count: number): Promise<ProviderFixture[]> {
     const to = new Date();
+    const currentSeason = to.getUTCFullYear();
 
-    const loadCompletedFixtures = async (daysBack: number) => {
-      const from = new Date(to);
-      from.setUTCDate(from.getUTCDate() - daysBack);
-
+    const loadCompletedFixtures = async (season: number, from: Date, until: Date) => {
       const payload = fixturesSchema.parse(
         await this.request("/fixtures", {
           team: teamId,
+          season,
           from: formatApiDate(from),
-          to: formatApiDate(to),
+          to: formatApiDate(until),
           status: COMPLETED_FIXTURE_STATUSES.join("-"),
         }),
       );
@@ -318,11 +317,25 @@ export class ApiFootballProvider implements SportsDataProvider {
         .sort((a, b) => a.timestamp - b.timestamp);
     };
 
-    // The API-FOOTBALL Free plan rejects the convenience `last` parameter. Use a date range,
-    // then select the most recent completed fixtures deterministically in our own code.
-    let fixtures = await loadCompletedFixtures(120);
+    const currentFrom = new Date(to);
+    currentFrom.setUTCDate(currentFrom.getUTCDate() - 120);
+
+    // The API-FOOTBALL Free plan rejects the convenience `last` parameter and requires
+    // `season` when team + date filters are used. Query the current season explicitly,
+    // then fall back to the prior season only when necessary.
+    let fixtures = await loadCompletedFixtures(currentSeason, currentFrom, to);
+
     if (fixtures.length < count) {
-      fixtures = await loadCompletedFixtures(365);
+      const previousSeason = currentSeason - 1;
+      const previousFrom = new Date(Date.UTC(previousSeason, 0, 1));
+      const previousTo = new Date(Date.UTC(previousSeason, 11, 31, 23, 59, 59));
+      const previousFixtures = await loadCompletedFixtures(previousSeason, previousFrom, previousTo);
+
+      const byFixtureId = new Map<number, ProviderFixture>();
+      for (const fixture of [...previousFixtures, ...fixtures]) {
+        byFixtureId.set(fixture.id, fixture);
+      }
+      fixtures = [...byFixtureId.values()].sort((a, b) => a.timestamp - b.timestamp);
     }
 
     return fixtures.slice(-count);
