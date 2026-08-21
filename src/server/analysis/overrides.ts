@@ -7,10 +7,7 @@ export function applyOverrides(
 ): QueryIntentInput {
   if (!overrides) return parsedIntent;
 
-  const competitionWasOverridden = Object.prototype.hasOwnProperty.call(
-    overrides,
-    "competition",
-  );
+  const competitionWasOverridden = Object.prototype.hasOwnProperty.call(overrides, "competition");
 
   return {
     ...parsedIntent,
