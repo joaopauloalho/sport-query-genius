@@ -26,7 +26,8 @@ export function AppSidebar() {
   const pathname = useRouterState({ select: (routerState) => routerState.location.pathname });
   const { theme, toggleTheme } = useScoutly();
 
-  const isActive = (url: string) => (url === "/app" ? pathname === "/app" : pathname.startsWith(url));
+  const isActive = (url: string) =>
+    url === "/app" ? pathname === "/app" : pathname.startsWith(url);
 
   return (
     <Sidebar collapsible="icon">
@@ -70,7 +71,8 @@ export function AppSidebar() {
 
         {!collapsed && (
           <p className="px-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-            O histórico recente é salvo somente neste navegador e não é sincronizado em conta ou nuvem.
+            O histórico recente é salvo somente neste navegador e não é sincronizado em conta ou
+            nuvem.
           </p>
         )}
       </SidebarFooter>
