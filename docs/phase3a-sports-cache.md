@@ -106,9 +106,22 @@ The existing Phase 2B suite remains part of Phase 3A CI. The strict lint gate is
 
 ## Real Supabase validation status
 
-At implementation time, the connected Supabase account did not expose a project clearly associated with `sport-query-genius`. The migration is therefore versioned in the repository but intentionally **not applied to any unrelated project**.
+Validated on 2026-08-21 against the dedicated Supabase project:
 
-Once a dedicated project is connected, apply the migration, configure the two server-only environment variables, and validate with:
+- project: `sport-query-genius`
+- project ref: `xuyqlajmtsvnzhqbjwmz`
+- region: `sa-east-1`
+- migration: `20260821193000_phase3a_sports_cache`
+- migration history aligned with the repository migration version
+- all three cache tables exist with expected columns, composite primary keys, foreign key, constraints, and indexes
+- RLS enabled on all three cache tables
+- `anon` has no direct SELECT/INSERT/UPDATE/DELETE access
+- `authenticated` has no direct SELECT/INSERT/UPDATE/DELETE access
+- backend `service_role` has the required SELECT/INSERT/UPDATE/DELETE access
+- security advisor reports only INFO `rls_enabled_no_policy`, expected for backend-only tables with no browser grants
+- performance advisor reports only INFO `unused_index`, expected while the cache tables are new and empty
+
+The remaining real gate is runtime cache validation after the server-only Supabase environment variables are available to a Phase 3A deployment:
 
 1. `Qual foi a média de escanteios do Corinthians nos últimos 5 jogos?`
 2. Repeat the same query and confirm fixture/stat cache hits plus avoided provider calls.
