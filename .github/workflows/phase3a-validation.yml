@@ -8,6 +8,7 @@ on:
     paths:
       - "src/server/analysis/analyze.server.ts"
       - "src/server/sports/cache/**"
+      - "src/server/sports/filtered-provider.server.ts"
       - "tests/phase3a/**"
       - "supabase/migrations/**"
       - "docs/phase3a-sports-cache.md"
@@ -54,6 +55,7 @@ jobs:
         run: >-
           bunx eslint
           src/server/analysis/analyze.server.ts
+          src/server/sports/filtered-provider.server.ts
           src/server/sports/cache/cache-policy.ts
           src/server/sports/cache/cached-provider.server.ts
           src/server/sports/cache/repository.ts
