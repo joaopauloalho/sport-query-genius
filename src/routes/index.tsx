@@ -107,8 +107,7 @@ function Landing() {
         <section className="hero-glow relative overflow-hidden px-4 pt-20 pb-20 sm:px-6">
           <div className="mx-auto max-w-3xl text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-lime/40 bg-lime/10 px-3 py-1 text-xs font-semibold tracking-wide text-lime uppercase">
-              <ShieldCheck className="size-3.5" />{" "}
-              Dados reais · futebol
+              <ShieldCheck className="size-3.5" /> Dados reais · futebol
             </span>
             <h1 className="animate-rise mt-6 text-4xl leading-[1.08] font-bold text-balance sm:text-6xl">
               Analise equipes de futebol sem{" "}
