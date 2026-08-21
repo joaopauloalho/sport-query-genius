@@ -42,14 +42,20 @@ export function SourceBadge({
 }) {
   const date = new Date(updatedAt ?? DATA_SOURCE.updatedAt);
   return (
-    <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground", className)}>
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground",
+        className,
+      )}
+    >
       <span className="inline-flex items-center gap-1.5">
         <Database className="size-3.5" />
         Fonte: {provider}
       </span>
       <span className="inline-flex items-center gap-1.5">
         <RefreshCw className="size-3.5" />
-        Última atualização: {date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+        Última atualização:{" "}
+        {date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
       </span>
     </div>
   );
