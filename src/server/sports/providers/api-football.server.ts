@@ -6,6 +6,7 @@ import { AnalysisPipelineError } from "@/server/analysis/errors";
 import type { ProviderFixture, ResolvedTeam, SportsDataProvider } from "../provider";
 import {
   classifyApiFootballError,
+  getApiFootballErrorPayload,
   type ApiFootballErrorKind,
 } from "./api-football-errors";
 
@@ -77,13 +78,6 @@ const normalize = (value: string) =>
 
 const formatApiDate = (date: Date) => date.toISOString().slice(0, 10);
 
-function hasApiErrors(errors: unknown): boolean {
-  if (!errors) return false;
-  if (Array.isArray(errors)) return errors.length > 0;
-  if (typeof errors === "object") return Object.keys(errors as Record<string, unknown>).length > 0;
-  return Boolean(errors);
-}
-
 function safeErrorForLog(errors: unknown, apiKey: string): string {
   let serialized: string;
   try {
@@ -130,6 +124,19 @@ function pipelineErrorFor(kind: ApiFootballErrorKind): AnalysisPipelineError {
     "PROVIDER_UNAVAILABLE",
     "A API-FOOTBALL recusou a consulta solicitada.",
   );
+}
+
+function classifyHttpFailure(status: number, payload: unknown): ApiFootballErrorKind {
+  const errorPayload = getApiFootballErrorPayload(payload);
+  if (errorPayload !== null) {
+    const classified = classifyApiFootballError(errorPayload);
+    if (classified !== "provider") return classified;
+  }
+
+  if (status === 401) return "auth";
+  if (status === 402) return "plan";
+  if (status === 403) return "auth";
+  return "provider";
 }
 
 export class ApiFootballProvider implements SportsDataProvider {
@@ -185,16 +192,7 @@ export class ApiFootballProvider implements SportsDataProvider {
       }
 
       if (!response.ok) {
-        const errorCarrier = z.object({ errors: z.unknown().optional() }).safeParse(payload);
-        const kind =
-          errorCarrier.success && hasApiErrors(errorCarrier.data.errors)
-            ? classifyApiFootballError(errorCarrier.data.errors)
-            : response.status === 401
-              ? "auth"
-              : response.status === 402
-                ? "plan"
-                : "provider";
-
+        const kind = classifyHttpFailure(response.status, payload);
         console.warn("[api-football] HTTP failure", {
           path,
           authHeader,
@@ -220,17 +218,17 @@ export class ApiFootballProvider implements SportsDataProvider {
     };
 
     let result = await performRequest("x-apisports-key");
-    let errorCarrier = z.object({ errors: z.unknown().optional() }).safeParse(result.payload);
+    let errorPayload = getApiFootballErrorPayload(result.payload);
 
-    if (errorCarrier.success && hasApiErrors(errorCarrier.data.errors)) {
-      const kind = classifyApiFootballError(errorCarrier.data.errors);
+    if (errorPayload !== null) {
+      const kind = classifyApiFootballError(errorPayload);
 
       console.warn("[api-football] API error", {
         path,
         authHeader: "x-apisports-key",
         kind,
         remaining: result.remaining,
-        detail: safeErrorForLog(errorCarrier.data.errors, apiKey),
+        detail: safeErrorForLog(errorPayload, apiKey),
       });
 
       // API-Sports currently documents x-apisports-key. Older/RapidAPI-issued keys can use
@@ -239,9 +237,9 @@ export class ApiFootballProvider implements SportsDataProvider {
       // entitlement, rate limits and normal provider errors are never retried this way.
       if (kind === "auth") {
         result = await performRequest("x-rapidapi-key");
-        errorCarrier = z.object({ errors: z.unknown().optional() }).safeParse(result.payload);
+        errorPayload = getApiFootballErrorPayload(result.payload);
 
-        if (!(errorCarrier.success && hasApiErrors(errorCarrier.data.errors))) {
+        if (errorPayload === null) {
           console.info("[api-football] alternate auth header accepted", {
             path,
             authHeader: "x-rapidapi-key",
@@ -250,13 +248,13 @@ export class ApiFootballProvider implements SportsDataProvider {
           return result.payload;
         }
 
-        const fallbackKind = classifyApiFootballError(errorCarrier.data.errors);
+        const fallbackKind = classifyApiFootballError(errorPayload);
         console.warn("[api-football] API error after auth fallback", {
           path,
           authHeader: "x-rapidapi-key",
           kind: fallbackKind,
           remaining: result.remaining,
-          detail: safeErrorForLog(errorCarrier.data.errors, apiKey),
+          detail: safeErrorForLog(errorPayload, apiKey),
         });
         throw pipelineErrorFor(fallbackKind);
       }
