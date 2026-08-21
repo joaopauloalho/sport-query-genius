@@ -1,10 +1,16 @@
 import type { MatchRecord } from "@/data/sports";
 import type { QueryIntent } from "@/lib/analysis";
 import { ApiFootballProvider } from "@/server/sports/providers/api-football.server";
+import { BsdFootballProvider } from "@/server/sports/providers/bsd-football.server";
 
 import { parseIntentWithDeepSeek } from "./deepseek.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type ServerAnalysisOutcome } from "./errors";
+
+function createFootballProvider() {
+  if (process.env.BSD_FOOTBALL_KEY) return new BsdFootballProvider();
+  return new ApiFootballProvider();
+}
 
 export async function analyzeQuestionServer(question: string): Promise<ServerAnalysisOutcome> {
   try {
@@ -24,14 +30,14 @@ export async function analyzeQuestionServer(question: string): Promise<ServerAna
       );
     }
 
-    const provider = new ApiFootballProvider();
+    const provider = createFootballProvider();
     const team = await provider.resolveTeam(parsedIntent.entity_name);
     const fixtures = await provider.getRecentTeamFixtures(team.id, parsedIntent.match_count);
 
     if (fixtures.length < parsedIntent.match_count) {
       throw new AnalysisPipelineError(
         "DATA_INSUFFICIENT",
-        `A API-FOOTBALL retornou apenas ${fixtures.length} partidas concluídas para a amostra pedida.`,
+        `A ${provider.name} retornou apenas ${fixtures.length} partidas concluídas para a amostra pedida.`,
       );
     }
 
@@ -44,7 +50,7 @@ export async function analyzeQuestionServer(question: string): Promise<ServerAna
     if (matches.length < parsedIntent.match_count) {
       throw new AnalysisPipelineError(
         "DATA_INSUFFICIENT",
-        `A API-FOOTBALL não forneceu a estatística "${parsedIntent.metric}" em todas as ${parsedIntent.match_count} partidas. Nenhum valor ausente foi estimado.`,
+        `A ${provider.name} não forneceu a estatística "${parsedIntent.metric}" em todas as ${parsedIntent.match_count} partidas. Nenhum valor ausente foi estimado.`,
       );
     }
 
