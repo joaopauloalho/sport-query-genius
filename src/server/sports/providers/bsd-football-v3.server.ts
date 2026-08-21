@@ -7,6 +7,8 @@ import { BsdFootballV2Provider } from "./bsd-football-v2.server";
 const BSD_BASE_URL = "https://sports.bzzoiro.com/api/v2";
 const TIMEOUT_MS = 15_000;
 
+type BsdProviderFixture = ProviderFixture & { leagueId: number | null };
+
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -99,7 +101,7 @@ function readDate(record: Record<string, unknown>): { date: string; timestamp: n
   return null;
 }
 
-function readFixture(raw: Record<string, unknown>): ProviderFixture | null {
+function readFixture(raw: Record<string, unknown>): BsdProviderFixture | null {
   const id = readNumber(raw, ["id", "event_id", "fixture_id"]);
   const when = readDate(raw);
   const home = readTeam(raw, "home");
@@ -112,6 +114,7 @@ function readFixture(raw: Record<string, unknown>): ProviderFixture | null {
     timestamp: when.timestamp,
     status: (readString(raw, ["status"]) ?? "").toLowerCase(),
     competition: readCompetition(raw),
+    leagueId: readNumber(raw, ["league_id"]),
     home,
     away,
     goals: {
@@ -136,12 +139,13 @@ function formatDate(date: Date): string {
 export class BsdFootballV3Provider implements SportsDataProvider {
   readonly name = "BSD";
   private readonly delegate = new BsdFootballV2Provider();
+  private leagueNamesPromise: Promise<Map<number, string>> | null = null;
 
   resolveTeam(name: string): Promise<ResolvedTeam> {
     return this.delegate.resolveTeam(name);
   }
 
-  private async fetchFinishedEvents(teamId: number, daysBack: number): Promise<ProviderFixture[]> {
+  private async fetchJson(path: string, params: Record<string, string | number>): Promise<unknown> {
     const apiKey = process.env.BSD_FOOTBALL_KEY;
     if (!apiKey) {
       throw new AnalysisPipelineError(
@@ -150,17 +154,10 @@ export class BsdFootballV3Provider implements SportsDataProvider {
       );
     }
 
-    const dateTo = new Date();
-    const dateFrom = new Date(dateTo);
-    dateFrom.setUTCDate(dateFrom.getUTCDate() - daysBack);
-
-    const url = new URL(`${BSD_BASE_URL}/events/`);
-    url.searchParams.set("team_id", String(teamId));
-    url.searchParams.set("status", "finished");
-    url.searchParams.set("date_from", formatDate(dateFrom));
-    url.searchParams.set("date_to", formatDate(dateTo));
-    url.searchParams.set("limit", "200");
-    url.searchParams.set("offset", "0");
+    const url = new URL(`${BSD_BASE_URL}${path}`);
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, String(value));
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -174,7 +171,7 @@ export class BsdFootballV3Provider implements SportsDataProvider {
     } catch {
       throw new AnalysisPipelineError(
         "PROVIDER_UNAVAILABLE",
-        "A BSD Football API não respondeu ao buscar o histórico do time.",
+        "A BSD Football API não respondeu à consulta.",
       );
     } finally {
       clearTimeout(timeout);
@@ -193,20 +190,82 @@ export class BsdFootballV3Provider implements SportsDataProvider {
       );
     }
     if (!response.ok) {
-      console.warn("[bsd-football-v3] events HTTP failure", {
-        teamId,
+      console.warn("[bsd-football-v3] HTTP failure", {
+        path,
         status: response.status,
       });
       throw new AnalysisPipelineError(
         "PROVIDER_UNAVAILABLE",
-        `A BSD Football API falhou ao buscar o histórico (HTTP ${response.status}).`,
+        `A BSD Football API falhou ao consultar ${path} (HTTP ${response.status}).`,
       );
     }
 
-    const payload: unknown = await response.json();
+    try {
+      return (await response.json()) as unknown;
+    } catch {
+      throw new AnalysisPipelineError(
+        "PROVIDER_UNAVAILABLE",
+        "A BSD Football API retornou uma resposta inválida.",
+      );
+    }
+  }
+
+  private async getLeagueNames(): Promise<Map<number, string>> {
+    if (!this.leagueNamesPromise) {
+      this.leagueNamesPromise = this.fetchJson("/leagues/", { limit: 200, offset: 0 })
+        .then((payload) => {
+          const names = new Map<number, string>();
+          for (const raw of extractResults(payload)) {
+            const id = readNumber(raw, ["id", "league_id"]);
+            const name = readString(raw, ["name", "league_name"]);
+            if (id !== null && name) names.set(id, name);
+          }
+
+          if (names.size === 0) {
+            throw new AnalysisPipelineError(
+              "PROVIDER_UNAVAILABLE",
+              "A BSD Football API não retornou o catálogo de competições necessário para identificar as partidas.",
+            );
+          }
+
+          return names;
+        })
+        .catch((error) => {
+          this.leagueNamesPromise = null;
+          throw error;
+        });
+    }
+
+    return this.leagueNamesPromise;
+  }
+
+  private async enrichCompetitionNames(fixtures: BsdProviderFixture[]): Promise<ProviderFixture[]> {
+    if (fixtures.length === 0) return [];
+
+    const leagueNames = await this.getLeagueNames();
+    return fixtures.map(({ leagueId, ...fixture }) => ({
+      ...fixture,
+      competition: leagueId === null ? fixture.competition : (leagueNames.get(leagueId) ?? fixture.competition),
+    }));
+  }
+
+  private async fetchFinishedEvents(teamId: number, daysBack: number): Promise<BsdProviderFixture[]> {
+    const dateTo = new Date();
+    const dateFrom = new Date(dateTo);
+    dateFrom.setUTCDate(dateFrom.getUTCDate() - daysBack);
+
+    const payload = await this.fetchJson("/events/", {
+      team_id: teamId,
+      status: "finished",
+      date_from: formatDate(dateFrom),
+      date_to: formatDate(dateTo),
+      limit: 200,
+      offset: 0,
+    });
+
     return extractResults(payload)
       .map(readFixture)
-      .filter((fixture): fixture is ProviderFixture => fixture !== null)
+      .filter((fixture): fixture is BsdProviderFixture => fixture !== null)
       .filter((fixture) => fixture.status === "finished")
       .filter((fixture) => fixture.home.id === teamId || fixture.away.id === teamId)
       .filter((fixture) => fixture.goals.home !== null && fixture.goals.away !== null)
@@ -220,14 +279,16 @@ export class BsdFootballV3Provider implements SportsDataProvider {
       fixtures = await this.fetchFinishedEvents(teamId, 730);
     }
 
+    const enriched = await this.enrichCompetitionNames(fixtures);
+
     console.info("[bsd-football-v3] recent fixtures resolved", {
       teamId,
       requested: count,
-      available: fixtures.length,
-      selectedIds: fixtures.slice(-count).map((fixture) => fixture.id),
+      available: enriched.length,
+      selectedIds: enriched.slice(-count).map((fixture) => fixture.id),
     });
 
-    return fixtures.slice(-count);
+    return enriched.slice(-count);
   }
 
   getFixtureMetric(
