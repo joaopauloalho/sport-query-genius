@@ -5,8 +5,8 @@
  *   pergunta -> IA extrai intenção -> backend valida -> backend consulta DB
  *   -> backend calcula -> objeto estruturado -> IA escreve o resumo -> UI renderiza.
  *
- * NESTE MVP, tudo abaixo roda localmente sobre dados demonstrativos.
- * Os pontos de integração futura estão marcados com TODO(integração).
+ * O motor demonstrativo legado permanece disponível para as telas que ainda
+ * dependem dele. A Fase 1 usa o pipeline server-side real em src/server/.
  */
 
 import {
@@ -60,7 +60,7 @@ export interface AnalysisResult {
   insights: string[];
   related: string[];
   source: { provider: string; updated_at: string; missing: number };
-  demo: true;
+  demo: boolean;
 }
 
 export type AnalysisOutcome =
@@ -181,7 +181,7 @@ function fetchMatches(intent: QueryIntent, entityId: string, entityName: string)
   return filtered.slice(-intent.match_count);
 }
 
-/** TODO(integração): mover para um server function que consulta o Supabase. */
+/** Motor demonstrativo legado. O fluxo real da Fase 1 não chama esta função. */
 export function runAnalysis(question: string): AnalysisOutcome {
   const intent = parseIntent(question);
   if (!intent) {
