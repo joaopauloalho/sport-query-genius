@@ -2,7 +2,13 @@ import { ArrowRight, Home, Search, Sparkles } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { COMPETITIONS, SPORTS } from "@/data/sports";
 import {
   SUPPORTED_MATCH_COUNTS,
@@ -36,7 +42,9 @@ export const PLACEHOLDER =
   "Ex.: Qual foi a média de escanteios do Corinthians nos últimos 20 jogos?";
 
 const FOOTBALL_SPORTS = SPORTS.filter((sport) => sport.id === "football");
-const FOOTBALL_COMPETITIONS = COMPETITIONS.filter((competition) => competition.sport === "football");
+const FOOTBALL_COMPETITIONS = COMPETITIONS.filter(
+  (competition) => competition.sport === "football",
+);
 
 export function SmartSearch({
   onSubmit,
@@ -113,7 +121,10 @@ export function SmartSearch({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Sparkles className="size-3.5 text-muted-foreground" />
           <Select value={filters.sport}>
-            <SelectTrigger className="h-8 w-auto min-w-[8rem] rounded-full text-xs" aria-label="Esporte">
+            <SelectTrigger
+              className="h-8 w-auto min-w-[8rem] rounded-full text-xs"
+              aria-label="Esporte"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -132,7 +143,10 @@ export function SmartSearch({
               setExplicit({ ...explicit, period: true });
             }}
           >
-            <SelectTrigger className="h-8 w-auto min-w-[9rem] rounded-full text-xs" aria-label="Período">
+            <SelectTrigger
+              className="h-8 w-auto min-w-[9rem] rounded-full text-xs"
+              aria-label="Período"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -151,7 +165,10 @@ export function SmartSearch({
               setExplicit({ ...explicit, competition: true });
             }}
           >
-            <SelectTrigger className="h-8 w-auto min-w-[10rem] rounded-full text-xs" aria-label="Competição">
+            <SelectTrigger
+              className="h-8 w-auto min-w-[10rem] rounded-full text-xs"
+              aria-label="Competição"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -171,7 +188,10 @@ export function SmartSearch({
               setExplicit({ ...explicit, venue: true });
             }}
           >
-            <SelectTrigger className="h-8 w-auto min-w-[8.5rem] rounded-full text-xs" aria-label="Mando">
+            <SelectTrigger
+              className="h-8 w-auto min-w-[8.5rem] rounded-full text-xs"
+              aria-label="Mando"
+            >
               <Home className="mr-1 size-3.5" />
               <SelectValue />
             </SelectTrigger>
