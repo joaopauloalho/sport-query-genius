@@ -75,9 +75,10 @@ export class CachedSportsDataProvider implements SportsDataProvider {
     operation: string,
     identity: Record<string, string | number>,
     write: () => Promise<void>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await write();
+      return true;
     } catch (error) {
       console.warn("[sports-cache] write failed; provider result kept", {
         provider: this.name,
@@ -85,6 +86,7 @@ export class CachedSportsDataProvider implements SportsDataProvider {
         ...identity,
         error: error instanceof Error ? error.message.slice(0, 300) : "unknown",
       });
+      return false;
     }
   }
 
@@ -209,18 +211,22 @@ export class CachedSportsDataProvider implements SportsDataProvider {
       });
       const fixtures = await this.delegate.getRecentTeamFixtures(teamId, count);
 
-      await this.writeCache("fixtures", { teamId, count: fixtures.length }, () =>
-        this.repository.upsertFixtures(this.name, fixtures),
+      const fixturesPersisted = await this.writeCache(
+        "fixtures",
+        { teamId, count: fixtures.length },
+        () => this.repository.upsertFixtures(this.name, fixtures),
       );
       await this.writeCache("fixture-feed", { teamId, requested: count }, () =>
         this.repository.markFixturesFetched(this.name, teamId, count, fixtures.length),
       );
 
-      console.info("[sports-cache] fixtures persisted", {
-        provider: this.name,
-        teamId,
-        count: fixtures.length,
-      });
+      if (fixturesPersisted) {
+        console.info("[sports-cache] fixtures persisted", {
+          provider: this.name,
+          teamId,
+          count: fixtures.length,
+        });
+      }
       return fixtures;
     })();
 
@@ -286,23 +292,28 @@ export class CachedSportsDataProvider implements SportsDataProvider {
       const value = record?.value ?? null;
       const sourceProvider = record?.source ?? this.name;
 
-      await this.writeCache("metric", { fixtureId: fixture.id, teamId, metric }, () =>
-        this.repository.upsertMetric({
+      const metricPersisted = await this.writeCache(
+        "metric",
+        { fixtureId: fixture.id, teamId, metric },
+        () =>
+          this.repository.upsertMetric({
+            provider: this.name,
+            fixtureId: fixture.id,
+            teamId,
+            metric,
+            value,
+            sourceProvider,
+          }),
+      );
+      if (metricPersisted) {
+        console.info("[sports-cache] statistic persisted", {
           provider: this.name,
           fixtureId: fixture.id,
           teamId,
           metric,
-          value,
-          sourceProvider,
-        }),
-      );
-      console.info("[sports-cache] statistic persisted", {
-        provider: this.name,
-        fixtureId: fixture.id,
-        teamId,
-        metric,
-        hasValue: value !== null,
-      });
+          hasValue: value !== null,
+        });
+      }
       return record;
     })();
 
