@@ -107,13 +107,16 @@ function Landing() {
         <section className="hero-glow relative overflow-hidden px-4 pt-20 pb-20 sm:px-6">
           <div className="mx-auto max-w-3xl text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-lime/40 bg-lime/10 px-3 py-1 text-xs font-semibold tracking-wide text-lime uppercase">
-              <ShieldCheck className="size-3.5" /> Dados reais · futebol
+              <ShieldCheck className="size-3.5" />{" "}
+              Dados reais · futebol
             </span>
             <h1 className="animate-rise mt-6 text-4xl leading-[1.08] font-bold text-balance sm:text-6xl">
-              Analise equipes de futebol sem <span className="text-gradient">horas de pesquisa</span>.
+              Analise equipes de futebol sem{" "}
+              <span className="text-gradient">horas de pesquisa</span>.
             </h1>
             <p className="animate-rise mx-auto mt-5 max-w-2xl text-base text-pretty text-muted-foreground sm:text-lg">
-              Faça uma pergunta, escolha período, competição e mando e receba números calculados sobre partidas reais, com fonte e amostra identificadas.
+              Faça uma pergunta, escolha período, competição e mando e receba números calculados
+              sobre partidas reais, com fonte e amostra identificadas.
             </p>
             <div className="animate-rise mt-8 flex flex-wrap justify-center gap-3">
               <Button size="lg" className="gap-2" asChild>
@@ -127,7 +130,8 @@ function Landing() {
               </Button>
             </div>
             <p className="mt-5 text-sm text-muted-foreground">
-              Sem login e sem cobrança nesta fase. Recursos ainda não suportados ficam fora da navegação principal.
+              Sem login e sem cobrança nesta fase. Recursos ainda não suportados ficam fora da
+              navegação principal.
             </p>
           </div>
         </section>
@@ -137,7 +141,8 @@ function Landing() {
             <div className="text-center">
               <h2 className="text-3xl font-bold">O que funciona hoje</h2>
               <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
-                A superfície do produto mostra somente capacidades conectadas ao motor real de análise.
+                A superfície do produto mostra somente capacidades conectadas ao motor real de
+                análise.
               </p>
             </div>
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -145,7 +150,9 @@ function Landing() {
                 <div key={capability.title} className="surface-card p-5">
                   <capability.icon className="size-5 text-primary" />
                   <h3 className="mt-4 text-base font-semibold">{capability.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{capability.text}</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                    {capability.text}
+                  </p>
                 </div>
               ))}
             </div>
@@ -158,7 +165,9 @@ function Landing() {
               <Newspaper className="size-7 text-primary" />
               <h2 className="mt-4 text-3xl font-bold">Do texto ao número verificável</h2>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                A inteligência artificial interpreta a intenção. A estatística final não é inventada por ela: o cálculo acontece no backend sobre dados estruturados dos providers disponíveis.
+                A inteligência artificial interpreta a intenção. A estatística final não é inventada
+                por ela: o cálculo acontece no backend sobre dados estruturados dos providers
+                disponíveis.
               </p>
             </div>
             <ol className="surface-card space-y-4 p-6">
@@ -179,7 +188,8 @@ function Landing() {
             <div className="surface-card border-primary/20 p-6 sm:p-8">
               <h2 className="text-2xl font-bold">Limites atuais, sem esconder o que falta</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Estes recursos ficam fora da experiência principal até possuírem implementação real adequada.
+                Estes recursos ficam fora da experiência principal até possuírem implementação real
+                adequada.
               </p>
               <ul className="mt-6 grid gap-3 sm:grid-cols-2">
                 {LIMITATIONS.map((item) => (
@@ -203,7 +213,10 @@ function Landing() {
       <footer className="border-t border-border/60 px-4 py-8 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 text-center text-xs text-muted-foreground sm:flex-row sm:justify-between sm:text-left">
           <Logo />
-          <p>Scoutly AI — análises reais de equipes de futebol com fonte, filtros e amostra explícitos.</p>
+          <p>
+            Scoutly AI — análises reais de equipes de futebol com fonte, filtros e amostra
+            explícitos.
+          </p>
         </div>
       </footer>
     </div>
