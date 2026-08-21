@@ -1,9 +1,10 @@
+import type { MatchRecord } from "@/data/sports";
 import type { QueryIntent } from "@/lib/analysis";
 import { ApiFootballProvider } from "@/server/sports/providers/api-football.server";
 
+import { parseIntentWithDeepSeek } from "./deepseek.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type ServerAnalysisOutcome } from "./errors";
-import { parseIntentWithDeepSeek } from "./deepseek.server";
 
 export async function analyzeQuestionServer(question: string): Promise<ServerAnalysisOutcome> {
   try {
@@ -34,7 +35,7 @@ export async function analyzeQuestionServer(question: string): Promise<ServerAna
       );
     }
 
-    const matches = [];
+    const matches: MatchRecord[] = [];
     for (const fixture of fixtures.slice(-parsedIntent.match_count)) {
       const match = await provider.getFixtureMetric(fixture, team.id, parsedIntent.metric);
       if (match) matches.push(match);
