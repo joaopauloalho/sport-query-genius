@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import {
   Bookmark,
   BookmarkCheck,
@@ -8,7 +9,6 @@ import {
   Share2,
   Sparkles,
   Trophy,
-  Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ import { MatchesTable } from "@/components/scoutly/matches-table";
 import { MetricCard } from "@/components/scoutly/metric-card";
 import { PerformanceChart } from "@/components/scoutly/performance-chart";
 import { SmartSearch } from "@/components/scoutly/smart-search";
-import { DemoBadge, MethodologyNote, SourceBadge } from "@/components/scoutly/source-badge";
+import { DemoBadge, MethodologyNote, RealDataBadge, SourceBadge } from "@/components/scoutly/source-badge";
 import { EmptyState, ProcessingSteps } from "@/components/scoutly/states";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,8 +28,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getCompetition, getSport } from "@/data/sports";
-import { buildCacheKey, parseIntent, runAnalysis, toCsv, type AnalysisResult } from "@/lib/analysis";
+import { toCsv, type AnalysisResult } from "@/lib/analysis";
 import { useScoutly } from "@/lib/store";
+import { analyzeQuestion } from "@/server/analysis.functions";
 
 export const Route = createFileRoute("/app/resultado")({
   validateSearch: (search: Record<string, unknown>) => ({ q: String(search.q ?? "") }),
@@ -44,15 +45,29 @@ export const Route = createFileRoute("/app/resultado")({
   component: ResultPage,
 });
 
+const ERROR_TITLES: Record<string, string> = {
+  TEAM_NOT_FOUND: "Time não encontrado",
+  QUESTION_NOT_UNDERSTOOD: "Pergunta não compreendida",
+  UNSUPPORTED_METRIC: "Métrica não suportada",
+  UNSUPPORTED_FILTER: "Filtro ainda não suportado",
+  API_LIMIT_REACHED: "Limite da API atingido",
+  PROVIDER_UNAVAILABLE: "API-FOOTBALL indisponível",
+  DATA_INSUFFICIENT: "Dados insuficientes",
+  DEEPSEEK_ERROR: "Erro ao interpretar pergunta",
+  INVALID_DEEPSEEK_OUTPUT: "Saída inválida do DeepSeek",
+};
+
+type ResultError = { code?: string; reason: string };
+
 function ResultPage() {
   const { q } = Route.useSearch();
   const navigate = useNavigate();
-  const { registerAnalysis, getCached, toggleSaved, isSaved, workspaces, addToWorkspace } = useScoutly();
+  const analyze = useServerFn(analyzeQuestion);
+  const { registerAnalysis, toggleSaved, isSaved, workspaces, addToWorkspace } = useScoutly();
 
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [cached, setCached] = useState(false);
+  const [error, setError] = useState<ResultError | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
@@ -61,38 +76,41 @@ function ResultPage() {
     setError(null);
     setResult(null);
 
-    const intent = parseIntent(q);
-    const key = intent ? buildCacheKey(intent) : null;
-    const hit = key ? getCached(key) : undefined;
+    if (q.trim().length < 3) {
+      setError({
+        code: "QUESTION_NOT_UNDERSTOOD",
+        reason: "Digite uma pergunta esportiva com pelo menos três caracteres.",
+      });
+      setLoading(false);
+      return () => {
+        alive = false;
+      };
+    }
 
-    const timer = setTimeout(
-      () => {
+    void analyze({ data: { question: q } })
+      .then((outcome) => {
         if (!alive) return;
-        if (hit) {
-          setResult(hit);
-          setCached(true);
-          registerAnalysis(hit, true);
+        if (outcome.ok) {
+          setResult(outcome.result);
+          registerAnalysis(outcome.result, false);
         } else {
-          const outcome = runAnalysis(q);
-          if (outcome.ok) {
-            setResult(outcome.result);
-            setCached(false);
-            registerAnalysis(outcome.result, false);
-          } else {
-            setError(outcome.reason);
-          }
+          setError({ code: outcome.code, reason: outcome.reason });
         }
-        setLoading(false);
-      },
-      hit ? 240 : 1200,
-    );
+      })
+      .catch(() => {
+        if (!alive) return;
+        setError({
+          reason: "Não foi possível concluir a análise agora. Nenhuma estatística foi estimada ou inventada.",
+        });
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
 
     return () => {
       alive = false;
-      clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [q, analyze, registerAnalysis]);
 
   const ask = (question: string) => navigate({ to: "/app/resultado", search: { q: question } });
 
@@ -109,7 +127,10 @@ function ResultPage() {
     return (
       <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-14 sm:px-6">
         <SmartSearch defaultValue={q} showFilters={false} size="sm" onSubmit={(question) => ask(question)} />
-        <EmptyState title="Dados insuficientes" description={error ?? "Tente reformular a pergunta."} />
+        <EmptyState
+          title={error?.code ? (ERROR_TITLES[error.code] ?? "Não foi possível analisar") : "Não foi possível analisar"}
+          description={error?.reason ?? "Tente reformular a pergunta."}
+        />
       </div>
     );
   }
@@ -147,21 +168,16 @@ function ResultPage() {
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Calendar className="size-3.5" />
-                Últimos {result.statistics.sample_size} jogos
+                {result.statistics.sample_size} partidas analisadas
                 {result.intent.venue !== "all" && (result.intent.venue === "home" ? " · em casa" : " · fora de casa")}
               </span>
               <span>
                 Consulta em{" "}
                 {new Date(result.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
               </span>
-              {cached && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-lime/10 px-2 py-0.5 text-lime">
-                  <Zap className="size-3" /> Resultado em cache
-                </span>
-              )}
             </div>
           </div>
-          <DemoBadge className="shrink-0" />
+          {result.demo ? <DemoBadge className="shrink-0" /> : <RealDataBadge className="shrink-0" />}
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
@@ -268,7 +284,7 @@ function ResultPage() {
           <span>Competição: {competition?.name ?? "todas"}</span>
           <span>Dados ausentes: {result.source.missing}</span>
         </div>
-        <SourceBadge updatedAt={result.source.updated_at} />
+        <SourceBadge provider={result.source.provider} updatedAt={result.source.updated_at} />
         <MethodologyNote />
       </section>
 
