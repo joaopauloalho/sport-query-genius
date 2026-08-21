@@ -1,3 +1,4 @@
+// Temporary cold-cache rerun marker: 2026-08-21.
 import { analyzeQuestionServer } from "../src/server/analysis/analyze.server.ts";
 
 type CacheEvent = Record<string, unknown>;
