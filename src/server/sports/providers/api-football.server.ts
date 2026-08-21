@@ -7,6 +7,7 @@ import type { ProviderFixture, ResolvedTeam, SportsDataProvider } from "../provi
 
 const API_FOOTBALL_BASE_URL = "https://v3.football.api-sports.io";
 const TIMEOUT_MS = 15_000;
+const COMPLETED_FIXTURE_STATUSES = ["FT", "AET", "PEN"] as const;
 
 type ApiFootballAuthHeader = "x-apisports-key" | "x-rapidapi-key";
 type ApiFootballErrorKind = "auth" | "limit" | "plan" | "parameter" | "provider";
@@ -70,6 +71,8 @@ const normalize = (value: string) =>
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+const formatApiDate = (date: Date) => date.toISOString().slice(0, 10);
 
 function hasApiErrors(errors: unknown): boolean {
   if (!errors) return false;
@@ -285,23 +288,44 @@ export class ApiFootballProvider implements SportsDataProvider {
   }
 
   async getRecentTeamFixtures(teamId: number, count: number): Promise<ProviderFixture[]> {
-    const payload = fixturesSchema.parse(
-      await this.request("/fixtures", { team: teamId, last: count }),
-    );
+    const to = new Date();
 
-    return payload.response
-      .map((entry) => ({
-        id: entry.fixture.id,
-        date: entry.fixture.date,
-        timestamp: entry.fixture.timestamp,
-        status: entry.fixture.status.short,
-        competition: entry.league.name,
-        home: entry.teams.home,
-        away: entry.teams.away,
-        goals: entry.goals,
-      }))
-      .filter((fixture) => ["FT", "AET", "PEN"].includes(fixture.status))
-      .sort((a, b) => a.timestamp - b.timestamp);
+    const loadCompletedFixtures = async (daysBack: number) => {
+      const from = new Date(to);
+      from.setUTCDate(from.getUTCDate() - daysBack);
+
+      const payload = fixturesSchema.parse(
+        await this.request("/fixtures", {
+          team: teamId,
+          from: formatApiDate(from),
+          to: formatApiDate(to),
+          status: COMPLETED_FIXTURE_STATUSES.join("-"),
+        }),
+      );
+
+      return payload.response
+        .map((entry) => ({
+          id: entry.fixture.id,
+          date: entry.fixture.date,
+          timestamp: entry.fixture.timestamp,
+          status: entry.fixture.status.short,
+          competition: entry.league.name,
+          home: entry.teams.home,
+          away: entry.teams.away,
+          goals: entry.goals,
+        }))
+        .filter((fixture) => COMPLETED_FIXTURE_STATUSES.includes(fixture.status as (typeof COMPLETED_FIXTURE_STATUSES)[number]))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    };
+
+    // The API-FOOTBALL Free plan rejects the convenience `last` parameter. Use a date range,
+    // then select the most recent completed fixtures deterministically in our own code.
+    let fixtures = await loadCompletedFixtures(120);
+    if (fixtures.length < count) {
+      fixtures = await loadCompletedFixtures(365);
+    }
+
+    return fixtures.slice(-count);
   }
 
   async getFixtureMetric(
