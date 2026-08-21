@@ -1,7 +1,6 @@
 import { COMPETITIONS } from "@/data/sports";
 import {
   SUPPORTED_MATCH_COUNTS,
-  type AnalysisOverrides,
   type AnalysisRequest,
   type SupportedMatchCount,
 } from "@/lib/analysis-request";
@@ -15,6 +14,7 @@ import { parseIntentWithDeepSeek } from "./deepseek.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type ServerAnalysisOutcome } from "./errors";
 import type { QueryIntentInput } from "./intent-schema";
+import { applyOverrides } from "./overrides";
 
 const METRIC_LABELS = {
   corners: "Escanteios",
@@ -77,27 +77,6 @@ function assertSupportedExplicitPeriod(question: string): void {
       );
     }
   }
-}
-
-export function applyOverrides(
-  parsedIntent: QueryIntentInput,
-  overrides?: AnalysisOverrides,
-): QueryIntentInput {
-  if (!overrides) return parsedIntent;
-
-  const competitionWasOverridden = Object.prototype.hasOwnProperty.call(
-    overrides,
-    "competition",
-  );
-
-  return {
-    ...parsedIntent,
-    match_count: overrides.match_count ?? parsedIntent.match_count,
-    competition: competitionWasOverridden
-      ? (overrides.competition ?? null)
-      : parsedIntent.competition,
-    venue: overrides.venue ?? parsedIntent.venue,
-  };
 }
 
 function resolveCompetition(value: string | null): {
