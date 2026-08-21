@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { analysisVenueSchema, supportedMatchCountSchema } from "@/lib/analysis-request";
+
 export const SUPPORTED_METRICS = [
   "corners",
   "goals",
@@ -15,9 +17,9 @@ export const queryIntentInputSchema = z
     entity_name: z.string().trim().min(2).max(100),
     metric: z.enum(SUPPORTED_METRICS),
     aggregation: z.enum(["average", "total", "median"]),
-    match_count: z.number().int().min(3).max(20),
+    match_count: supportedMatchCountSchema,
     competition: z.string().trim().min(2).max(100).nullable(),
-    venue: z.enum(["all", "home", "away"]),
+    venue: analysisVenueSchema,
   })
   .strict();
 

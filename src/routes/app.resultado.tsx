@@ -10,7 +10,7 @@ import {
   Sparkles,
   Trophy,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { MatchesTable } from "@/components/scoutly/matches-table";
@@ -29,11 +29,46 @@ import {
 } from "@/components/ui/dialog";
 import { getCompetition, getSport } from "@/data/sports";
 import { toCsv, type AnalysisResult } from "@/lib/analysis";
+import {
+  SUPPORTED_MATCH_COUNTS,
+  type AnalysisOverrides,
+  type AnalysisVenue,
+  type SupportedMatchCount,
+} from "@/lib/analysis-request";
 import { analyzeQuestion } from "@/lib/analysis.functions";
 import { useScoutly } from "@/lib/store";
 
+function parseMatchCount(value: unknown): SupportedMatchCount | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = Number(value);
+  return SUPPORTED_MATCH_COUNTS.includes(parsed as SupportedMatchCount)
+    ? (parsed as SupportedMatchCount)
+    : undefined;
+}
+
+function parseVenue(value: unknown): AnalysisVenue | undefined {
+  return value === "all" || value === "home" || value === "away" ? value : undefined;
+}
+
 export const Route = createFileRoute("/app/resultado")({
-  validateSearch: (search: Record<string, unknown>) => ({ q: String(search.q ?? "") }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const rawMatchCount = search.match_count;
+    const match_count = parseMatchCount(rawMatchCount);
+    const competition =
+      typeof search.competition === "string" && search.competition.trim()
+        ? search.competition.trim()
+        : undefined;
+    const venue = parseVenue(search.venue);
+
+    return {
+      q: String(search.q ?? ""),
+      match_count,
+      competition,
+      venue,
+      invalid_match_count:
+        rawMatchCount !== undefined && rawMatchCount !== null && rawMatchCount !== "" && !match_count,
+    };
+  },
   head: () => ({
     meta: [
       { title: "Resultado da análise — Scoutly AI" },
@@ -51,7 +86,7 @@ const ERROR_TITLES: Record<string, string> = {
   UNSUPPORTED_METRIC: "Métrica não suportada",
   UNSUPPORTED_FILTER: "Filtro ainda não suportado",
   API_LIMIT_REACHED: "Limite da API atingido",
-  PROVIDER_UNAVAILABLE: "API-FOOTBALL indisponível",
+  PROVIDER_UNAVAILABLE: "Serviço de dados esportivos indisponível",
   DATA_INSUFFICIENT: "Dados insuficientes",
   DEEPSEEK_ERROR: "Erro ao interpretar pergunta",
   INVALID_DEEPSEEK_OUTPUT: "Saída inválida do DeepSeek",
@@ -60,7 +95,7 @@ const ERROR_TITLES: Record<string, string> = {
 type ResultError = { code?: string; reason: string };
 
 function ResultPage() {
-  const { q } = Route.useSearch();
+  const { q, match_count, competition, venue, invalid_match_count } = Route.useSearch();
   const navigate = useNavigate();
   const analyze = useServerFn(analyzeQuestion);
   const { registerAnalysis, toggleSaved, isSaved, workspaces, addToWorkspace } = useScoutly();
@@ -69,6 +104,14 @@ function ResultPage() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<ResultError | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+
+  const requestOverrides = useMemo<AnalysisOverrides | undefined>(() => {
+    const overrides: AnalysisOverrides = {};
+    if (match_count !== undefined) overrides.match_count = match_count;
+    if (competition !== undefined) overrides.competition = competition === "all" ? null : competition;
+    if (venue !== undefined) overrides.venue = venue;
+    return Object.keys(overrides).length > 0 ? overrides : undefined;
+  }, [match_count, competition, venue]);
 
   useEffect(() => {
     let alive = true;
@@ -87,7 +130,23 @@ function ResultPage() {
       };
     }
 
-    void analyze({ data: { question: q } })
+    if (invalid_match_count) {
+      setError({
+        code: "UNSUPPORTED_FILTER",
+        reason: "Período não suportado. Use exatamente 5, 10, 15 ou 20 partidas.",
+      });
+      setLoading(false);
+      return () => {
+        alive = false;
+      };
+    }
+
+    void analyze({
+      data: {
+        question: q,
+        ...(requestOverrides ? { overrides: requestOverrides } : {}),
+      },
+    })
       .then((outcome) => {
         if (!alive) return;
         if (outcome.ok) {
@@ -110,9 +169,21 @@ function ResultPage() {
     return () => {
       alive = false;
     };
-  }, [q, analyze, registerAnalysis]);
+  }, [q, invalid_match_count, requestOverrides, analyze, registerAnalysis]);
 
-  const ask = (question: string) => navigate({ to: "/app/resultado", search: { q: question } });
+  const ask = (question: string, overrides?: AnalysisOverrides) =>
+    navigate({
+      to: "/app/resultado",
+      search: {
+        q: question,
+        match_count: overrides?.match_count,
+        competition:
+          overrides && Object.prototype.hasOwnProperty.call(overrides, "competition")
+            ? (overrides.competition ?? "all")
+            : undefined,
+        venue: overrides?.venue,
+      },
+    });
 
   if (loading) {
     return (
@@ -136,7 +207,8 @@ function ResultPage() {
   }
 
   const sport = getSport(result.intent.sport);
-  const competition = getCompetition(result.intent.competition);
+  const competitionLabel =
+    getCompetition(result.intent.competition)?.name ?? result.intent.competition ?? null;
   const saved = isSaved(result.cache_key);
 
   function exportCsv() {
@@ -151,11 +223,19 @@ function ResultPage() {
     toast.success("CSV exportado.");
   }
 
+  function copyShareLink() {
+    const params = new URLSearchParams({ q: result.question });
+    if (match_count !== undefined) params.set("match_count", String(match_count));
+    if (competition !== undefined) params.set("competition", competition);
+    if (venue !== undefined) params.set("venue", venue);
+    navigator.clipboard?.writeText(`${window.location.origin}/app/resultado?${params.toString()}`);
+    toast.success("Link copiado.");
+  }
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-8 sm:px-6 sm:py-10">
       <SmartSearch defaultValue={q} showFilters={false} size="sm" onSubmit={(question) => ask(question)} />
 
-      {/* Cabeçalho da análise */}
       <header className="surface-card p-5">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:justify-between">
           <div className="min-w-0">
@@ -164,7 +244,7 @@ function ResultPage() {
               <span className="inline-flex items-center gap-1.5">
                 <Trophy className="size-3.5" />
                 {sport.name}
-                {competition ? ` · ${competition.name}` : ""}
+                {competitionLabel ? ` · ${competitionLabel}` : ""}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Calendar className="size-3.5" />
@@ -191,13 +271,12 @@ function ResultPage() {
           <Button size="sm" variant="outline" className="gap-1.5" onClick={exportCsv}>
             <Download className="size-4" /> Exportar CSV
           </Button>
-          <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => ask(q)}>
+          <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => ask(q, requestOverrides)}>
             <RefreshCw className="size-4" /> Atualizar
           </Button>
         </div>
       </header>
 
-      {/* Resposta principal */}
       <section className="surface-card border-primary/30 bg-primary/5 p-6">
         <p className="font-display text-xl leading-snug font-semibold text-balance sm:text-2xl">
           {result.answer.summary}
@@ -205,7 +284,6 @@ function ResultPage() {
         <p className="mt-3 text-sm text-muted-foreground">{result.answer.explanation}</p>
       </section>
 
-      {/* Números principais */}
       <section>
         <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted-foreground uppercase">Números principais</h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -225,7 +303,6 @@ function ResultPage() {
         </div>
       </section>
 
-      {/* Gráfico */}
       <section className="surface-card p-5">
         <PerformanceChart
           data={result.chart_data}
@@ -234,21 +311,19 @@ function ResultPage() {
         />
       </section>
 
-      {/* Tabela */}
       <section className="surface-card p-5">
         <h2 className="mb-4 text-sm font-semibold">Partidas analisadas</h2>
         <MatchesTable matches={result.matches} metricLabel={result.intent.metric_label} onExport={exportCsv} />
       </section>
 
-      {/* Insights */}
       <section className="surface-card p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Sparkles className="size-4 text-lime" /> O que os dados mostram
         </h2>
         <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-          {result.insights.map((i) => (
-            <li key={i} className="rounded-lg bg-secondary/50 p-3 text-sm">
-              {i}
+          {result.insights.map((insight) => (
+            <li key={insight} className="rounded-lg bg-secondary/50 p-3 text-sm">
+              {insight}
             </li>
           ))}
         </ul>
@@ -257,31 +332,29 @@ function ResultPage() {
         </p>
       </section>
 
-      {/* Perguntas relacionadas */}
       <section>
         <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
           Perguntas relacionadas
         </h2>
         <div className="flex flex-wrap gap-2">
-          {result.related.map((r) => (
+          {result.related.map((relatedQuestion) => (
             <button
-              key={r}
-              onClick={() => ask(r)}
+              key={relatedQuestion}
+              onClick={() => ask(relatedQuestion)}
               className="rounded-full border border-border bg-card px-3.5 py-2 text-xs transition-colors hover:border-primary/50 hover:text-primary"
             >
-              {r}
+              {relatedQuestion}
             </button>
           ))}
         </div>
       </section>
 
-      {/* Confiança nos dados */}
       <section className="surface-card space-y-3 p-5">
         <h2 className="text-sm font-semibold">Confiança nos dados</h2>
         <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
           <span>Jogos analisados: {result.statistics.sample_size}</span>
           <span>Mando de campo: {result.intent.venue === "all" ? "todos" : result.intent.venue === "home" ? "casa" : "fora"}</span>
-          <span>Competição: {competition?.name ?? "todas"}</span>
+          <span>Competição: {competitionLabel ?? "todas"}</span>
           <span>Dados ausentes: {result.source.missing}</span>
         </div>
         <SourceBadge provider={result.source.provider} updatedAt={result.source.updated_at} />
@@ -297,32 +370,23 @@ function ResultPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                navigator.clipboard?.writeText(
-                  `${window.location.origin}/app/resultado?q=${encodeURIComponent(result.question)}`,
-                );
-                toast.success("Link copiado.");
-              }}
-            >
+            <Button variant="outline" className="w-full" onClick={copyShareLink}>
               Copiar link
             </Button>
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Adicionar a um workspace</p>
-              {workspaces.map((w) => (
+              {workspaces.map((workspace) => (
                 <Button
-                  key={w.id}
+                  key={workspace.id}
                   variant="ghost"
                   className="w-full justify-start"
                   onClick={() => {
-                    addToWorkspace(w.id, result);
+                    addToWorkspace(workspace.id, result);
                     setShareOpen(false);
-                    toast.success(`Análise adicionada a ${w.name}.`);
+                    toast.success(`Análise adicionada a ${workspace.name}.`);
                   }}
                 >
-                  {w.name}
+                  {workspace.name}
                 </Button>
               ))}
             </div>
