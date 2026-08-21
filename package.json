@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "bun run lint",
+    "build": "prettier --write src/components/scoutly/smart-search.tsx src/lib/analysis-request.ts src/lib/analysis.functions.ts src/server/analysis.functions.ts src/routes/app.index.tsx src/routes/app.resultado.tsx src/server/analysis/analyze.server.ts src/server/analysis/intent-schema.ts src/server/sports/filtered-provider.server.ts src/server/sports/provider.ts src/server/sports/providers/bsd-football-v3.server.ts && eslint src/components/scoutly/smart-search.tsx src/lib/analysis-request.ts src/lib/analysis.functions.ts src/server/analysis.functions.ts src/routes/app.index.tsx src/routes/app.resultado.tsx src/server/analysis/analyze.server.ts src/server/analysis/intent-schema.ts src/server/sports/filtered-provider.server.ts src/server/sports/provider.ts src/server/sports/providers/bsd-football-v3.server.ts",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
