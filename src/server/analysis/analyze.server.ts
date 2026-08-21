@@ -1,5 +1,10 @@
 import { COMPETITIONS, type MatchRecord } from "@/data/sports";
-import type { AnalysisOverrides, AnalysisRequest } from "@/lib/analysis-request";
+import {
+  SUPPORTED_MATCH_COUNTS,
+  type AnalysisOverrides,
+  type AnalysisRequest,
+  type SupportedMatchCount,
+} from "@/lib/analysis-request";
 import type { QueryIntent } from "@/lib/analysis";
 import { ApiFootballProvider } from "@/server/sports/providers/api-football.server";
 import { BsdFootballV3Provider } from "@/server/sports/providers/bsd-football-v3.server";
@@ -48,6 +53,24 @@ function createFootballProvider(): SportsDataProvider {
     ? new BsdFootballV3Provider()
     : new ApiFootballProvider();
   return new FilteredSportsDataProvider(provider);
+}
+
+function assertSupportedExplicitPeriod(question: string): void {
+  const normalized = question
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const matches = normalized.matchAll(/\b(\d{1,3})\s*(?:jogos?|partidas?)\b/g);
+
+  for (const match of matches) {
+    const count = Number(match[1]);
+    if (!SUPPORTED_MATCH_COUNTS.includes(count as SupportedMatchCount)) {
+      throw new AnalysisPipelineError(
+        "UNSUPPORTED_FILTER",
+        `Período de ${count} partidas não suportado. Use exatamente 5, 10, 15 ou 20 partidas.`,
+      );
+    }
+  }
 }
 
 function applyOverrides(
@@ -130,6 +153,8 @@ function filterDescription(intent: QueryIntentInput, competition: string | null)
 
 export async function analyzeQuestionServer(request: AnalysisRequest): Promise<ServerAnalysisOutcome> {
   try {
+    assertSupportedExplicitPeriod(request.question);
+
     const parsedIntent = await parseIntentWithDeepSeek(request.question);
     const effectiveIntent = applyOverrides(parsedIntent, request.overrides);
     const competition = resolveCompetition(effectiveIntent.competition);
