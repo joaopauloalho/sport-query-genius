@@ -10,7 +10,7 @@ import type {
 
 const METRIC_CONCURRENCY = 4;
 const FALLBACK_HISTORY_LIMIT = 120;
-const MATCH_TIME_TOLERANCE_SECONDS = 3 * 60 * 60;
+const MATCH_TIME_TOLERANCE_SECONDS = 90 * 60;
 
 export interface ProviderSelection {
   provider: SportsDataProvider;
