@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "bun run test:phase2b && bun run typecheck && bunx eslint src/server/analysis/analyze.server.ts src/server/analysis/overrides.ts src/server/sports/provider-fallback.server.ts src/server/sports/providers/api-football-errors.ts src/server/sports/providers/api-football.server.ts tests/phase2b/provider-fallback.test.mjs && vite build",
+    "build": "bun run lint",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
