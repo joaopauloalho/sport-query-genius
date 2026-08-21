@@ -4,19 +4,16 @@ import type { MatchRecord } from "@/data/sports";
 import type { QueryIntentInput } from "@/server/analysis/intent-schema";
 import { AnalysisPipelineError } from "@/server/analysis/errors";
 import type { ProviderFixture, ResolvedTeam, SportsDataProvider } from "../provider";
+import {
+  classifyApiFootballError,
+  type ApiFootballErrorKind,
+} from "./api-football-errors";
 
 const API_FOOTBALL_BASE_URL = "https://v3.football.api-sports.io";
 const TIMEOUT_MS = 15_000;
 const COMPLETED_FIXTURE_STATUSES = ["FT", "AET", "PEN"] as const;
 
 type ApiFootballAuthHeader = "x-apisports-key" | "x-rapidapi-key";
-type ApiFootballErrorKind =
-  | "account"
-  | "auth"
-  | "limit"
-  | "plan"
-  | "parameter"
-  | "provider";
 
 const teamSearchSchema = z.object({
   response: z.array(
@@ -85,29 +82,6 @@ function hasApiErrors(errors: unknown): boolean {
   if (Array.isArray(errors)) return errors.length > 0;
   if (typeof errors === "object") return Object.keys(errors as Record<string, unknown>).length > 0;
   return Boolean(errors);
-}
-
-function serializeApiErrors(errors: unknown): string {
-  try {
-    return JSON.stringify(errors).toLowerCase();
-  } catch {
-    return String(errors).toLowerCase();
-  }
-}
-
-export function classifyApiFootballError(errors: unknown): ApiFootballErrorKind {
-  const serialized = serializeApiErrors(errors);
-
-  if (/suspend|suspended|disabled|inactive|deactivat|blocked/.test(serialized)) {
-    return "account";
-  }
-  if (/request|limit|rate|quota|too many/.test(serialized)) return "limit";
-  if (/plan|upgrade|paid|subscription|subscribe|entitlement/.test(serialized)) return "plan";
-  if (/token|api.?key|authentication|unauthorized|forbidden|access denied/.test(serialized)) {
-    return "auth";
-  }
-  if (/parameter|required|invalid|field/.test(serialized)) return "parameter";
-  return "provider";
 }
 
 function safeErrorForLog(errors: unknown, apiKey: string): string {
