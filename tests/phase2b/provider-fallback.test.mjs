@@ -165,10 +165,7 @@ test("B. BSD indisponível antes de resolver o time aciona API-Football", async 
   const bsd = new FakeProvider({
     name: "BSD",
     team: CORINTHIANS_BSD,
-    resolveError: new AnalysisPipelineError(
-      "PROVIDER_UNAVAILABLE",
-      "BSD timeout de teste",
-    ),
+    resolveError: new AnalysisPipelineError("PROVIDER_UNAVAILABLE", "BSD timeout de teste"),
   });
   const api = new FakeProvider({
     name: "API-FOOTBALL",
@@ -323,10 +320,7 @@ test("F. nenhum provider possui a métrica mantém DATA_INSUFFICIENT", async () 
 });
 
 test("G. API-Football suspenso e entitlement são classificados sem esconder a causa", () => {
-  assert.equal(
-    classifyApiFootballError({ account: "Your account is suspended" }),
-    "account",
-  );
+  assert.equal(classifyApiFootballError({ account: "Your account is suspended" }), "account");
   assert.equal(
     classifyApiFootballError({ subscription: "This endpoint is not included in your plan" }),
     "plan",
@@ -359,7 +353,10 @@ test("H. competição e mando continuam restringindo as fixtures antes da amostr
     competitionNames: ["Brasileirão Série A"],
   });
 
-  assert.deepEqual(selection.fixtures.map((item) => item.id), [602]);
+  assert.deepEqual(
+    selection.fixtures.map((item) => item.id),
+    [602],
+  );
   assert.equal(api.calls.resolve, 0);
 });
 
