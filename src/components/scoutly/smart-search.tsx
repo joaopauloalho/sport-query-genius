@@ -1,6 +1,5 @@
-import { ArrowRight, Home, Mic, Search, Sparkles } from "lucide-react";
+import { ArrowRight, Home, Search, Sparkles } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -97,23 +96,13 @@ export function SmartSearch({
           aria-label="Pergunta de análise esportiva"
           autoFocus={autoFocus}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(event) => setValue(event.target.value)}
           placeholder={PLACEHOLDER}
           className={cn(
             "min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground",
             size === "lg" ? "py-2 text-base" : "text-sm",
           )}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Pesquisar por voz"
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-          onClick={() => toast.info("Entrada por voz chega na próxima versão do MVP.")}
-        >
-          <Mic className="size-4.5" />
-        </Button>
         <Button type="submit" size={size === "lg" ? "default" : "sm"} className="shrink-0 gap-1.5">
           Analisar
           <ArrowRight className="size-4" />
