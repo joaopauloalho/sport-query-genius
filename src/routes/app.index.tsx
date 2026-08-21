@@ -12,7 +12,8 @@ export const Route = createFileRoute("/app/")({
       { title: "Início — Scoutly AI" },
       {
         name: "description",
-        content: "Faça perguntas sobre equipes de futebol e analise dados reais por período, competição e mando.",
+        content:
+          "Faça perguntas sobre equipes de futebol e analise dados reais por período, competição e mando.",
       },
       { property: "og:title", content: "Início — Scoutly AI" },
       { property: "og:description", content: "O painel de pesquisa esportiva da Scoutly AI." },
@@ -108,14 +109,19 @@ function Dashboard() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
       <section className="text-center">
-        <h1 className="text-3xl font-bold text-balance sm:text-4xl">O que você quer descobrir hoje?</h1>
+        <h1 className="text-3xl font-bold text-balance sm:text-4xl">
+          O que você quer descobrir hoje?
+        </h1>
         <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground sm:text-base">
           Analise equipes de futebol por período, competição e mando de campo usando dados reais.
         </p>
       </section>
 
       <div className="mt-8">
-        <SmartSearch autoFocus onSubmit={(question, _filters, overrides) => ask(question, overrides)} />
+        <SmartSearch
+          autoFocus
+          onSubmit={(question, _filters, overrides) => ask(question, overrides)}
+        />
       </div>
 
       <div className="mt-6 flex flex-wrap justify-center gap-2">
@@ -135,7 +141,8 @@ function Dashboard() {
         <div>
           <h2 className="text-lg font-semibold">Perguntas prontas</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Atalhos para executar o mesmo motor real de análise, sem resultados pré-calculados ou simulados.
+            Atalhos para executar o mesmo motor real de análise, sem resultados pré-calculados ou
+            simulados.
           </p>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -152,7 +159,9 @@ function Dashboard() {
                 <ArrowUpRight className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
               </div>
               <h3 className="mt-3 text-sm font-semibold">{analysis.title}</h3>
-              <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{analysis.question}</p>
+              <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">
+                {analysis.question}
+              </p>
             </button>
           ))}
         </div>
