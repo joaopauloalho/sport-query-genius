@@ -1,4 +1,5 @@
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
+import { getRequestHeader } from "@tanstack/react-start/server";
 
 import { analysisRequestSchema } from "@/lib/analysis-request";
 import { getBrowserSupabase } from "@/lib/supabase-browser";
@@ -24,8 +25,10 @@ const analysisAuthMiddleware = createMiddleware({ type: "function" })
       },
     });
   })
-  .server(async ({ next, request }) => {
-    const analysisAuth = await validateAnalysisAuthorization(request.headers.get("authorization"));
+  .server(async ({ next }) => {
+    const analysisAuth = await validateAnalysisAuthorization(
+      getRequestHeader("authorization"),
+    );
     return next({ context: { analysisAuth } });
   });
 
