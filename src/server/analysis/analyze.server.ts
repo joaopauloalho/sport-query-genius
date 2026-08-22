@@ -106,7 +106,9 @@ function assertSupportedExplicitPeriod(question: string): void {
 function resolveCompetition(value: string | null): ResolvedCompetitionFilter {
   if (value === null) return { intentValue: null, providerNames: null };
   const normalized = normalizeCompetition(value);
-  const footballCompetitions = COMPETITIONS.filter((competition) => competition.sport === "football");
+  const footballCompetitions = COMPETITIONS.filter(
+    (competition) => competition.sport === "football",
+  );
   const known = footballCompetitions.find((competition) => {
     if (normalizeCompetition(competition.id) === normalized) return true;
     if (normalizeCompetition(competition.name) === normalized) return true;

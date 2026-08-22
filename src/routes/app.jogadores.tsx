@@ -37,7 +37,9 @@ function PlayersPage() {
           <Button className="gap-2" asChild>
             <Link
               to="/app/resultado"
-              search={{ q: "Qual foi a média de finalizações do Yuri Alberto nos últimos 5 jogos?" }}
+              search={{
+                q: "Qual foi a média de finalizações do Yuri Alberto nos últimos 5 jogos?",
+              }}
             >
               <Search className="size-4" /> Analisar Yuri Alberto
             </Link>

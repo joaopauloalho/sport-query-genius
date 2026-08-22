@@ -1,14 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  Bookmark,
-  Calendar,
-  Download,
-  RefreshCw,
-  Sparkles,
-  Target,
-  Trophy,
-} from "lucide-react";
+import { Bookmark, Calendar, Download, RefreshCw, Sparkles, Target, Trophy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -25,11 +17,7 @@ import {
 import { EmptyState, ProcessingSteps } from "@/components/scoutly/states";
 import { Button } from "@/components/ui/button";
 import { getCompetition } from "@/data/sports";
-import {
-  isEventListAnalysisResult,
-  toCsv,
-  type AnalysisResult,
-} from "@/lib/analysis";
+import { isEventListAnalysisResult, toCsv, type AnalysisResult } from "@/lib/analysis";
 import {
   SUPPORTED_MATCH_COUNTS,
   type AnalysisOverrides,
@@ -78,7 +66,8 @@ export const Route = createFileRoute("/app/resultado")({
       { title: "Resultado da análise — Scoutly AI" },
       {
         name: "description",
-        content: "Resposta, números, eventos, gráfico, tabela e fonte da sua análise real de futebol.",
+        content:
+          "Resposta, números, eventos, gráfico, tabela e fonte da sua análise real de futebol.",
       },
       { property: "og:title", content: "Resultado da análise — Scoutly AI" },
       {
@@ -377,8 +366,9 @@ function ResultPage() {
             Últimos {result.events.length} gols de {result.player.name}
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
-            Eventos individualizados retornados pela {result.source.provider}. A lista não representa
-            os últimos {result.events.length} jogos; cada gol conta como um evento próprio.
+            Eventos individualizados retornados pela {result.source.provider}. A lista não
+            representa os últimos {result.events.length} jogos; cada gol conta como um evento
+            próprio.
           </p>
         </section>
 
@@ -403,7 +393,11 @@ function ResultPage() {
                   </p>
                   {(event.situation || event.body_part || event.xg !== null) && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {[event.situation, event.body_part, event.xg !== null ? `xG ${event.xg}` : null]
+                      {[
+                        event.situation,
+                        event.body_part,
+                        event.xg !== null ? `xG ${event.xg}` : null,
+                      ]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
@@ -415,7 +409,9 @@ function ResultPage() {
                       ? "Minuto não informado"
                       : `${event.minute}${event.extra_time ? `+${event.extra_time}` : ""}'`}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">Gol #{result.events.length - index}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Gol #{result.events.length - index}
+                  </p>
                 </div>
               </article>
             ))}
@@ -548,7 +544,9 @@ function ResultPage() {
           <MetricCard label="Jogos analisados" value={result.statistics.sample_size} />
           <MetricCard
             label="Tendência recente"
-            value={result.statistics.trend > 0 ? `+${result.statistics.trend}` : result.statistics.trend}
+            value={
+              result.statistics.trend > 0 ? `+${result.statistics.trend}` : result.statistics.trend
+            }
             trend={result.statistics.trend}
             hint="Últimos 5 jogos vs. período"
           />
