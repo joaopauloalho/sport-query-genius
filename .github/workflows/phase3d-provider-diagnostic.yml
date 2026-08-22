@@ -11,16 +11,35 @@ on:
 jobs:
   diagnostic:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
-      - name: Fetch protected preview diagnostic
+      - name: Install browser
         shell: bash
         run: |
-          set -euo pipefail
-          URL='https://sport-query-genius-74cw5woa0-joao-paulos-projects-0a85e668.vercel.app/phase3d-provider-diagnostic?_vercel_share=40f9VeeAPdJD0oXSFOV4OZHgGhYy1nL4'
-          curl --fail --silent --show-error --location \
-            --cookie-jar /tmp/vercel-cookies \
-            --cookie /tmp/vercel-cookies \
-            "$URL" \
-            | head -c 30000
-          echo
+          mkdir -p /tmp/phase3d-diag
+          cd /tmp/phase3d-diag
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.55.0
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Read protected preview diagnostic
+        shell: bash
+        run: |
+          cat >/tmp/phase3d-diag/read.mjs <<'NODE'
+          import { chromium } from "playwright";
+          const browser = await chromium.launch({ headless: true });
+          const page = await browser.newPage();
+          try {
+            const url = "https://sport-query-genius-74cw5woa0-joao-paulos-projects-0a85e668.vercel.app/phase3d-provider-diagnostic?_vercel_share=40f9VeeAPdJD0oXSFOV4OZHgGhYy1nL4";
+            await page.goto(url, { waitUntil: "networkidle", timeout: 60000 });
+            console.log(`DIAG_URL|${page.url()}`);
+            const text = (await page.locator("body").innerText()).trim();
+            console.log(`DIAG_BODY|${text.slice(0, 30000)}`);
+            if (!text.includes('"bsd"') || !text.includes('"apiFootball"')) {
+              throw new Error("Diagnostic route was not reached");
+            }
+          } finally {
+            await browser.close();
+          }
+          NODE
+          node /tmp/phase3d-diag/read.mjs
