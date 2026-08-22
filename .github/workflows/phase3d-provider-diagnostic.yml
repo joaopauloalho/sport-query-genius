@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/phase3d-provider-runtime
+  pull_request:
+    branches:
+      - main
 
 jobs:
   diagnostic:
