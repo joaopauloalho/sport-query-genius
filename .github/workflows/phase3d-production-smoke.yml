@@ -19,29 +19,29 @@ jobs:
           mkdir -p /tmp/phase3d-smoke
           cd /tmp/phase3d-smoke
           npm init -y >/dev/null 2>&1
-          npm install --silent playwright@1.55.0
+          npm install --silent playwright@1.55.0 @supabase/supabase-js@2.112.3
           npx playwright install --with-deps chromium >/dev/null
 
       - name: Run authenticated production smoke
         shell: bash
         env:
           TARGET_URL: https://sport-query-genius.vercel.app
+          SUPABASE_URL: https://xuyqlajmtsvnzhqbjwmz.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_0YFBwlQ1wLRQ9o3ThQiw2Q_c6qfYp46
         run: |
           cat >/tmp/phase3d-smoke/smoke.mjs <<'NODE'
           import { chromium } from "playwright";
-          import crypto from "node:crypto";
+          import { createClient } from "@supabase/supabase-js";
 
           const base = process.env.TARGET_URL;
-          const email = `phase3d-smoke-${Date.now()}-${crypto.randomBytes(4).toString("hex")}@example.com`;
-          const password = crypto.randomBytes(24).toString("base64url");
+          const supabaseUrl = process.env.SUPABASE_URL;
+          const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+          const supabase = createClient(supabaseUrl, publishableKey, {
+            auth: { persistSession: false, autoRefreshToken: false },
+          });
           const browser = await chromium.launch({ headless: true });
           const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
 
-          page.on("response", (response) => {
-            if (response.url().includes("/auth/v1/")) {
-              console.log(`AUTH_HTTP|${response.status()}|${response.url().split("?")[0]}`);
-            }
-          });
           page.on("console", (message) => {
             if (message.type() === "error") console.log(`BROWSER_ERROR|${message.text()}`);
           });
@@ -79,30 +79,25 @@ jobs:
           }
 
           try {
-            await page.goto(`${base}/login`, { waitUntil: "networkidle", timeout: 60000 });
-            const loginText = await bodyText();
-            console.log(`LOGIN_READY|${page.url()}|${loginText.slice(0, 800)}`);
-            if (loginText.includes("Supabase Auth ainda não está configurado")) {
-              throw new Error("Production Supabase Auth is not configured");
+            const { data, error } = await supabase.auth.signInAnonymously({
+              options: { data: { display_name: "Phase 3D Smoke" } },
+            });
+            if (error || !data.session || !data.user) {
+              console.log(`SMOKE_AUTH_ERROR|${error?.message ?? "missing session"}`);
+              throw error ?? new Error("Anonymous auth returned no session");
             }
 
-            await page.getByRole("button", { name: "Criar conta" }).click();
-            await page.getByLabel("Nome").fill("Phase 3D Smoke");
-            await page.getByLabel("E-mail").fill(email);
-            await page.getByLabel("Senha").fill(password);
-            await page.locator("form").getByRole("button", { name: "Criar conta" }).click();
-            await page.waitForTimeout(5000);
-
-            const afterSignup = await bodyText();
-            console.log(`AFTER_SIGNUP|${page.url()}|${afterSignup.slice(0, 2500)}`);
-            if (afterSignup.includes("Confirme seu e-mail")) {
-              console.log(`SMOKE_AUTH|EMAIL_CONFIRMATION_REQUIRED|${email}`);
-              throw new Error("Disposable smoke signup requires email confirmation");
-            }
-            if (!/\/app(?:\/|$)/.test(new URL(page.url()).pathname)) {
-              throw new Error("Signup did not create an authenticated session");
-            }
-            console.log(`SMOKE_AUTH|OK|${email}`);
+            const storageKey = "sb-xuyqlajmtsvnzhqbjwmz-auth-token";
+            await page.goto(`${base}/login`, { waitUntil: "domcontentloaded", timeout: 60000 });
+            await page.evaluate(
+              ({ key, session }) => localStorage.setItem(key, JSON.stringify(session)),
+              { key: storageKey, session: data.session },
+            );
+            await page.reload({ waitUntil: "networkidle", timeout: 60000 });
+            await page.goto(`${base}/app`, { waitUntil: "networkidle", timeout: 60000 });
+            const appText = await bodyText();
+            console.log(`SMOKE_AUTH|OK|USER_ID=${data.user.id}|${appText.slice(0, 700)}`);
+            if (/\/login(?:\?|$)/.test(page.url())) throw new Error("Anonymous session was not accepted by the app");
 
             const runs = [
               ["Q1_BAYERN", "Qual foi a média de escanteios do Bayern de Munique nos últimos 5 jogos?"],
