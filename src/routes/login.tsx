@@ -80,7 +80,7 @@ function LoginPage() {
             Seu histórico, análises salvas e workspaces ficam sincronizados com sua conta.
           </p>
 
-          {!configured && (
+          {!loading && !configured && (
             <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
               Supabase Auth ainda não está configurado neste ambiente.
             </div>
@@ -124,7 +124,11 @@ function LoginPage() {
 
             {message && <p className="text-sm text-muted-foreground">{message}</p>}
 
-            <Button className="w-full" disabled={submitting || !configured} type="submit">
+            <Button
+              className="w-full"
+              disabled={submitting || loading || !configured}
+              type="submit"
+            >
               {submitting && <Loader2 className="mr-2 size-4 animate-spin" />}
               {mode === "login" ? "Entrar" : "Criar conta"}
             </Button>
