@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - feat/phase-3d-entity-player-analysis
-  pull_request:
-    paths:
-      - ".github/workflows/phase3d-production-smoke.yml"
 
 jobs:
   smoke:
@@ -46,7 +43,7 @@ jobs:
             return (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
           }
 
-          async function ask(label, question) {
+          async function ask(label, question, requireResult = false) {
             await page.goto(`${base}/app/resultado?q=${encodeURIComponent(question)}`, {
               waitUntil: "domcontentloaded",
               timeout: 60000,
@@ -70,7 +67,21 @@ jobs:
               { timeout: 120000 },
             );
             const text = await bodyText();
-            console.log(`SMOKE|${label}|${question}|${text.slice(0, 5000)}`);
+            console.log(`FINAL_SMOKE|${label}|${question}|${text.slice(0, 5000)}`);
+            const hardFailures = [
+              "Não foi possível analisar",
+              "Provider indisponível",
+              "DeepSeek indisponível",
+              "Resposta inválida do DeepSeek",
+              "Time não encontrado",
+              "Jogador não encontrado",
+            ];
+            if (hardFailures.some((marker) => text.includes(marker))) {
+              throw new Error(`${label} hard failure`);
+            }
+            if (requireResult && text.includes("Dados insuficientes")) {
+              throw new Error(`${label} returned insufficient data`);
+            }
             return text;
           }
 
@@ -79,10 +90,7 @@ jobs:
               email: process.env.SMOKE_EMAIL,
               password: process.env.SMOKE_PASSWORD,
             });
-            if (error || !data.session || !data.user) {
-              console.log(`SMOKE_AUTH_ERROR|${error?.message ?? "missing session"}`);
-              throw error ?? new Error("Technical smoke user returned no session");
-            }
+            if (error || !data.session || !data.user) throw error ?? new Error("missing session");
 
             const storageKey = "sb-xuyqlajmtsvnzhqbjwmz-auth-token";
             await page.goto(`${base}/login`, { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -92,28 +100,27 @@ jobs:
             );
             await page.reload({ waitUntil: "networkidle", timeout: 60000 });
             await page.goto(`${base}/app`, { waitUntil: "networkidle", timeout: 60000 });
-            const appText = await bodyText();
-            console.log(`SMOKE_AUTH|OK|USER_ID=${data.user.id}|${appText.slice(0, 700)}`);
-            if (/\/login(?:\?|$)/.test(page.url())) throw new Error("Technical smoke session was not accepted by the app");
+            if (/\/login(?:\?|$)/.test(page.url())) throw new Error("session rejected");
 
             const runs = [
-              ["Q1_BAYERN", "Qual foi a média de escanteios do Bayern de Munique nos últimos 5 jogos?"],
-              ["Q2_YURI_SHOTS", "Qual foi a média de finalizações do Yuri Alberto nos últimos 5 jogos?"],
-              ["Q3_YURI_GOALS", "Quantos gols o Yuri Alberto marcou nos últimos 10 jogos?"],
-              ["Q4_YURI_LAST_GOALS", "Quais foram os últimos 5 gols do Yuri Alberto?"],
-              ["Q2_YURI_SHOTS_REPEAT", "Qual foi a média de finalizações do Yuri Alberto nos últimos 5 jogos?"],
+              ["T1_BAYERN_CORNERS", "Qual foi a média de escanteios do Bayern de Munique nos últimos 5 jogos?", false],
+              ["T2_MANUTD_CORNERS", "Qual foi a média de escanteios do Manchester United nos últimos 5 jogos?", false],
+              ["T3_CORINTHIANS_CORNERS", "Qual foi a média de escanteios do Corinthians nos últimos 5 jogos?", false],
+              ["P1_YURI_SHOTS", "Qual foi a média de finalizações do Yuri Alberto nos últimos 5 jogos?", true],
+              ["P2_YURI_GOALS", "Quantos gols o Yuri Alberto marcou nos últimos 10 jogos?", true],
+              ["P3_YURI_SOT", "Qual foi a média de finalizações no alvo do Yuri Alberto nos últimos 5 jogos?", true],
+              ["P4_YURI_LAST_GOALS", "Quais foram os últimos 5 gols do Yuri Alberto?", true],
+              ["P5_YURI_LAST_GOALS_ALT", "Liste os 5 gols mais recentes do Yuri Alberto", true],
+              ["P6_YURI_GOALS_ALT", "Quantos gols o Yuri Alberto fez nos últimos 10 jogos?", true],
+              ["P1_YURI_SHOTS_REPEAT", "Qual foi a média de finalizações do Yuri Alberto nos últimos 5 jogos?", true],
             ];
 
-            for (const [label, question] of runs) {
-              const text = await ask(label, question);
-              if (["Não foi possível analisar", "Provider indisponível", "DeepSeek indisponível", "Resposta inválida do DeepSeek", "Time não encontrado", "Jogador não encontrado"].some((marker) => text.includes(marker))) {
-                throw new Error(`${label} failed`);
-              }
-              await page.waitForTimeout(1500);
+            for (const [label, question, requireResult] of runs) {
+              await ask(label, question, requireResult);
+              await page.waitForTimeout(1000);
             }
           } finally {
             await browser.close();
           }
           NODE
-          cd /tmp/phase3d-smoke
-          node smoke.mjs
+          node /tmp/phase3d-smoke/smoke.mjs
