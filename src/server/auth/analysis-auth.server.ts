@@ -18,7 +18,9 @@ export async function validateAnalysisAuthorization(
   if (!accessToken) return { status: "unauthorized", user: null };
 
   const url = (process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL)?.trim();
-  const publishableKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+  const publishableKey = (
+    process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY
+  )?.trim();
 
   if (!url || !publishableKey) {
     console.error("[analysis-auth] server auth configuration missing", {
