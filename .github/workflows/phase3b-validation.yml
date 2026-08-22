@@ -1,0 +1,80 @@
+name: Phase 3B Validation
+
+on:
+  push:
+    branches:
+      - feat/phase-3b-auth-user-persistence
+  pull_request:
+    paths:
+      - "src/lib/auth.tsx"
+      - "src/lib/supabase-browser.ts"
+      - "src/lib/store.tsx"
+      - "src/routes/login.tsx"
+      - "src/routes/app.tsx"
+      - "src/routes/app.index.tsx"
+      - "src/routes/app.historico.tsx"
+      - "src/routes/app.salvos.tsx"
+      - "src/routes/app.workspaces.tsx"
+      - "src/routes/app.perfil.tsx"
+      - "src/routes/app.resultado.tsx"
+      - "src/components/scoutly/app-sidebar.tsx"
+      - "src/routes/__root.tsx"
+      - "supabase/migrations/20260821235900_phase3b_auth_user_persistence.sql"
+      - "tests/phase3b/**"
+      - ".env.example"
+      - "package.json"
+      - ".github/workflows/phase3b-validation.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Preserve Phase 2B regression coverage
+        run: bun run test:phase2b
+
+      - name: Preserve Phase 3A cache coverage
+        run: bun run test:phase3a
+
+      - name: Phase 3B tests
+        run: bun run test:phase3b
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build
+        run: bun run build
+
+      - name: Global lint diagnostic
+        continue-on-error: true
+        run: bun run lint
+
+      - name: Lint Phase 3B files
+        run: >-
+          bunx eslint
+          src/lib/auth.tsx
+          src/lib/supabase-browser.ts
+          src/lib/store.tsx
+          src/routes/login.tsx
+          src/routes/app.tsx
+          src/routes/app.index.tsx
+          src/routes/app.historico.tsx
+          src/routes/app.salvos.tsx
+          src/routes/app.workspaces.tsx
+          src/routes/app.perfil.tsx
+          src/components/scoutly/app-sidebar.tsx
+          src/routes/__root.tsx
+          tests/phase3b/auth-persistence.test.mjs

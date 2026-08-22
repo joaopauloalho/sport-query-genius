@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, Moon, Sun } from "lucide-react";
+import { Bookmark, FolderKanban, History, Home, LogOut, Moon, Sun, UserRound } from "lucide-react";
 
 import { Logo } from "@/components/scoutly/logo";
 import { Button } from "@/components/ui/button";
@@ -16,15 +16,23 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/lib/auth";
 import { useScoutly } from "@/lib/store";
 
-const MAIN = [{ title: "Início", url: "/app", icon: Home }];
+const MAIN = [
+  { title: "Início", url: "/app", icon: Home },
+  { title: "Histórico", url: "/app/historico", icon: History },
+  { title: "Salvos", url: "/app/salvos", icon: Bookmark },
+  { title: "Workspaces", url: "/app/workspaces", icon: FolderKanban },
+  { title: "Perfil", url: "/app/perfil", icon: UserRound },
+];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (routerState) => routerState.location.pathname });
-  const { theme, toggleTheme } = useScoutly();
+  const { signOut } = useAuth();
+  const { theme, toggleTheme, profile } = useScoutly();
 
   const isActive = (url: string) =>
     url === "/app" ? pathname === "/app" : pathname.startsWith(url);
@@ -39,7 +47,7 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel>Análise</SidebarGroupLabel>}
+          {!collapsed && <SidebarGroupLabel>Sua conta</SidebarGroupLabel>}
           <SidebarGroupContent>
             <SidebarMenu>
               {MAIN.map((item) => (
@@ -57,7 +65,13 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="gap-3 border-t border-sidebar-border p-3">
+      <SidebarFooter className="gap-2 border-t border-sidebar-border p-3">
+        {!collapsed && (
+          <div className="px-2 pb-1">
+            <p className="truncate text-xs font-medium">{profile.name}</p>
+            <p className="truncate text-[0.7rem] text-muted-foreground">{profile.email}</p>
+          </div>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -68,11 +82,19 @@ export function AppSidebar() {
           {theme === "dark" ? <Moon className="size-4" /> : <Sun className="size-4" />}
           {!collapsed && <span>{theme === "dark" ? "Modo escuro" : "Modo claro"}</span>}
         </Button>
-
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void signOut()}
+          className="justify-start gap-2 text-muted-foreground"
+          aria-label="Sair da conta"
+        >
+          <LogOut className="size-4" />
+          {!collapsed && <span>Sair</span>}
+        </Button>
         {!collapsed && (
-          <p className="px-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-            O histórico recente é salvo somente neste navegador e não é sincronizado em conta ou
-            nuvem.
+          <p className="px-2 pt-1 text-[0.7rem] leading-relaxed text-muted-foreground">
+            Histórico, salvos e workspaces sincronizados com sua conta.
           </p>
         )}
       </SidebarFooter>

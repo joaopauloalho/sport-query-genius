@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test:phase2b": "node --experimental-transform-types --test tests/phase2b/*.test.mjs",
     "test:phase3a": "node --experimental-transform-types --test tests/phase3a/*.test.mjs",
+    "test:phase3b": "node --experimental-transform-types --test tests/phase3b/*.test.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

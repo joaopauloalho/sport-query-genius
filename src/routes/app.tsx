@@ -1,14 +1,36 @@
-import { Outlet, createFileRoute } from "@tanstack/react-router";
-import { CheckCircle2 } from "lucide-react";
+import { Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { useEffect } from "react";
 
 import { AppSidebar } from "@/components/scoutly/app-sidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/app")({
   component: AppLayout,
 });
 
 function AppLayout() {
+  const navigate = useNavigate();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      void navigate({ to: "/login", replace: true });
+    }
+  }, [loading, user, navigate]);
+
+  if (loading || !user) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-background">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Verificando sua sessão…
+        </div>
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">

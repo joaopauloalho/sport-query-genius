@@ -77,7 +77,7 @@ const LIMITATIONS = [
   "O backend real atual cobre análises de equipes de futebol.",
   "Jogadores, tênis e basquete ainda não estão disponíveis.",
   "Explorar, perfis navegáveis de equipes e listagem de jogos aguardam integrações reais próprias.",
-  "Conta, sincronização em nuvem, cobrança e planos ainda não foram implementados.",
+  "Cobrança, pagamentos e planos pagos ainda não foram implementados.",
 ];
 
 function Landing() {
@@ -129,8 +129,8 @@ function Landing() {
               </Button>
             </div>
             <p className="mt-5 text-sm text-muted-foreground">
-              Sem login e sem cobrança nesta fase. Recursos ainda não suportados ficam fora da
-              navegação principal.
+              Conta e sincronização em nuvem já estão disponíveis. Cobrança e pagamentos continuam
+              fora desta fase.
             </p>
           </div>
         </section>
