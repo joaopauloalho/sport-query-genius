@@ -78,6 +78,33 @@ jobs:
 
       - name: Lint Phase 3D files
         run: >-
+          bunx eslint --fix
+          src/lib/analysis.ts
+          src/server/analysis/analyze.server.ts
+          src/server/analysis/analyze-player.server.ts
+          src/server/analysis/deepseek.server.ts
+          src/server/analysis/engine.server.ts
+          src/server/analysis/errors.ts
+          src/server/analysis/intent-schema.ts
+          src/server/analysis/overrides.ts
+          src/server/sports/alias-aware-provider.server.ts
+          src/server/sports/entity-resolver.ts
+          src/server/sports/phase3d-repository.server.ts
+          src/server/sports/player-data-service.server.ts
+          src/server/sports/player-provider.ts
+          src/server/sports/providers/api-football-safe.server.ts
+          src/server/sports/providers/bsd-football-v2.server.ts
+          src/server/sports/providers/bsd-player.server.ts
+          src/server/sports/verified-aliases.ts
+          src/routes/app.resultado.tsx
+          src/routes/app.jogadores.tsx
+          src/routes/app.historico.tsx
+          src/routes/app.salvos.tsx
+          tests/phase3d/entity-player.test.mjs
+          tests/phase3d/verified-aliases.test.mjs
+
+      - name: Verify Phase 3D lint after autofix
+        run: >-
           bunx eslint
           src/lib/analysis.ts
           src/server/analysis/analyze.server.ts
