@@ -5,14 +5,14 @@ export type AnalysisAuthContext =
   | { status: "unauthorized"; user: null }
   | { status: "misconfigured"; user: null };
 
-function readBearerToken(authorization: string | null): string | null {
+function readBearerToken(authorization: string | null | undefined): string | null {
   if (!authorization) return null;
   const match = authorization.match(/^Bearer\s+([^\s]+)$/i);
   return match?.[1] ?? null;
 }
 
 export async function validateAnalysisAuthorization(
-  authorization: string | null,
+  authorization: string | null | undefined,
 ): Promise<AnalysisAuthContext> {
   const accessToken = readBearerToken(authorization);
   if (!accessToken) return { status: "unauthorized", user: null };
