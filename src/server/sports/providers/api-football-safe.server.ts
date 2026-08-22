@@ -23,6 +23,16 @@ function hasApiErrors(value: unknown): boolean {
   return true;
 }
 
+function authHeaders(authHeader: AuthHeader, apiKey: string): Record<string, string> {
+  if (authHeader === "x-rapidapi-key") {
+    return {
+      "x-rapidapi-key": apiKey,
+      "x-rapidapi-host": "v3.football.api-sports.io",
+    };
+  }
+  return { "x-apisports-key": apiKey };
+}
+
 export class SafeApiFootballProvider extends ApiFootballProvider {
   async resolveTeam(name: string): Promise<ResolvedTeam> {
     const apiKey = process.env.API_FOOTBALL_KEY;
@@ -42,7 +52,7 @@ export class SafeApiFootballProvider extends ApiFootballProvider {
       let response: Response;
       try {
         response = await fetch(url, {
-          headers: { [authHeader]: apiKey },
+          headers: authHeaders(authHeader, apiKey),
           signal: controller.signal,
         });
       } catch {

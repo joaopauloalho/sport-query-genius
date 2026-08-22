@@ -10,7 +10,7 @@ import type { SportsCacheObserver } from "@/server/sports/cache/cache-observer";
 import { getPhase3dSportsRepository } from "@/server/sports/phase3d-repository.server";
 import { PlayerDataService } from "@/server/sports/player-data-service.server";
 import { playerMetricValue, type PlayerMetric } from "@/server/sports/player-provider";
-import { BsdPlayerProvider } from "@/server/sports/providers/bsd-player.server";
+import { BsdPlayerProvider } from "@/server/sports/providers/bsd-player-live.server";
 
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError } from "./errors";
