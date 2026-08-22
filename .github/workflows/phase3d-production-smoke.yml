@@ -37,6 +37,15 @@ jobs:
           const browser = await chromium.launch({ headless: true });
           const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
 
+          page.on("response", (response) => {
+            if (response.url().includes("/auth/v1/")) {
+              console.log(`AUTH_HTTP|${response.status()}|${response.url().split("?")[0]}`);
+            }
+          });
+          page.on("console", (message) => {
+            if (message.type() === "error") console.log(`BROWSER_ERROR|${message.text()}`);
+          });
+
           async function bodyText() {
             return (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
           }
@@ -65,13 +74,14 @@ jobs:
               { timeout: 120000 },
             );
             const text = await bodyText();
-            console.log(`SMOKE|${label}|${question}|${text.slice(0, 3500)}`);
+            console.log(`SMOKE|${label}|${question}|${text.slice(0, 5000)}`);
             return text;
           }
 
           try {
             await page.goto(`${base}/login`, { waitUntil: "networkidle", timeout: 60000 });
             const loginText = await bodyText();
+            console.log(`LOGIN_READY|${page.url()}|${loginText.slice(0, 800)}`);
             if (loginText.includes("Supabase Auth ainda não está configurado")) {
               throw new Error("Production Supabase Auth is not configured");
             }
@@ -84,11 +94,14 @@ jobs:
             await page.waitForTimeout(5000);
 
             const afterSignup = await bodyText();
+            console.log(`AFTER_SIGNUP|${page.url()}|${afterSignup.slice(0, 2500)}`);
             if (afterSignup.includes("Confirme seu e-mail")) {
               console.log(`SMOKE_AUTH|EMAIL_CONFIRMATION_REQUIRED|${email}`);
               throw new Error("Disposable smoke signup requires email confirmation");
             }
-            await page.waitForURL(/\/app(?:\/|$)/, { timeout: 30000 });
+            if (!/\/app(?:\/|$)/.test(new URL(page.url()).pathname)) {
+              throw new Error("Signup did not create an authenticated session");
+            }
             console.log(`SMOKE_AUTH|OK|${email}`);
 
             const runs = [
