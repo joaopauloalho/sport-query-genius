@@ -14,6 +14,7 @@
     "test:phase3a": "node --experimental-transform-types --test tests/phase3a/*.test.mjs",
     "test:phase3b": "node --experimental-transform-types --test tests/phase3b/*.test.mjs",
     "test:phase3c": "node --experimental-transform-types --test tests/phase3c/*.test.mjs",
+    "test:phase3d": "node --experimental-transform-types --test tests/phase3d/*.test.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

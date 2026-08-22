@@ -3,6 +3,7 @@ import { Bookmark, Clock, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { isEventListAnalysisResult } from "@/lib/analysis";
 import { useScoutly } from "@/lib/store";
 
 export const Route = createFileRoute("/app/historico")({
@@ -53,44 +54,48 @@ function HistoryPage() {
         </div>
       ) : (
         <div className="mt-8 space-y-3">
-          {history.map((entry) => (
-            <article key={entry.id} className="surface-card p-4 sm:p-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <p className="font-medium">{entry.question}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {new Date(entry.createdAt).toLocaleString("pt-BR")} ·{" "}
-                    {entry.result.statistics.sample_size} jogos · resultado{" "}
-                    {entry.result.answer.value}
-                  </p>
+          {history.map((entry) => {
+            const eventList = isEventListAnalysisResult(entry.result);
+            return (
+              <article key={entry.id} className="surface-card p-4 sm:p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-medium">{entry.question}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {new Date(entry.createdAt).toLocaleString("pt-BR")} ·{" "}
+                      {eventList
+                        ? `${entry.result.events.length} gols comprovados`
+                        : `${entry.result.statistics.sample_size} jogos · resultado ${entry.result.answer.value}`}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        void toggleSaved(entry.result).then(() =>
+                          toast.success(
+                            isSaved(entry.cacheKey) ? "Removida dos salvos." : "Análise salva.",
+                          ),
+                        )
+                      }
+                    >
+                      <Bookmark className="mr-1.5 size-4" />{" "}
+                      {isSaved(entry.cacheKey) ? "Salva" : "Salvar"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        void navigate({ to: "/app/resultado", search: { q: entry.question } })
+                      }
+                    >
+                      Reabrir
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      void toggleSaved(entry.result).then(() =>
-                        toast.success(
-                          isSaved(entry.cacheKey) ? "Removida dos salvos." : "Análise salva.",
-                        ),
-                      )
-                    }
-                  >
-                    <Bookmark className="mr-1.5 size-4" />{" "}
-                    {isSaved(entry.cacheKey) ? "Salva" : "Salvar"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      void navigate({ to: "/app/resultado", search: { q: entry.question } })
-                    }
-                  >
-                    Reabrir
-                  </Button>
-                </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
     </div>

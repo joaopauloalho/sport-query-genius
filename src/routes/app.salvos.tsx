@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { isEventListAnalysisResult } from "@/lib/analysis";
 import { useScoutly } from "@/lib/store";
 
 export const Route = createFileRoute("/app/salvos")({
@@ -46,6 +47,7 @@ function SavedPage() {
           {saved.map((analysis) => {
             const selectedWorkspace =
               workspaceByAnalysis[analysis.cache_key] ?? workspaces[0]?.id ?? "";
+            const eventList = isEventListAnalysisResult(analysis);
             return (
               <article key={analysis.cache_key} className="surface-card p-4 sm:p-5">
                 <div className="flex flex-col gap-4">
@@ -53,8 +55,9 @@ function SavedPage() {
                     <div className="min-w-0">
                       <p className="font-medium">{analysis.question}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {analysis.statistics.sample_size} jogos · {analysis.intent.metric_label} ·{" "}
-                        {analysis.answer.value} {analysis.answer.unit}
+                        {eventList
+                          ? `${analysis.events.length} gols · ${analysis.player.name}`
+                          : `${analysis.statistics.sample_size} jogos · ${analysis.intent.metric_label} · ${analysis.answer.value} ${analysis.answer.unit}`}
                       </p>
                     </div>
                     <div className="flex shrink-0 gap-2">

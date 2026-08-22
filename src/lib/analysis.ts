@@ -1,12 +1,6 @@
 /**
- * Camada de "regras de negócio" da análise.
- *
- * FLUXO REAL PREVISTO:
- *   pergunta -> IA extrai intenção -> backend valida -> backend consulta DB
- *   -> backend calcula -> objeto estruturado -> IA escreve o resumo -> UI renderiza.
- *
- * O motor demonstrativo legado permanece disponível para as telas que ainda
- * dependem dele. A Fase 1 usa o pipeline server-side real em src/server/.
+ * Shared analysis contracts plus the legacy deterministic demo engine.
+ * Real football analysis is executed server-side under src/server/.
  */
 
 import {
@@ -24,6 +18,7 @@ import {
 
 export interface QueryIntent {
   sport: SportId;
+  query_kind?: "aggregate";
   entity_type: "team" | "player";
   entity_name: string;
   entity_id: string;
@@ -36,6 +31,22 @@ export interface QueryIntent {
   venue: "all" | "home" | "away";
 }
 
+export interface EventListQueryIntent {
+  sport: "football";
+  query_kind: "event_list";
+  entity_type: "player";
+  entity_name: string;
+  entity_id: string;
+  metric: "goals";
+  metric_label: string;
+  event_type: "goal";
+  event_count: number;
+  competition: string | null;
+  venue: "all";
+}
+
+export type AnalysisIntent = QueryIntent | EventListQueryIntent;
+
 export interface AnalysisStatistics {
   average: number;
   median: number;
@@ -46,12 +57,20 @@ export interface AnalysisStatistics {
   trend: number;
 }
 
-export interface AnalysisResult {
+export interface AnalysisPlayerContext {
+  name: string;
+  team_name: string | null;
+  position: string | null;
+}
+
+export interface AggregateAnalysisResult {
+  result_type?: "aggregate";
   id: string;
   cache_key: string;
   question: string;
   created_at: string;
   intent: QueryIntent;
+  player?: AnalysisPlayerContext;
   answer: { value: number; unit: string; summary: string; explanation: string };
   statistics: AnalysisStatistics;
   chart_data: { label: string; value: number; opponent: string; venue: string; compare?: number }[];
@@ -61,6 +80,43 @@ export interface AnalysisResult {
   related: string[];
   source: { provider: string; updated_at: string; missing: number };
   demo: boolean;
+}
+
+export interface AnalysisGoalEvent {
+  event_key: string;
+  fixture_id: string;
+  date: string;
+  opponent: string;
+  competition: string;
+  venue: "home" | "away";
+  result: string;
+  minute: number | null;
+  extra_time: number | null;
+  situation: string | null;
+  body_part: string | null;
+  xg: number | null;
+  xg_estimated: boolean | null;
+  source: string;
+}
+
+export interface EventListAnalysisResult {
+  result_type: "event_list";
+  id: string;
+  cache_key: string;
+  question: string;
+  created_at: string;
+  intent: EventListQueryIntent;
+  player: AnalysisPlayerContext;
+  events: AnalysisGoalEvent[];
+  related: string[];
+  source: { provider: string; updated_at: string; missing: number };
+  demo: false;
+}
+
+export type AnalysisResult = AggregateAnalysisResult | EventListAnalysisResult;
+
+export function isEventListAnalysisResult(result: AnalysisResult): result is EventListAnalysisResult {
+  return result.result_type === "event_list";
 }
 
 export type AnalysisOutcome =
@@ -76,8 +132,21 @@ const normalize = (s: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-/** Chave normalizada — perguntas equivalentes compartilham o mesmo resultado. */
-export function buildCacheKey(intent: QueryIntent): string {
+/** Equivalent aggregate requests retain the historical v1 cache key. */
+export function buildCacheKey(intent: AnalysisIntent): string {
+  if (intent.query_kind === "event_list") {
+    return [
+      "v2",
+      intent.sport,
+      intent.entity_type,
+      intent.entity_id,
+      "event_list",
+      intent.event_type,
+      intent.event_count,
+      intent.competition ?? "all",
+    ].join("|");
+  }
+
   return [
     "v1",
     intent.sport,
@@ -92,7 +161,7 @@ export function buildCacheKey(intent: QueryIntent): string {
   ].join("|");
 }
 
-/** TODO(integração): substituir por extração de intenção via modelo de IA (server-side). */
+/** Legacy demo parser. The real server pipeline does not call this function. */
 export function parseIntent(question: string): QueryIntent | null {
   const q = normalize(question);
 
@@ -110,32 +179,29 @@ export function parseIntent(question: string): QueryIntent | null {
 
   const primary = found[0].e;
   const secondary = found.find((x) => x.e.id !== primary.id && x.e.type === primary.type)?.e ?? null;
-
   const sport = primary.sport;
   const metrics = getSport(sport).metrics;
   const metric: MetricDef =
     metrics.find((m) => m.aliases.some((a) => q.includes(normalize(a)))) ?? metrics[0];
-
-  const countMatch = q.match(/(?:ultim[oa]s?|last)\s+(\d{1,3})/) ?? q.match(/(\d{1,3})\s*(?:jogos|partidas|games)/);
+  const countMatch =
+    q.match(/(?:ultim[oa]s?|last)\s+(\d{1,3})/) ??
+    q.match(/(\d{1,3})\s*(?:jogos|partidas|games)/);
   const match_count = Math.min(50, Math.max(3, countMatch ? parseInt(countMatch[1], 10) : 10));
-
   const venue: QueryIntent["venue"] = /fora de casa|visitante|away/.test(q)
     ? "away"
     : /em casa|mandante|home/.test(q)
       ? "home"
       : "all";
-
   const aggregation: QueryIntent["aggregation"] = /total|quantos no total|soma/.test(q)
     ? "total"
     : /mediana/.test(q)
       ? "median"
       : "average";
-
-  const competition =
-    COMPETITIONS.find((c) => q.includes(normalize(c.name)))?.id ?? null;
+  const competition = COMPETITIONS.find((c) => q.includes(normalize(c.name)))?.id ?? null;
 
   return {
     sport,
+    query_kind: "aggregate",
     entity_type: primary.type,
     entity_name: primary.name,
     entity_id: primary.id,
@@ -167,7 +233,6 @@ function fetchMatches(intent: QueryIntent, entityId: string, entityName: string)
     )?.name ??
     "Competição demonstrativa";
 
-  // TODO(integração): trocar por SELECT em team_match_statistics / player_match_statistics.
   const all = generateMatches({
     entityId,
     sport: intent.sport,
@@ -175,13 +240,12 @@ function fetchMatches(intent: QueryIntent, entityId: string, entityName: string)
     count: intent.match_count + 8,
     competitionName,
   });
-
   const filtered = intent.venue === "all" ? all : all.filter((m) => m.venue === intent.venue);
   void entityName;
   return filtered.slice(-intent.match_count);
 }
 
-/** Motor demonstrativo legado. O fluxo real da Fase 1 não chama esta função. */
+/** Legacy demo engine. Real Phase 3D football analysis never calls this function. */
 export function runAnalysis(question: string): AnalysisOutcome {
   const intent = parseIntent(question);
   if (!intent) {
@@ -204,7 +268,6 @@ export function runAnalysis(question: string): AnalysisOutcome {
   const compareMatches = intent.compare_with
     ? fetchMatches(intent, intent.compare_with.entity_id, intent.compare_with.entity_name)
     : undefined;
-
   const values = matches.map((m) => m.value);
   const metric = getSport(intent.sport).metrics.find((m) => m.key === intent.metric)!;
   const total = values.reduce((a, b) => a + b, 0);
@@ -212,7 +275,6 @@ export function runAnalysis(question: string): AnalysisOutcome {
   const last5 = values.slice(-5);
   const last5Avg = last5.reduce((a, b) => a + b, 0) / last5.length;
   const trend = round(last5Avg - average);
-
   const homeVals = matches.filter((m) => m.venue === "home").map((m) => m.value);
   const awayVals = matches.filter((m) => m.venue === "away").map((m) => m.value);
   const homeAvg = homeVals.length ? homeVals.reduce((a, b) => a + b, 0) / homeVals.length : 0;
@@ -229,21 +291,24 @@ export function runAnalysis(question: string): AnalysisOutcome {
     sample_size: values.length,
     trend,
   };
-
   const headline =
-    intent.aggregation === "total" ? statistics.total : intent.aggregation === "median" ? statistics.median : statistics.average;
-
+    intent.aggregation === "total"
+      ? statistics.total
+      : intent.aggregation === "median"
+        ? statistics.median
+        : statistics.average;
   const venueLabel =
-    intent.venue === "home" ? " em jogos como mandante" : intent.venue === "away" ? " em jogos fora de casa" : "";
-
+    intent.venue === "home"
+      ? " em jogos como mandante"
+      : intent.venue === "away"
+        ? " em jogos fora de casa"
+        : "";
   const compareAvg = compareMatches
     ? round(compareMatches.reduce((a, b) => a + b.value, 0) / compareMatches.length)
     : null;
-
   const summary = compareAvg
     ? `${intent.entity_name} registrou ${statistics.average} ${metric.unit} contra ${compareAvg} de ${intent.compare_with!.entity_name} nos últimos ${statistics.sample_size} jogos analisados.`
     : `${intent.entity_name} teve ${headline} ${metric.unit}${venueLabel} nos últimos ${statistics.sample_size} jogos analisados.`;
-
   const insights = [
     trend > 0
       ? `A média subiu ${Math.abs(trend)} nos últimos cinco jogos em relação ao período completo.`
@@ -258,15 +323,11 @@ export function runAnalysis(question: string): AnalysisOutcome {
     `${aboveAvgLast10} dos últimos ${Math.min(10, matches.length)} jogos ficaram acima da média do período.`,
     `A maior marca do período (${best.value}) ocorreu contra ${best.opponent}.`,
   ];
-
   const related = [
     `Ver apenas jogos em casa do ${intent.entity_name}`,
     `Ver apenas jogos fora de casa do ${intent.entity_name}`,
     `Alterar para últimos 10 jogos de ${intent.entity_name} em ${metric.label.toLowerCase()}`,
-    `Ver ${metric.label.toLowerCase()} de ${intent.entity_name} nos últimos 30 jogos`,
-    `Comparar ${intent.entity_name} com ${(intent.entity_type === "team" ? TEAMS : PLAYERS).find((e) => e.id !== intent.entity_id)?.name} em ${metric.label.toLowerCase()}`,
   ];
-
   const chart_data = matches.map((m, i) => ({
     label: new Date(m.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
     value: m.value,
@@ -274,12 +335,12 @@ export function runAnalysis(question: string): AnalysisOutcome {
     venue: m.venue === "home" ? "Casa" : "Fora",
     compare: compareMatches?.[i]?.value,
   }));
-
   const cache_key = buildCacheKey(intent);
 
   return {
     ok: true,
     result: {
+      result_type: "aggregate",
       id: `${cache_key}-${Date.now()}`,
       cache_key,
       question,
@@ -312,15 +373,53 @@ export const PROCESSING_STEPS = [
 ];
 
 export function toCsv(result: AnalysisResult): string {
-  const head = ["data", "adversario", "competicao", "mando", "resultado", result.intent.metric_label, "fonte"];
-  const rows = result.matches.map((m) => [
-    new Date(m.date).toLocaleDateString("pt-BR"),
-    m.opponent,
-    m.competition,
-    m.venue === "home" ? "Casa" : "Fora",
-    m.result,
-    String(m.value),
-    m.source,
+  if (isEventListAnalysisResult(result)) {
+    const head = [
+      "data",
+      "adversario",
+      "competicao",
+      "mando",
+      "resultado",
+      "minuto",
+      "acrescimo",
+      "situacao",
+      "parte_corpo",
+      "xg",
+      "fonte",
+    ];
+    const rows = result.events.map((event) => [
+      new Date(event.date).toLocaleDateString("pt-BR"),
+      event.opponent,
+      event.competition,
+      event.venue === "home" ? "Casa" : "Fora",
+      event.result,
+      event.minute === null ? "" : String(event.minute),
+      event.extra_time === null ? "" : String(event.extra_time),
+      event.situation ?? "",
+      event.body_part ?? "",
+      event.xg === null ? "" : String(event.xg),
+      event.source,
+    ]);
+    return [head, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+  }
+
+  const head = [
+    "data",
+    "adversario",
+    "competicao",
+    "mando",
+    "resultado",
+    result.intent.metric_label,
+    "fonte",
+  ];
+  const rows = result.matches.map((match) => [
+    new Date(match.date).toLocaleDateString("pt-BR"),
+    match.opponent,
+    match.competition,
+    match.venue === "home" ? "Casa" : "Fora",
+    match.result,
+    String(match.value),
+    match.source,
   ]);
-  return [head, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+  return [head, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
 }

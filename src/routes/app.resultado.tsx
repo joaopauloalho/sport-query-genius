@@ -1,6 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Bookmark, Calendar, Download, RefreshCw, Sparkles, Trophy } from "lucide-react";
+import {
+  Bookmark,
+  Calendar,
+  Download,
+  RefreshCw,
+  Sparkles,
+  Target,
+  Trophy,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -17,7 +25,11 @@ import {
 import { EmptyState, ProcessingSteps } from "@/components/scoutly/states";
 import { Button } from "@/components/ui/button";
 import { getCompetition } from "@/data/sports";
-import { toCsv, type AnalysisResult } from "@/lib/analysis";
+import {
+  isEventListAnalysisResult,
+  toCsv,
+  type AnalysisResult,
+} from "@/lib/analysis";
 import {
   SUPPORTED_MATCH_COUNTS,
   type AnalysisOverrides,
@@ -66,7 +78,7 @@ export const Route = createFileRoute("/app/resultado")({
       { title: "Resultado da análise — Scoutly AI" },
       {
         name: "description",
-        content: "Resposta, números, gráfico, tabela e fonte da sua análise real de futebol.",
+        content: "Resposta, números, eventos, gráfico, tabela e fonte da sua análise real de futebol.",
       },
       { property: "og:title", content: "Resultado da análise — Scoutly AI" },
       {
@@ -80,6 +92,8 @@ export const Route = createFileRoute("/app/resultado")({
 
 const ERROR_TITLES: Record<string, string> = {
   TEAM_NOT_FOUND: "Time não encontrado",
+  PLAYER_NOT_FOUND: "Jogador não encontrado",
+  ENTITY_AMBIGUOUS: "Entidade ambígua",
   QUESTION_NOT_UNDERSTOOD: "Pergunta não compreendida",
   UNSUPPORTED_METRIC: "Métrica não suportada",
   UNSUPPORTED_FILTER: "Filtro não suportado",
@@ -96,7 +110,18 @@ const ERROR_TITLES: Record<string, string> = {
   USAGE_GUARD_UNAVAILABLE: "Proteção de uso indisponível",
 };
 
-type ResultError = { code?: string; reason: string };
+type EntityCandidate = {
+  id: string;
+  name: string;
+  provider: string;
+  context?: string;
+};
+
+type ResultError = {
+  code?: string;
+  reason: string;
+  candidates?: EntityCandidate[];
+};
 
 function ResultPage() {
   const { q, match_count, competition, venue, invalid_match_count } = Route.useSearch();
@@ -171,7 +196,11 @@ function ResultPage() {
           return;
         }
 
-        setError({ code: outcome.code, reason: outcome.reason });
+        setError({
+          code: outcome.code,
+          reason: outcome.reason,
+          ...(outcome.candidates ? { candidates: outcome.candidates } : {}),
+        });
       })
       .catch(() => {
         if (!alive) return;
@@ -237,12 +266,28 @@ function ResultPage() {
           }
           description={error?.reason ?? "Tente reformular a pergunta."}
         />
+        {error?.candidates && error.candidates.length > 0 && (
+          <section className="surface-card p-5">
+            <h2 className="text-sm font-semibold">Qual entidade você quis dizer?</h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {error.candidates.map((candidate) => (
+                <span
+                  key={`${candidate.provider}-${candidate.id}`}
+                  className="rounded-full border border-border bg-secondary/40 px-3 py-2 text-xs"
+                >
+                  {candidate.name}
+                  {candidate.context ? ` · ${candidate.context}` : ""}
+                </span>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Refaça a pergunta usando o nome completo de uma das opções acima.
+            </p>
+          </section>
+        )}
       </div>
     );
   }
-
-  const competitionLabel =
-    getCompetition(result.intent.competition)?.name ?? result.intent.competition ?? null;
 
   function exportCsv() {
     if (!result) return;
@@ -254,6 +299,159 @@ function ResultPage() {
     anchor.click();
     URL.revokeObjectURL(url);
     toast.success("CSV exportado.");
+  }
+
+  const competitionLabel =
+    getCompetition(result.intent.competition)?.name ?? result.intent.competition ?? null;
+
+  if (isEventListAnalysisResult(result)) {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-8 sm:px-6 sm:py-10">
+        <SmartSearch
+          defaultValue={q}
+          showFilters={false}
+          size="sm"
+          onSubmit={(question) => ask(question)}
+        />
+
+        <header className="surface-card p-5">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold text-balance sm:text-xl">{result.question}</h1>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <Target className="size-3.5" />
+                  {result.player.name}
+                  {result.player.team_name ? ` · ${result.player.team_name}` : ""}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Calendar className="size-3.5" /> {result.events.length} gols comprovados
+                </span>
+                <span>
+                  Consulta em{" "}
+                  {new Date(result.created_at).toLocaleString("pt-BR", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  })}
+                </span>
+              </div>
+            </div>
+            <RealDataBadge className="shrink-0" />
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={exportCsv}>
+              <Download className="size-4" /> Exportar CSV
+            </Button>
+            <Button
+              size="sm"
+              variant={isSaved(result.cache_key) ? "secondary" : "outline"}
+              className="gap-1.5"
+              onClick={() => {
+                const wasSaved = isSaved(result.cache_key);
+                void toggleSaved(result)
+                  .then(() =>
+                    toast.success(
+                      wasSaved ? "Análise removida dos salvos." : "Análise salva na sua conta.",
+                    ),
+                  )
+                  .catch(() => toast.error("Não foi possível atualizar as análises salvas."));
+              }}
+            >
+              <Bookmark className="size-4" />
+              {isSaved(result.cache_key) ? "Salva" : "Salvar análise"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1.5"
+              onClick={() => ask(q, requestOverrides)}
+            >
+              <RefreshCw className="size-4" /> Atualizar dados
+            </Button>
+          </div>
+        </header>
+
+        <section className="surface-card border-primary/30 bg-primary/5 p-6">
+          <p className="font-display text-xl leading-snug font-semibold text-balance sm:text-2xl">
+            Últimos {result.events.length} gols de {result.player.name}
+          </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Eventos individualizados retornados pela {result.source.provider}. A lista não representa
+            os últimos {result.events.length} jogos; cada gol conta como um evento próprio.
+          </p>
+        </section>
+
+        <section className="surface-card p-5">
+          <h2 className="mb-4 text-sm font-semibold">Gols mais recentes</h2>
+          <div className="space-y-3">
+            {result.events.map((event, index) => (
+              <article
+                key={event.event_key}
+                className="grid gap-3 rounded-xl border border-border bg-secondary/20 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+              >
+                <span className="grid size-8 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="font-medium">
+                    {event.opponent} · {new Date(event.date).toLocaleDateString("pt-BR")}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {event.competition} · {event.venue === "home" ? "Casa" : "Fora"}
+                    {event.result ? ` · ${event.result}` : ""}
+                  </p>
+                  {(event.situation || event.body_part || event.xg !== null) && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {[event.situation, event.body_part, event.xg !== null ? `xG ${event.xg}` : null]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  )}
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-sm font-semibold">
+                    {event.minute === null
+                      ? "Minuto não informado"
+                      : `${event.minute}${event.extra_time ? `+${event.extra_time}` : ""}'`}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">Gol #{result.events.length - index}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+            Perguntas relacionadas
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {result.related.map((relatedQuestion) => (
+              <button
+                key={relatedQuestion}
+                onClick={() => ask(relatedQuestion)}
+                className="rounded-full border border-border bg-card px-3.5 py-2 text-xs transition-colors hover:border-primary/50 hover:text-primary"
+              >
+                {relatedQuestion}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="surface-card space-y-3 p-5">
+          <h2 className="text-sm font-semibold">Confiança nos dados</h2>
+          <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+            <span>Eventos individualizados: {result.events.length}</span>
+            <span>Competição: {competitionLabel ?? "todas"}</span>
+            <span>Minutos ausentes: {result.source.missing}</span>
+            <span>Jogador: {result.player.name}</span>
+          </div>
+          <SourceBadge provider={result.source.provider} updatedAt={result.source.updated_at} />
+          <MethodologyNote />
+        </section>
+      </div>
+    );
   }
 
   return (
@@ -273,6 +471,7 @@ function ResultPage() {
               <span className="inline-flex items-center gap-1.5">
                 <Trophy className="size-3.5" />
                 Futebol{competitionLabel ? ` · ${competitionLabel}` : ""}
+                {result.player?.team_name ? ` · ${result.player.team_name}` : ""}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Calendar className="size-3.5" />
@@ -349,9 +548,7 @@ function ResultPage() {
           <MetricCard label="Jogos analisados" value={result.statistics.sample_size} />
           <MetricCard
             label="Tendência recente"
-            value={
-              result.statistics.trend > 0 ? `+${result.statistics.trend}` : result.statistics.trend
-            }
+            value={result.statistics.trend > 0 ? `+${result.statistics.trend}` : result.statistics.trend}
             trend={result.statistics.trend}
             hint="Últimos 5 jogos vs. período"
           />

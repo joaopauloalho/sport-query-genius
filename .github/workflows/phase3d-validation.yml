@@ -1,0 +1,104 @@
+name: Phase 3D Validation
+
+on:
+  push:
+    branches:
+      - feat/phase-3d-entity-player-analysis
+  pull_request:
+    paths:
+      - "src/lib/analysis.ts"
+      - "src/server/analysis/**"
+      - "src/server/sports/**"
+      - "src/routes/app.resultado.tsx"
+      - "src/routes/app.jogadores.tsx"
+      - "src/routes/app.historico.tsx"
+      - "src/routes/app.salvos.tsx"
+      - "supabase/migrations/*phase3d*"
+      - "tests/phase3d/**"
+      - "package.json"
+      - ".github/workflows/phase3d-validation.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Preserve Phase 2B fallback coverage
+        run: bun run test:phase2b
+
+      - name: Preserve Phase 3A cache coverage
+        run: bun run test:phase3a
+
+      - name: Preserve Phase 3B auth persistence coverage
+        run: bun run test:phase3b
+
+      - name: Preserve Phase 3C server protection coverage
+        run: bun run test:phase3c
+
+      - name: Phase 3D entity/player tests
+        run: bun run test:phase3d
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build
+        env:
+          SUPABASE_SECRET_KEY: phase3d-ci-server-secret-sentinel-do-not-expose
+        run: bun run build
+
+      - name: Prove server secret is absent from client bundle
+        shell: bash
+        run: |
+          test -d .output/public
+          if grep -R -F 'phase3d-ci-server-secret-sentinel-do-not-expose' .output/public; then
+            echo 'Server-only Supabase secret value leaked into client bundle.' >&2
+            exit 1
+          fi
+          if grep -R -F 'SUPABASE_SECRET_KEY' .output/public; then
+            echo 'Server-only Supabase env name found in client bundle.' >&2
+            exit 1
+          fi
+
+      - name: Global lint diagnostic
+        continue-on-error: true
+        run: bun run lint
+
+      - name: Lint Phase 3D files
+        run: >-
+          bunx eslint
+          src/lib/analysis.ts
+          src/server/analysis/analyze.server.ts
+          src/server/analysis/analyze-player.server.ts
+          src/server/analysis/deepseek.server.ts
+          src/server/analysis/engine.server.ts
+          src/server/analysis/errors.ts
+          src/server/analysis/intent-schema.ts
+          src/server/analysis/overrides.ts
+          src/server/sports/alias-aware-provider.server.ts
+          src/server/sports/entity-resolver.ts
+          src/server/sports/phase3d-repository.server.ts
+          src/server/sports/player-data-service.server.ts
+          src/server/sports/player-provider.ts
+          src/server/sports/providers/api-football-safe.server.ts
+          src/server/sports/providers/bsd-football-v2.server.ts
+          src/server/sports/providers/bsd-player.server.ts
+          src/server/sports/verified-aliases.ts
+          src/routes/app.resultado.tsx
+          src/routes/app.jogadores.tsx
+          src/routes/app.historico.tsx
+          src/routes/app.salvos.tsx
+          tests/phase3d/entity-player.test.mjs
+          tests/phase3d/verified-aliases.test.mjs

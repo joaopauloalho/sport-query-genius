@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { MatchRecord } from "@/data/sports";
 import { AnalysisPipelineError } from "@/server/analysis/errors";
 import type { QueryIntentInput } from "@/server/analysis/intent-schema";
+import { resolveFootballEntityCandidates } from "../entity-resolver";
 import type { ProviderFixture, ResolvedTeam, SportsDataProvider } from "../provider";
 import { BsdFootballProvider } from "./bsd-football.server";
 
@@ -14,15 +15,6 @@ const teamsSchema = z
     results: z.array(z.record(z.unknown())),
   })
   .passthrough();
-
-const normalize = (value: string) =>
-  value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -226,48 +218,61 @@ export class BsdFootballV2Provider implements SportsDataProvider {
   }
 
   async resolveTeam(name: string): Promise<ResolvedTeam> {
-    // Football docs specify `name` (not `search`) for team-name filtering.
-    const payload = teamsSchema.parse(
-      await this.request("/teams/", { name, limit: 20 }),
-    );
+    const payload = teamsSchema.parse(await this.request("/teams/", { name, limit: 20 }));
 
     const candidates = payload.results
       .map((raw) => {
         const id = readNumber(raw, ["id", "team_id"]);
         const teamName = readString(raw, ["name", "team_name"]);
-        const country =
-          readString(raw, ["country", "country_name", "country_code"]) ?? "";
+        const country = readString(raw, ["country", "country_name", "country_code"]) ?? "";
         return id !== null && teamName ? { id, name: teamName, country } : null;
       })
       .filter((team): team is ResolvedTeam => team !== null);
 
-    const target = normalize(name);
-    const chosen =
-      candidates.find((team) => normalize(team.name) === target) ??
-      candidates.find((team) => normalize(team.name).includes(target)) ??
-      candidates.find((team) => target.includes(normalize(team.name)));
+    const resolution = resolveFootballEntityCandidates(name, candidates);
+    if (resolution.status === "ambiguous") {
+      console.warn("[bsd-football-v2] team ambiguous", {
+        query: name,
+        candidates: resolution.candidates.map((team) => ({ id: team.id, name: team.name, score: team.score })),
+      });
+      throw new AnalysisPipelineError(
+        "ENTITY_AMBIGUOUS",
+        `Encontramos mais de um time plausível para "${name}". Escolha um nome mais específico.`,
+        resolution.candidates.map((team) => ({
+          id: String(team.id),
+          name: team.name,
+          provider: this.name,
+          context: team.country,
+        })),
+      );
+    }
 
-    if (!chosen) {
+    if (resolution.status !== "resolved") {
       console.warn("[bsd-football-v2] team not found", {
         query: name,
-        candidates: candidates.slice(0, 10).map((team) => ({ id: team.id, name: team.name })),
+        candidates: resolution.candidates.map((team) => ({ id: team.id, name: team.name, score: team.score })),
       });
       throw new AnalysisPipelineError(
         "TEAM_NOT_FOUND",
-        `Não encontramos o time "${name}" na BSD Football API.`,
+        `Não encontramos o time "${name}" na BSD Football API com confiança suficiente.`,
       );
+    }
+
+    const chosen = candidates.find((team) => team.id === resolution.candidate.id);
+    if (!chosen) {
+      throw new AnalysisPipelineError("TEAM_NOT_FOUND", `Não encontramos o time "${name}" na BSD Football API.`);
     }
 
     console.info("[bsd-football-v2] resolved team", {
       query: name,
       teamId: chosen.id,
       teamName: chosen.name,
+      score: resolution.score,
     });
     return chosen;
   }
 
   async getRecentTeamFixtures(teamId: number, count: number): Promise<ProviderFixture[]> {
-    // Dedicated team fixture endpoint is the documented path for club history/results.
     const payload = await this.request(`/teams/${teamId}/fixtures/`, {
       status: "finished",
       limit: Math.min(200, Math.max(20, count * 4)),
