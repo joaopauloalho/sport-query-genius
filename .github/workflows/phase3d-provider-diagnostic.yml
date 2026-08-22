@@ -1,0 +1,25 @@
+name: Phase 3D Provider Diagnostic
+
+on:
+  push:
+    branches:
+      - fix/phase3d-provider-runtime
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch protected preview diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://sport-query-genius-74cw5woa0-joao-paulos-projects-0a85e668.vercel.app/phase3d-provider-diagnostic?_vercel_share=40f9VeeAPdJD0oXSFOV4OZHgGhYy1nL4'
+          curl --fail --silent --show-error --location \
+            --cookie-jar /tmp/vercel-cookies \
+            --cookie /tmp/vercel-cookies \
+            "$URL" \
+            | sed -n '/<pre>/,/<\/pre>/p' \
+            | sed -e 's/<[^>]*>//g' -e 's/&quot;/"/g' -e 's/&amp;/\&/g' -e 's/&#x27;/'"'"'/g' \
+            | head -c 30000
+          echo
