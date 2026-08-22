@@ -1,5 +1,5 @@
 import type { SportsCacheObserver } from "./cache/cache-observer";
-import { normalizeFootballEntityName } from "./entity-resolver";
+import { normalizeFootballEntityName } from "./entity-resolver.ts";
 import type {
   CachedPlayerIdentity,
   Phase3dSportsRepository,
@@ -13,8 +13,8 @@ import {
   type PlayerMetric,
   type PlayerSportsDataProvider,
   type ResolvedPlayer,
-} from "./player-provider";
-import { getVerifiedEntityAlias } from "./verified-aliases";
+} from "./player-provider.ts";
+import { getVerifiedEntityAlias } from "./verified-aliases.ts";
 
 const PLAYER_IDENTITY_TTL_MS = 24 * 60 * 60 * 1000;
 const PLAYER_STATS_FEED_TTL_MS = 10 * 60 * 1000;

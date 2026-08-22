@@ -1,4 +1,4 @@
-import { normalizeFootballEntityName } from "./entity-resolver";
+import { normalizeFootballEntityName } from "./entity-resolver.ts";
 
 export type FootballEntityType = "team" | "player";
 
