@@ -11,7 +11,7 @@ import {
 import type { AnalysisResult } from "@/lib/analysis";
 import { PLANS } from "@/data/sports";
 import { useAuth } from "@/lib/auth";
-import { getBrowserSupabase } from "@/lib/supabase.client";
+import { getBrowserSupabase } from "@/lib/supabase-browser";
 
 export interface Workspace {
   id: string;
