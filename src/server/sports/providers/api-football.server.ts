@@ -78,6 +78,16 @@ const normalize = (value: string) =>
 
 const formatApiDate = (date: Date) => date.toISOString().slice(0, 10);
 
+function authHeaders(authHeader: ApiFootballAuthHeader, apiKey: string): Record<string, string> {
+  if (authHeader === "x-rapidapi-key") {
+    return {
+      "x-rapidapi-key": apiKey,
+      "x-rapidapi-host": "v3.football.api-sports.io",
+    };
+  }
+  return { "x-apisports-key": apiKey };
+}
+
 function safeErrorForLog(errors: unknown, apiKey: string): string {
   let serialized: string;
   try {
@@ -166,7 +176,7 @@ export class ApiFootballProvider implements SportsDataProvider {
       let response: Response;
       try {
         response = await fetch(url, {
-          headers: { [authHeader]: apiKey },
+          headers: authHeaders(authHeader, apiKey),
           signal: controller.signal,
         });
       } catch {
@@ -234,10 +244,9 @@ export class ApiFootballProvider implements SportsDataProvider {
         detail: safeErrorForLog(errorPayload, apiKey),
       });
 
-      // API-Sports currently documents x-apisports-key. Older/RapidAPI-issued keys can use
-      // x-rapidapi-key against the same allow-listed API host. Retry only when the response
-      // specifically indicates an authentication/header mismatch. Account suspension,
-      // entitlement, rate limits and normal provider errors are never retried this way.
+      // API-Sports currently documents x-apisports-key. RapidAPI-issued keys require both
+      // x-rapidapi-key and x-rapidapi-host against the same allow-listed API host. Retry only
+      // when the response specifically indicates an authentication/header mismatch.
       if (kind === "auth") {
         result = await performRequest("x-rapidapi-key");
         errorPayload = getApiFootballErrorPayload(result.payload);
