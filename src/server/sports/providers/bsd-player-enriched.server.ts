@@ -1,12 +1,9 @@
-import { AnalysisPipelineError } from "@/server/analysis/errors";
-import type { ProviderFixture } from "@/server/sports/provider";
-import type {
-  PlayerFixtureStat,
-  ResolvedPlayer,
-} from "@/server/sports/player-provider";
+import { AnalysisPipelineError } from "../../analysis/errors.ts";
+import type { ProviderFixture } from "../provider.ts";
+import type { PlayerFixtureStat, ResolvedPlayer } from "../player-provider.ts";
 
-import { BsdFootballV3Provider } from "./bsd-football-v3.server";
-import { BsdPlayerProvider as BaseBsdPlayerProvider } from "./bsd-player.server";
+import { BsdFootballV3Provider } from "./bsd-football-v3.server.ts";
+import { BsdPlayerProvider as BaseBsdPlayerProvider } from "./bsd-player.server.ts";
 
 const BSD_BASE_URL = "https://sports.bzzoiro.com/api/v2";
 const TIMEOUT_MS = 15_000;
@@ -234,15 +231,16 @@ export class BsdPlayerProvider extends BaseBsdPlayerProvider {
 
     const teamIds = Array.from(
       new Set(
-        [
-          player.teamId,
-          ...rawRows.map(rawTeamId),
-        ].filter((teamId): teamId is number => teamId !== null),
+        [player.teamId, ...rawRows.map(rawTeamId)].filter(
+          (teamId): teamId is number => teamId !== null,
+        ),
       ),
     ).slice(0, MAX_RECENT_TEAMS);
 
     const fixtureGroups = await Promise.all(
-      teamIds.map((teamId) => this.football.getRecentTeamFixtures(teamId, TEAM_FIXTURE_HISTORY)),
+      teamIds.map((teamId) =>
+        this.football.getRecentTeamFixtures(teamId, TEAM_FIXTURE_HISTORY),
+      ),
     );
     const fixturesById = new Map<number, ProviderFixture>();
     for (const fixture of fixtureGroups.flat()) fixturesById.set(fixture.id, fixture);
