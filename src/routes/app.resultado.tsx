@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Calendar, Download, RefreshCw, Sparkles, Trophy } from "lucide-react";
+import { Bookmark, Calendar, Download, RefreshCw, Sparkles, Trophy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -96,7 +96,7 @@ function ResultPage() {
   const { q, match_count, competition, venue, invalid_match_count } = Route.useSearch();
   const navigate = useNavigate();
   const analyze = useServerFn(analyzeQuestion);
-  const { registerAnalysis } = useScoutly();
+  const { registerAnalysis, toggleSaved, isSaved } = useScoutly();
 
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -272,6 +272,24 @@ function ResultPage() {
         <div className="mt-5 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" className="gap-1.5" onClick={exportCsv}>
             <Download className="size-4" /> Exportar CSV
+          </Button>
+          <Button
+            size="sm"
+            variant={isSaved(result.cache_key) ? "secondary" : "outline"}
+            className="gap-1.5"
+            onClick={() => {
+              const wasSaved = isSaved(result.cache_key);
+              void toggleSaved(result)
+                .then(() =>
+                  toast.success(
+                    wasSaved ? "Análise removida dos salvos." : "Análise salva na sua conta.",
+                  ),
+                )
+                .catch(() => toast.error("Não foi possível atualizar as análises salvas."));
+            }}
+          >
+            <Bookmark className="size-4" />
+            {isSaved(result.cache_key) ? "Salva" : "Salvar análise"}
           </Button>
           <Button
             size="sm"
