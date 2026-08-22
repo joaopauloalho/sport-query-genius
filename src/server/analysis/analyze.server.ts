@@ -5,6 +5,7 @@ import {
   type SupportedMatchCount,
 } from "@/lib/analysis-request";
 import type { QueryIntent } from "@/lib/analysis";
+import type { SportsCacheObserver } from "@/server/sports/cache/cache-observer";
 import { withSportsCache } from "@/server/sports/cache/sports-cache.server";
 import { FilteredSportsDataProvider } from "@/server/sports/filtered-provider.server";
 import { FootballProviderOrchestrator } from "@/server/sports/provider-fallback.server";
@@ -13,7 +14,7 @@ import { BsdFootballV3Provider } from "@/server/sports/providers/bsd-football-v3
 
 import { parseIntentWithDeepSeek } from "./deepseek.server";
 import { buildRealAnalysisResult } from "./engine.server";
-import { AnalysisPipelineError, toSafeAnalysisError, type ServerAnalysisOutcome } from "./errors";
+import { AnalysisPipelineError, toSafeAnalysisError, type AnalysisPipelineOutcome } from "./errors";
 import type { QueryIntentInput } from "./intent-schema";
 import { applyOverrides } from "./overrides";
 
@@ -49,16 +50,16 @@ const normalizeCompetition = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-function createFootballOrchestrator(): FootballProviderOrchestrator {
+function createFootballOrchestrator(observer?: SportsCacheObserver): FootballProviderOrchestrator {
   if (process.env.BSD_FOOTBALL_KEY) {
     return new FootballProviderOrchestrator(
-      new FilteredSportsDataProvider(withSportsCache(new BsdFootballV3Provider())),
-      new FilteredSportsDataProvider(withSportsCache(new ApiFootballProvider())),
+      new FilteredSportsDataProvider(withSportsCache(new BsdFootballV3Provider(), observer)),
+      new FilteredSportsDataProvider(withSportsCache(new ApiFootballProvider(), observer)),
     );
   }
 
   return new FootballProviderOrchestrator(
-    new FilteredSportsDataProvider(withSportsCache(new ApiFootballProvider())),
+    new FilteredSportsDataProvider(withSportsCache(new ApiFootballProvider(), observer)),
   );
 }
 
@@ -119,7 +120,8 @@ function filterDescription(intent: QueryIntentInput, competition: string | null)
 
 export async function analyzeQuestionServer(
   request: AnalysisRequest,
-): Promise<ServerAnalysisOutcome> {
+  observer?: SportsCacheObserver,
+): Promise<AnalysisPipelineOutcome> {
   try {
     assertSupportedExplicitPeriod(request.question);
 
@@ -127,7 +129,7 @@ export async function analyzeQuestionServer(
     const effectiveIntent = applyOverrides(parsedIntent, request.overrides);
     const competition = resolveCompetition(effectiveIntent.competition);
 
-    const orchestrator = createFootballOrchestrator();
+    const orchestrator = createFootballOrchestrator(observer);
     const selection = await orchestrator.selectTeamFixtures(
       effectiveIntent.entity_name,
       effectiveIntent.match_count,

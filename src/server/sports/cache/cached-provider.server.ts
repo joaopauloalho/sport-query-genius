@@ -1,6 +1,7 @@
 import type { MatchRecord } from "@/data/sports";
 import type { QueryIntentInput } from "@/server/analysis/intent-schema";
 import type { ProviderFixture, ResolvedTeam, SportsDataProvider } from "../provider";
+import type { SportsCacheObserver } from "./cache-observer";
 import {
   SPORTS_CACHE_TTL_MS,
   isFreshTimestamp,
@@ -47,6 +48,7 @@ export class CachedSportsDataProvider implements SportsDataProvider {
     private readonly delegate: SportsDataProvider,
     private readonly repository: SportsCacheRepository,
     private readonly now: () => number = Date.now,
+    private readonly observer?: SportsCacheObserver,
   ) {}
 
   get name(): string {
@@ -109,6 +111,7 @@ export class CachedSportsDataProvider implements SportsDataProvider {
             kind: "team",
             teamId: cached.value.id,
           });
+          this.observer?.cacheHit(this.name, "team");
           return {
             id: cached.value.id,
             name: cached.value.name,
@@ -128,6 +131,8 @@ export class CachedSportsDataProvider implements SportsDataProvider {
         });
       }
 
+      this.observer?.cacheMiss(this.name, "team");
+      this.observer?.providerCall(this.name, "resolveTeam");
       console.info("[sports-cache] provider called", {
         provider: this.name,
         operation: "resolveTeam",
@@ -175,6 +180,7 @@ export class CachedSportsDataProvider implements SportsDataProvider {
                 requested: count,
                 returned: cachedFixtures.value.length,
               });
+              this.observer?.cacheHit(this.name, "fixtures");
               return cachedFixtures.value.slice(-count);
             }
           }
@@ -205,6 +211,8 @@ export class CachedSportsDataProvider implements SportsDataProvider {
         });
       }
 
+      this.observer?.cacheMiss(this.name, "fixtures");
+      this.observer?.providerCall(this.name, "getRecentTeamFixtures");
       console.info("[sports-cache] provider called", {
         provider: this.name,
         operation: "getRecentTeamFixtures",
@@ -261,6 +269,7 @@ export class CachedSportsDataProvider implements SportsDataProvider {
             metric,
             hasValue: cached.value.value !== null,
           });
+          this.observer?.cacheHit(this.name, "metric");
           return cached.value.value === null
             ? null
             : buildMatchRecord(fixture, teamId, cached.value.value, cached.value.sourceProvider);
@@ -283,6 +292,8 @@ export class CachedSportsDataProvider implements SportsDataProvider {
         });
       }
 
+      this.observer?.cacheMiss(this.name, "metric");
+      this.observer?.providerCall(this.name, "getFixtureMetric");
       console.info("[sports-cache] provider called", {
         provider: this.name,
         operation: "getFixtureMetric",

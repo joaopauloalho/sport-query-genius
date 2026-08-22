@@ -22,6 +22,7 @@ export const analysisOverridesSchema = z
 export const analysisRequestSchema = z
   .object({
     question: z.string().trim().min(3).max(500),
+    idempotency_key: z.string().uuid(),
     overrides: analysisOverridesSchema.optional(),
   })
   .strict();

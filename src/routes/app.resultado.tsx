@@ -88,6 +88,12 @@ const ERROR_TITLES: Record<string, string> = {
   DATA_INSUFFICIENT: "Dados insuficientes",
   DEEPSEEK_ERROR: "DeepSeek indisponível",
   INVALID_DEEPSEEK_OUTPUT: "Resposta inválida do DeepSeek",
+  UNAUTHORIZED: "Sessão expirada",
+  RATE_LIMITED: "Muitas solicitações",
+  QUOTA_EXCEEDED: "Limite de uso atingido",
+  ANALYSIS_IN_PROGRESS: "Análise já em andamento",
+  DUPLICATE_REQUEST: "Solicitação já processada",
+  USAGE_GUARD_UNAVAILABLE: "Proteção de uso indisponível",
 };
 
 type ResultError = { code?: string; reason: string };
@@ -96,7 +102,7 @@ function ResultPage() {
   const { q, match_count, competition, venue, invalid_match_count } = Route.useSearch();
   const navigate = useNavigate();
   const analyze = useServerFn(analyzeQuestion);
-  const { registerAnalysis, toggleSaved, isSaved } = useScoutly();
+  const { refreshUserData, toggleSaved, isSaved } = useScoutly();
 
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -110,6 +116,11 @@ function ResultPage() {
     if (venue !== undefined) overrides.venue = venue;
     return Object.keys(overrides).length > 0 ? overrides : undefined;
   }, [match_count, competition, venue]);
+
+  const idempotencyKey = useMemo(
+    () => crypto.randomUUID(),
+    [q, match_count, competition, venue, invalid_match_count],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -142,6 +153,7 @@ function ResultPage() {
     void analyze({
       data: {
         question: q,
+        idempotency_key: idempotencyKey,
         ...(requestOverrides ? { overrides: requestOverrides } : {}),
       },
     })
@@ -149,10 +161,17 @@ function ResultPage() {
         if (!alive) return;
         if (outcome.ok) {
           setResult(outcome.result);
-          registerAnalysis(outcome.result, false);
-        } else {
-          setError({ code: outcome.code, reason: outcome.reason });
+          void refreshUserData().catch(() => undefined);
+          return;
         }
+
+        if (outcome.code === "UNAUTHORIZED") {
+          toast.error("Sua sessão expirou. Entre novamente para continuar.");
+          void navigate({ to: "/login", replace: true });
+          return;
+        }
+
+        setError({ code: outcome.code, reason: outcome.reason });
       })
       .catch(() => {
         if (!alive) return;
@@ -168,7 +187,15 @@ function ResultPage() {
     return () => {
       alive = false;
     };
-  }, [q, invalid_match_count, requestOverrides, analyze, registerAnalysis]);
+  }, [
+    q,
+    invalid_match_count,
+    requestOverrides,
+    idempotencyKey,
+    analyze,
+    refreshUserData,
+    navigate,
+  ]);
 
   const ask = (question: string, overrides?: AnalysisOverrides) =>
     navigate({

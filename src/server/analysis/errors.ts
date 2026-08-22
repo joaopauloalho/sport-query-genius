@@ -9,7 +9,13 @@ export type AnalysisErrorCode =
   | "PROVIDER_UNAVAILABLE"
   | "DATA_INSUFFICIENT"
   | "DEEPSEEK_ERROR"
-  | "INVALID_DEEPSEEK_OUTPUT";
+  | "INVALID_DEEPSEEK_OUTPUT"
+  | "UNAUTHORIZED"
+  | "RATE_LIMITED"
+  | "QUOTA_EXCEEDED"
+  | "ANALYSIS_IN_PROGRESS"
+  | "DUPLICATE_REQUEST"
+  | "USAGE_GUARD_UNAVAILABLE";
 
 export class AnalysisPipelineError extends Error {
   constructor(
@@ -31,10 +37,24 @@ export function toSafeAnalysisError(error: unknown): {
 
   return {
     code: "PROVIDER_UNAVAILABLE",
-    reason: "Não foi possível concluir a análise agora. Nenhuma estatística foi estimada ou inventada.",
+    reason:
+      "Não foi possível concluir a análise agora. Nenhuma estatística foi estimada ou inventada.",
   };
 }
 
+export type AnalysisFailure = {
+  ok: false;
+  code: AnalysisErrorCode;
+  reason: string;
+  retry_after_seconds?: number;
+};
+
+export type AnalysisPipelineOutcome = { ok: true; result: AnalysisResult } | AnalysisFailure;
+
 export type ServerAnalysisOutcome =
-  | { ok: true; result: AnalysisResult }
-  | { ok: false; code: AnalysisErrorCode; reason: string };
+  | {
+      ok: true;
+      result: AnalysisResult;
+      history: { id: string; created_at: string };
+    }
+  | AnalysisFailure;
