@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/phase-3d-entity-player-analysis
+  pull_request:
+    paths:
+      - ".github/workflows/phase3d-preview-smoke.yml"
 
 jobs:
   smoke:
