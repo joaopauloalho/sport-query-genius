@@ -124,7 +124,11 @@ function LoginPage() {
 
             {message && <p className="text-sm text-muted-foreground">{message}</p>}
 
-            <Button className="w-full" disabled={submitting || loading || !configured} type="submit">
+            <Button
+              className="w-full"
+              disabled={submitting || loading || !configured}
+              type="submit"
+            >
               {submitting && <Loader2 className="mr-2 size-4 animate-spin" />}
               {mode === "login" ? "Entrar" : "Criar conta"}
             </Button>
