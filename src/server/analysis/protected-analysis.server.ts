@@ -236,7 +236,8 @@ export async function executeProtectedAnalysis(input: {
       user_id: userId,
       usage_event_id: usageEventId,
       duration_ms: durationMs,
-      error_code: error instanceof UsageGuardUnavailableError ? "USAGE_GUARD_UNAVAILABLE" : "INTERNAL",
+      error_code:
+        error instanceof UsageGuardUnavailableError ? "USAGE_GUARD_UNAVAILABLE" : "INTERNAL",
     });
     return blockedOutcome(
       "USAGE_GUARD_UNAVAILABLE",

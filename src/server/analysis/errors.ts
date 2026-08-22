@@ -37,7 +37,8 @@ export function toSafeAnalysisError(error: unknown): {
 
   return {
     code: "PROVIDER_UNAVAILABLE",
-    reason: "Não foi possível concluir a análise agora. Nenhuma estatística foi estimada ou inventada.",
+    reason:
+      "Não foi possível concluir a análise agora. Nenhuma estatística foi estimada ou inventada.",
   };
 }
 

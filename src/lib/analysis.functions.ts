@@ -26,9 +26,7 @@ const analysisAuthMiddleware = createMiddleware({ type: "function" })
     });
   })
   .server(async ({ next }) => {
-    const analysisAuth = await validateAnalysisAuthorization(
-      getRequestHeader("authorization"),
-    );
+    const analysisAuth = await validateAnalysisAuthorization(getRequestHeader("authorization"));
     return next({ context: { analysisAuth } });
   });
 

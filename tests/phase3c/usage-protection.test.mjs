@@ -29,7 +29,10 @@ test("B. Server Function validates bearer auth on the server before protected an
     source,
     /validateAnalysisAuthorization\(\s*getRequestHeader\("authorization"\),?\s*\)/,
   );
-  assert.match(source, /executeProtectedAnalysis\(\{ request: data, auth: context\.analysisAuth \}\)/);
+  assert.match(
+    source,
+    /executeProtectedAnalysis\(\{ request: data, auth: context\.analysisAuth \}\)/,
+  );
   assert.doesNotMatch(source, /analyzeQuestionServer\(data\)/);
 });
 
@@ -61,15 +64,24 @@ test("E. migration makes usage server-authoritative, RLS-isolated and atomically
   assert.match(sql, /alter table public\.analysis_usage_events enable row level security/i);
   assert.match(sql, /create policy analysis_usage_select_own/i);
   assert.match(sql, /\(select auth\.uid\(\)\) = user_id/i);
-  assert.match(sql, /revoke all on table public\.analysis_usage_events from anon, authenticated, service_role/i);
+  assert.match(
+    sql,
+    /revoke all on table public\.analysis_usage_events from anon, authenticated, service_role/i,
+  );
   assert.match(sql, /grant select on table public\.analysis_usage_events to authenticated/i);
   assert.doesNotMatch(sql, /grant\s+(insert|update|delete)[^;]*authenticated/i);
   assert.match(sql, /revoke insert, update on table public\.analysis_history from authenticated/i);
   assert.match(sql, /pg_advisory_xact_lock/i);
   assert.match(sql, /analysis_usage_user_idempotency_uidx/i);
   assert.match(sql, /security invoker/gi);
-  assert.match(sql, /revoke all on function public\.begin_analysis_usage[\s\S]*from public, anon, authenticated/i);
-  assert.match(sql, /grant execute on function public\.begin_analysis_usage[\s\S]*to service_role/i);
+  assert.match(
+    sql,
+    /revoke all on function public\.begin_analysis_usage[\s\S]*from public, anon, authenticated/i,
+  );
+  assert.match(
+    sql,
+    /grant execute on function public\.begin_analysis_usage[\s\S]*to service_role/i,
+  );
 });
 
 test("F. usage foundation has configurable anti-abuse controls and no hardcoded commercial quota", async () => {

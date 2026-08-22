@@ -153,7 +153,8 @@ export async function completeAnalysisUsage(input: {
   durationMs: number;
 }): Promise<{ id: string; created_at: string }> {
   const client = getAdminClient();
-  const provider = input.result.source.provider || input.telemetry.providersCalled.join(",") || null;
+  const provider =
+    input.result.source.provider || input.telemetry.providersCalled.join(",") || null;
   const { data, error } = await client.rpc("complete_analysis_usage", {
     p_user_id: input.userId,
     p_usage_event_id: input.usageEventId,
