@@ -28,23 +28,19 @@ jobs:
           TARGET_URL: https://sport-query-genius.vercel.app
           SUPABASE_URL: https://xuyqlajmtsvnzhqbjwmz.supabase.co
           SUPABASE_PUBLISHABLE_KEY: sb_publishable_0YFBwlQ1wLRQ9o3ThQiw2Q_c6qfYp46
+          SMOKE_EMAIL: phase3d-smoke-c0ddf4f1e68c@example.com
+          SMOKE_PASSWORD: rLRYC8mKVNuIO0b8n3PvHuwWDHiygUvA
         run: |
           cat >/tmp/phase3d-smoke/smoke.mjs <<'NODE'
           import { chromium } from "playwright";
           import { createClient } from "@supabase/supabase-js";
 
           const base = process.env.TARGET_URL;
-          const supabaseUrl = process.env.SUPABASE_URL;
-          const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-          const supabase = createClient(supabaseUrl, publishableKey, {
+          const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
             auth: { persistSession: false, autoRefreshToken: false },
           });
           const browser = await chromium.launch({ headless: true });
           const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
-
-          page.on("console", (message) => {
-            if (message.type() === "error") console.log(`BROWSER_ERROR|${message.text()}`);
-          });
 
           async function bodyText() {
             return (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
@@ -79,12 +75,13 @@ jobs:
           }
 
           try {
-            const { data, error } = await supabase.auth.signInAnonymously({
-              options: { data: { display_name: "Phase 3D Smoke" } },
+            const { data, error } = await supabase.auth.signInWithPassword({
+              email: process.env.SMOKE_EMAIL,
+              password: process.env.SMOKE_PASSWORD,
             });
             if (error || !data.session || !data.user) {
               console.log(`SMOKE_AUTH_ERROR|${error?.message ?? "missing session"}`);
-              throw error ?? new Error("Anonymous auth returned no session");
+              throw error ?? new Error("Technical smoke user returned no session");
             }
 
             const storageKey = "sb-xuyqlajmtsvnzhqbjwmz-auth-token";
@@ -97,7 +94,7 @@ jobs:
             await page.goto(`${base}/app`, { waitUntil: "networkidle", timeout: 60000 });
             const appText = await bodyText();
             console.log(`SMOKE_AUTH|OK|USER_ID=${data.user.id}|${appText.slice(0, 700)}`);
-            if (/\/login(?:\?|$)/.test(page.url())) throw new Error("Anonymous session was not accepted by the app");
+            if (/\/login(?:\?|$)/.test(page.url())) throw new Error("Technical smoke session was not accepted by the app");
 
             const runs = [
               ["Q1_BAYERN", "Qual foi a média de escanteios do Bayern de Munique nos últimos 5 jogos?"],
