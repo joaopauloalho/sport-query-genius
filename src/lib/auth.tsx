@@ -9,7 +9,7 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
-import { getBrowserSupabase, isBrowserSupabaseConfigured } from "@/lib/supabase.client";
+import { getBrowserSupabase } from "@/lib/supabase-browser";
 
 type AuthOperationResult = {
   ok: boolean;
@@ -54,10 +54,11 @@ async function ensureProfile(user: User): Promise<void> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const configured = isBrowserSupabaseConfigured();
+  const [configured, setConfigured] = useState(false);
 
   useEffect(() => {
     const client = getBrowserSupabase();
+    setConfigured(Boolean(client));
     if (!client) {
       setSession(null);
       setLoading(false);
