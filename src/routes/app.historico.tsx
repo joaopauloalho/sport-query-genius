@@ -55,7 +55,8 @@ function HistoryPage() {
       ) : (
         <div className="mt-8 space-y-3">
           {history.map((entry) => {
-            const eventList = isEventListAnalysisResult(entry.result);
+            const result = entry.result;
+            const eventList = isEventListAnalysisResult(result);
             return (
               <article key={entry.id} className="surface-card p-4 sm:p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -64,8 +65,8 @@ function HistoryPage() {
                     <p className="mt-1 text-xs text-muted-foreground">
                       {new Date(entry.createdAt).toLocaleString("pt-BR")} ·{" "}
                       {eventList
-                        ? `${entry.result.events.length} gols comprovados`
-                        : `${entry.result.statistics.sample_size} jogos · resultado ${entry.result.answer.value}`}
+                        ? `${result.events.length} gols comprovados`
+                        : `${result.statistics.sample_size} jogos · resultado ${result.answer.value}`}
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-2">
@@ -73,7 +74,7 @@ function HistoryPage() {
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        void toggleSaved(entry.result).then(() =>
+                        void toggleSaved(result).then(() =>
                           toast.success(
                             isSaved(entry.cacheKey) ? "Removida dos salvos." : "Análise salva.",
                           ),
