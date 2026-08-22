@@ -2,6 +2,8 @@ import type { AnalysisResult } from "@/lib/analysis";
 
 export type AnalysisErrorCode =
   | "TEAM_NOT_FOUND"
+  | "PLAYER_NOT_FOUND"
+  | "ENTITY_AMBIGUOUS"
   | "QUESTION_NOT_UNDERSTOOD"
   | "UNSUPPORTED_METRIC"
   | "UNSUPPORTED_FILTER"
@@ -17,10 +19,18 @@ export type AnalysisErrorCode =
   | "DUPLICATE_REQUEST"
   | "USAGE_GUARD_UNAVAILABLE";
 
+export interface AnalysisEntityCandidate {
+  id: string;
+  name: string;
+  provider: string;
+  context?: string;
+}
+
 export class AnalysisPipelineError extends Error {
   constructor(
     public readonly code: AnalysisErrorCode,
     message: string,
+    public readonly candidates?: AnalysisEntityCandidate[],
   ) {
     super(message);
     this.name = "AnalysisPipelineError";
@@ -30,9 +40,14 @@ export class AnalysisPipelineError extends Error {
 export function toSafeAnalysisError(error: unknown): {
   code: AnalysisErrorCode;
   reason: string;
+  candidates?: AnalysisEntityCandidate[];
 } {
   if (error instanceof AnalysisPipelineError) {
-    return { code: error.code, reason: error.message };
+    return {
+      code: error.code,
+      reason: error.message,
+      ...(error.candidates ? { candidates: error.candidates } : {}),
+    };
   }
 
   return {
@@ -47,6 +62,7 @@ export type AnalysisFailure = {
   code: AnalysisErrorCode;
   reason: string;
   retry_after_seconds?: number;
+  candidates?: AnalysisEntityCandidate[];
 };
 
 export type AnalysisPipelineOutcome = { ok: true; result: AnalysisResult } | AnalysisFailure;

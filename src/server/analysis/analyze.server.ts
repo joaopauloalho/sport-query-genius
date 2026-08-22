@@ -1,21 +1,32 @@
 import { COMPETITIONS } from "@/data/sports";
+import type { QueryIntent } from "@/lib/analysis";
 import {
   SUPPORTED_MATCH_COUNTS,
   type AnalysisRequest,
   type SupportedMatchCount,
 } from "@/lib/analysis-request";
-import type { QueryIntent } from "@/lib/analysis";
+import { AliasAwareTeamProvider } from "@/server/sports/alias-aware-provider.server";
 import type { SportsCacheObserver } from "@/server/sports/cache/cache-observer";
-import { withSportsCache } from "@/server/sports/cache/sports-cache.server";
+import {
+  getSportsCacheRepository,
+  withSportsCache,
+} from "@/server/sports/cache/sports-cache.server";
 import { FilteredSportsDataProvider } from "@/server/sports/filtered-provider.server";
+import { getPhase3dSportsRepository } from "@/server/sports/phase3d-repository.server";
 import { FootballProviderOrchestrator } from "@/server/sports/provider-fallback.server";
-import { ApiFootballProvider } from "@/server/sports/providers/api-football.server";
+import type { SportsDataProvider } from "@/server/sports/provider";
+import { SafeApiFootballProvider } from "@/server/sports/providers/api-football-safe.server";
 import { BsdFootballV3Provider } from "@/server/sports/providers/bsd-football-v3.server";
 
+import {
+  analyzePlayerAggregate,
+  analyzePlayerEventList,
+  type ResolvedCompetitionFilter,
+} from "./analyze-player.server";
 import { parseIntentWithDeepSeek } from "./deepseek.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type AnalysisPipelineOutcome } from "./errors";
-import type { QueryIntentInput } from "./intent-schema";
+import type { TeamAggregateIntentInput } from "./intent-schema";
 import { applyOverrides } from "./overrides";
 
 const METRIC_LABELS = {
@@ -50,16 +61,27 @@ const normalizeCompetition = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+function addEntityResolution(
+  provider: SportsDataProvider,
+  observer?: SportsCacheObserver,
+): SportsDataProvider {
+  return new AliasAwareTeamProvider(
+    withSportsCache(provider, observer),
+    getPhase3dSportsRepository(),
+    getSportsCacheRepository(),
+    observer,
+  );
+}
+
 function createFootballOrchestrator(observer?: SportsCacheObserver): FootballProviderOrchestrator {
   if (process.env.BSD_FOOTBALL_KEY) {
     return new FootballProviderOrchestrator(
-      new FilteredSportsDataProvider(withSportsCache(new BsdFootballV3Provider(), observer)),
-      new FilteredSportsDataProvider(withSportsCache(new ApiFootballProvider(), observer)),
+      new FilteredSportsDataProvider(addEntityResolution(new BsdFootballV3Provider(), observer)),
+      new FilteredSportsDataProvider(addEntityResolution(new SafeApiFootballProvider(), observer)),
     );
   }
-
   return new FootballProviderOrchestrator(
-    new FilteredSportsDataProvider(withSportsCache(new ApiFootballProvider(), observer)),
+    new FilteredSportsDataProvider(addEntityResolution(new SafeApiFootballProvider(), observer)),
   );
 }
 
@@ -81,12 +103,8 @@ function assertSupportedExplicitPeriod(question: string): void {
   }
 }
 
-function resolveCompetition(value: string | null): {
-  intentValue: string | null;
-  providerNames: readonly string[] | null;
-} {
+function resolveCompetition(value: string | null): ResolvedCompetitionFilter {
   if (value === null) return { intentValue: null, providerNames: null };
-
   const normalized = normalizeCompetition(value);
   const footballCompetitions = COMPETITIONS.filter(
     (competition) => competition.sport === "football",
@@ -98,11 +116,7 @@ function resolveCompetition(value: string | null): {
       (alias) => normalizeCompetition(alias) === normalized,
     );
   });
-
-  if (!known) {
-    return { intentValue: value, providerNames: [value] };
-  }
-
+  if (!known) return { intentValue: value, providerNames: [value] };
   const aliases = COMPETITION_ALIASES[known.id] ?? [known.name];
   return {
     intentValue: known.id,
@@ -110,7 +124,7 @@ function resolveCompetition(value: string | null): {
   };
 }
 
-function filterDescription(intent: QueryIntentInput, competition: string | null): string {
+function filterDescription(intent: TeamAggregateIntentInput, competition: string | null): string {
   const parts: string[] = [];
   if (intent.venue === "home") parts.push("em casa");
   if (intent.venue === "away") parts.push("fora de casa");
@@ -124,10 +138,27 @@ export async function analyzeQuestionServer(
 ): Promise<AnalysisPipelineOutcome> {
   try {
     assertSupportedExplicitPeriod(request.question);
-
     const parsedIntent = await parseIntentWithDeepSeek(request.question);
     const effectiveIntent = applyOverrides(parsedIntent, request.overrides);
     const competition = resolveCompetition(effectiveIntent.competition);
+
+    if (effectiveIntent.entity_type === "player") {
+      const result =
+        effectiveIntent.query_kind === "event_list"
+          ? await analyzePlayerEventList({
+              question: request.question,
+              intent: effectiveIntent,
+              competition,
+              observer,
+            })
+          : await analyzePlayerAggregate({
+              question: request.question,
+              intent: effectiveIntent,
+              competition,
+              observer,
+            });
+      return { ok: true, result };
+    }
 
     const orchestrator = createFootballOrchestrator(observer);
     const selection = await orchestrator.selectTeamFixtures(
@@ -151,7 +182,6 @@ export async function analyzeQuestionServer(
       { ...selection, fixtures: selectedFixtures },
       effectiveIntent.metric,
     );
-
     const intent: QueryIntent = {
       ...effectiveIntent,
       competition: competition.intentValue,
@@ -160,7 +190,6 @@ export async function analyzeQuestionServer(
       metric_label: METRIC_LABELS[effectiveIntent.metric],
       compare_with: null,
     };
-
     const providersUsed = Array.from(new Set(matches.map((match) => match.source)));
     const providerLabel = providersUsed.join(" + ");
 
@@ -175,6 +204,11 @@ export async function analyzeQuestionServer(
     };
   } catch (error) {
     const safe = toSafeAnalysisError(error);
-    return { ok: false, code: safe.code, reason: safe.reason };
+    return {
+      ok: false,
+      code: safe.code,
+      reason: safe.reason,
+      ...(safe.candidates ? { candidates: safe.candidates } : {}),
+    };
   }
 }

@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import type { AnalysisResult } from "@/lib/analysis";
+import { isEventListAnalysisResult, type AnalysisResult } from "@/lib/analysis";
 import type { AnalysisTelemetrySnapshot } from "./telemetry.server";
 
 export type UsageTerminalStatus = "failed_user" | "failed_provider" | "failed_internal";
@@ -153,18 +153,23 @@ export async function completeAnalysisUsage(input: {
   durationMs: number;
 }): Promise<{ id: string; created_at: string }> {
   const client = getAdminClient();
-  const provider =
-    input.result.source.provider || input.telemetry.providersCalled.join(",") || null;
+  const result = input.result;
+  const provider = result.source.provider || input.telemetry.providersCalled.join(",") || null;
+  const aggregation = isEventListAnalysisResult(result) ? "event_list" : result.intent.aggregation;
+  const sampleCount = isEventListAnalysisResult(result)
+    ? result.events.length
+    : result.statistics.sample_size;
+
   const { data, error } = await client.rpc("complete_analysis_usage", {
     p_user_id: input.userId,
     p_usage_event_id: input.usageEventId,
-    p_question: input.result.question,
-    p_cache_key: input.result.cache_key,
-    p_result_json: input.result,
-    p_result_created_at: input.result.created_at,
-    p_metric: input.result.intent.metric,
-    p_aggregation: input.result.intent.aggregation,
-    p_match_count: input.result.statistics.sample_size,
+    p_question: result.question,
+    p_cache_key: result.cache_key,
+    p_result_json: result,
+    p_result_created_at: result.created_at,
+    p_metric: result.intent.metric,
+    p_aggregation: aggregation,
+    p_match_count: sampleCount,
     p_provider: provider,
     p_cache_status: input.telemetry.cacheStatus,
     p_cache_hit_count: input.telemetry.cacheHitCount,
