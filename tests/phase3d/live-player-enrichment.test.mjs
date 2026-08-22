@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hydrateBsdPlayerStatRows } from "../../src/server/sports/providers/bsd-player-enriched.server.ts";
+import { hydrateBsdPlayerStatRows } from "../../src/server/sports/providers/bsd-player-enrichment.ts";
 import { playerParticipated } from "../../src/server/sports/player-provider.ts";
 
 const player = {
