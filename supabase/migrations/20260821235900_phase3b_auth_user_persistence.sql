@@ -31,7 +31,7 @@ create table if not exists public.saved_analyses (
   unique (user_id, cache_key),
   foreign key (analysis_history_id, user_id)
     references public.analysis_history (id, user_id)
-    on delete set null
+    on delete set null (analysis_history_id)
 );
 
 create index if not exists saved_analyses_user_created_idx
@@ -64,7 +64,7 @@ create table if not exists public.workspace_items (
     on delete cascade,
   foreign key (analysis_history_id, user_id)
     references public.analysis_history (id, user_id)
-    on delete set null
+    on delete set null (analysis_history_id)
 );
 
 create index if not exists workspace_items_user_workspace_idx
