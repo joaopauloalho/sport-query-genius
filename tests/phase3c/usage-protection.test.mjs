@@ -24,7 +24,11 @@ test("A. analysis request requires an idempotency key and rejects client user_id
 test("B. Server Function validates bearer auth on the server before protected analysis", async () => {
   const source = await read("src/lib/analysis.functions.ts");
   assert.match(source, /Authorization: `Bearer \$\{accessToken\}`/);
-  assert.match(source, /validateAnalysisAuthorization\(request\.headers\.get\("authorization"\)\)/);
+  assert.match(source, /getRequestHeader\("authorization"\)/);
+  assert.match(
+    source,
+    /validateAnalysisAuthorization\(\s*getRequestHeader\("authorization"\),?\s*\)/,
+  );
   assert.match(source, /executeProtectedAnalysis\(\{ request: data, auth: context\.analysisAuth \}\)/);
   assert.doesNotMatch(source, /analyzeQuestionServer\(data\)/);
 });
