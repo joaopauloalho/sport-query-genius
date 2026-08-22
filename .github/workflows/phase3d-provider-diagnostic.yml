@@ -22,7 +22,5 @@ jobs:
             --cookie-jar /tmp/vercel-cookies \
             --cookie /tmp/vercel-cookies \
             "$URL" \
-            | sed -n '/<pre>/,/<\/pre>/p' \
-            | sed -e 's/<[^>]*>//g' -e 's/&quot;/"/g' -e 's/&amp;/\&/g' -e 's/&#x27;/'"'"'/g' \
             | head -c 30000
           echo
