@@ -76,11 +76,11 @@ alter table public.saved_analyses enable row level security;
 alter table public.workspaces enable row level security;
 alter table public.workspace_items enable row level security;
 
-revoke all on table public.profiles from anon, authenticated;
-revoke all on table public.analysis_history from anon, authenticated;
-revoke all on table public.saved_analyses from anon, authenticated;
-revoke all on table public.workspaces from anon, authenticated;
-revoke all on table public.workspace_items from anon, authenticated;
+revoke all on table public.profiles from anon, authenticated, service_role;
+revoke all on table public.analysis_history from anon, authenticated, service_role;
+revoke all on table public.saved_analyses from anon, authenticated, service_role;
+revoke all on table public.workspaces from anon, authenticated, service_role;
+revoke all on table public.workspace_items from anon, authenticated, service_role;
 
 grant select, insert, update, delete on table public.profiles to authenticated;
 grant select, insert, update, delete on table public.analysis_history to authenticated;
