@@ -15,6 +15,7 @@ const browserClient = readFileSync(
   "utf8",
 );
 const store = readFileSync(new URL("../../src/lib/store.tsx", import.meta.url), "utf8");
+const loginRoute = readFileSync(new URL("../../src/routes/login.tsx", import.meta.url), "utf8");
 
 const userTables = [
   "profiles",
@@ -96,4 +97,9 @@ test("authenticated user data no longer falls back to legacy localStorage", () =
   ]) {
     assert.match(store, new RegExp(`from\\(\\"${table}\\"\\)`));
   }
+});
+
+test("login does not report missing Auth configuration while SSR/session bootstrap is loading", () => {
+  assert.match(loginRoute, /!loading && !configured/);
+  assert.match(loginRoute, /disabled=\{submitting \|\| loading \|\| !configured\}/);
 });
