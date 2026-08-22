@@ -19,7 +19,9 @@ function SavedPage() {
   if (loadingUserData) {
     return (
       <div className="grid min-h-[60vh] place-items-center text-sm text-muted-foreground">
-        <span className="inline-flex items-center gap-2"><Loader2 className="size-4 animate-spin" /> Carregando análises salvas…</span>
+        <span className="inline-flex items-center gap-2">
+          <Loader2 className="size-4 animate-spin" /> Carregando análises salvas…
+        </span>
       </div>
     );
   }
@@ -27,8 +29,12 @@ function SavedPage() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6">
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold"><Bookmark className="size-5 text-primary" /> Análises salvas</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Snapshots persistidos na sua conta, independentes do histórico local do navegador.</p>
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          <Bookmark className="size-5 text-primary" /> Análises salvas
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Snapshots persistidos na sua conta, independentes do histórico local do navegador.
+        </p>
       </div>
 
       {saved.length === 0 ? (
@@ -38,7 +44,8 @@ function SavedPage() {
       ) : (
         <div className="mt-8 space-y-3">
           {saved.map((analysis) => {
-            const selectedWorkspace = workspaceByAnalysis[analysis.cache_key] ?? workspaces[0]?.id ?? "";
+            const selectedWorkspace =
+              workspaceByAnalysis[analysis.cache_key] ?? workspaces[0]?.id ?? "";
             return (
               <article key={analysis.cache_key} className="surface-card p-4 sm:p-5">
                 <div className="flex flex-col gap-4">
@@ -46,15 +53,27 @@ function SavedPage() {
                     <div className="min-w-0">
                       <p className="font-medium">{analysis.question}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {analysis.statistics.sample_size} jogos · {analysis.intent.metric_label} · {analysis.answer.value} {analysis.answer.unit}
+                        {analysis.statistics.sample_size} jogos · {analysis.intent.metric_label} ·{" "}
+                        {analysis.answer.value} {analysis.answer.unit}
                       </p>
                     </div>
                     <div className="flex shrink-0 gap-2">
-                      <Button size="sm" onClick={() => void navigate({ to: "/app/resultado", search: { q: analysis.question } })}>Reabrir</Button>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          void navigate({ to: "/app/resultado", search: { q: analysis.question } })
+                        }
+                      >
+                        Reabrir
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => void toggleSaved(analysis).then(() => toast.success("Análise removida dos salvos."))}
+                        onClick={() =>
+                          void toggleSaved(analysis).then(() =>
+                            toast.success("Análise removida dos salvos."),
+                          )
+                        }
                       >
                         <Trash2 className="size-4" />
                       </Button>
@@ -65,16 +84,29 @@ function SavedPage() {
                     <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center">
                       <select
                         value={selectedWorkspace}
-                        onChange={(event) => setWorkspaceByAnalysis((current) => ({ ...current, [analysis.cache_key]: event.target.value }))}
+                        onChange={(event) =>
+                          setWorkspaceByAnalysis((current) => ({
+                            ...current,
+                            [analysis.cache_key]: event.target.value,
+                          }))
+                        }
                         className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2.5 text-sm"
                       >
-                        {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+                        {workspaces.map((workspace) => (
+                          <option key={workspace.id} value={workspace.id}>
+                            {workspace.name}
+                          </option>
+                        ))}
                       </select>
                       <Button
                         size="sm"
                         variant="outline"
                         className="gap-1.5"
-                        onClick={() => void addToWorkspace(selectedWorkspace, analysis).then(() => toast.success("Análise adicionada ao workspace."))}
+                        onClick={() =>
+                          void addToWorkspace(selectedWorkspace, analysis).then(() =>
+                            toast.success("Análise adicionada ao workspace."),
+                          )
+                        }
                       >
                         <FolderPlus className="size-4" /> Adicionar ao workspace
                       </Button>

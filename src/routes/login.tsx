@@ -41,9 +41,7 @@ function LoginPage() {
     setSubmitting(true);
     try {
       const result =
-        mode === "login"
-          ? await signIn(email, password)
-          : await signUp(email, password, name);
+        mode === "login" ? await signIn(email, password) : await signUp(email, password, name);
       if (!result.ok) {
         setMessage(result.message ?? "Não foi possível concluir a autenticação.");
         return;

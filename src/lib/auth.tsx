@@ -94,20 +94,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [session?.user?.id]);
 
-  const signIn = useCallback(async (email: string, password: string): Promise<AuthOperationResult> => {
-    const client = getBrowserSupabase();
-    if (!client) return { ok: false, message: "Supabase Auth ainda não está configurado neste ambiente." };
+  const signIn = useCallback(
+    async (email: string, password: string): Promise<AuthOperationResult> => {
+      const client = getBrowserSupabase();
+      if (!client)
+        return { ok: false, message: "Supabase Auth ainda não está configurado neste ambiente." };
 
-    const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) return { ok: false, message: error.message };
-    if (data.user) await ensureProfile(data.user);
-    return { ok: true };
-  }, []);
+      const { data, error } = await client.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) return { ok: false, message: error.message };
+      if (data.user) await ensureProfile(data.user);
+      return { ok: true };
+    },
+    [],
+  );
 
   const signUp = useCallback(
     async (email: string, password: string, displayName: string): Promise<AuthOperationResult> => {
       const client = getBrowserSupabase();
-      if (!client) return { ok: false, message: "Supabase Auth ainda não está configurado neste ambiente." };
+      if (!client)
+        return { ok: false, message: "Supabase Auth ainda não está configurado neste ambiente." };
 
       const { data, error } = await client.auth.signUp({
         email: email.trim(),
@@ -122,7 +130,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return {
         ok: true,
         needsEmailConfirmation: Boolean(data.user && !data.session),
-        message: data.user && !data.session ? "Confira seu e-mail para confirmar a conta antes de entrar." : undefined,
+        message:
+          data.user && !data.session
+            ? "Confira seu e-mail para confirmar a conta antes de entrar."
+            : undefined,
       };
     },
     [],

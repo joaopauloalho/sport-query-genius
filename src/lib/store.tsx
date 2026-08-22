@@ -242,7 +242,8 @@ export function ScoutlyProvider({ children }: { children: ReactNode }) {
   }, [authLoading, refreshUserData]);
 
   const toggleTheme = useCallback(
-    () => setState((current) => ({ ...current, theme: current.theme === "dark" ? "light" : "dark" })),
+    () =>
+      setState((current) => ({ ...current, theme: current.theme === "dark" ? "light" : "dark" })),
     [],
   );
 
@@ -323,7 +324,8 @@ export function ScoutlyProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const historyId = state.history.find((entry) => entry.cacheKey === result.cache_key)?.id ?? null;
+      const historyId =
+        state.history.find((entry) => entry.cacheKey === result.cache_key)?.id ?? null;
       const { error } = await client.from("saved_analyses").upsert(
         {
           user_id: user.id,
@@ -336,7 +338,10 @@ export function ScoutlyProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       setState((current) => ({
         ...current,
-        saved: [result, ...current.saved.filter((analysis) => analysis.cache_key !== result.cache_key)],
+        saved: [
+          result,
+          ...current.saved.filter((analysis) => analysis.cache_key !== result.cache_key),
+        ],
         cache: { ...current.cache, [result.cache_key]: result },
       }));
     },
@@ -381,7 +386,8 @@ export function ScoutlyProvider({ children }: { children: ReactNode }) {
     async (workspaceId: string, result: AnalysisResult) => {
       const client = getBrowserSupabase();
       if (!client || !user) return;
-      const historyId = state.history.find((entry) => entry.cacheKey === result.cache_key)?.id ?? null;
+      const historyId =
+        state.history.find((entry) => entry.cacheKey === result.cache_key)?.id ?? null;
       const { error } = await client.from("workspace_items").upsert(
         {
           workspace_id: workspaceId,
