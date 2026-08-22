@@ -1,12 +1,38 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createMiddleware, createServerFn } from "@tanstack/react-start";
 
 import { analysisRequestSchema } from "@/lib/analysis-request";
-import { analyzeQuestionServer } from "@/server/analysis/analyze.server";
+import { getBrowserSupabase } from "@/lib/supabase-browser";
+import { validateAnalysisAuthorization } from "@/server/auth/analysis-auth.server";
+import { executeProtectedAnalysis } from "@/server/analysis/protected-analysis.server";
 import type { ServerAnalysisOutcome } from "@/server/analysis/errors";
 
 export type { AnalysisOverrides, AnalysisRequest } from "@/lib/analysis-request";
 export type { ServerAnalysisOutcome } from "@/server/analysis/errors";
 
+const analysisAuthMiddleware = createMiddleware({ type: "function" })
+  .client(async ({ next }) => {
+    const client = getBrowserSupabase();
+    if (!client) return next();
+
+    const { data } = await client.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return next();
+
+    return next({
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  })
+  .server(async ({ next, request }) => {
+    const analysisAuth = await validateAnalysisAuthorization(request.headers.get("authorization"));
+    return next({ context: { analysisAuth } });
+  });
+
 export const analyzeQuestion = createServerFn({ method: "POST" })
+  .middleware([analysisAuthMiddleware])
   .validator(analysisRequestSchema)
-  .handler(async ({ data }): Promise<ServerAnalysisOutcome> => analyzeQuestionServer(data));
+  .handler(
+    async ({ data, context }): Promise<ServerAnalysisOutcome> =>
+      executeProtectedAnalysis({ request: data, auth: context.analysisAuth }),
+  );
