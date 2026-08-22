@@ -53,14 +53,20 @@ jobs:
         run: bun run typecheck
 
       - name: Build
+        env:
+          SUPABASE_SECRET_KEY: phase3c-ci-server-secret-sentinel-do-not-expose
         run: bun run build
 
       - name: Prove server secret is absent from client bundle
         shell: bash
         run: |
           test -d .output/public
-          if grep -R -E 'SUPABASE_SECRET_KEY|sb_secret_' .output/public; then
-            echo 'Server-only Supabase secret marker found in client bundle.' >&2
+          if grep -R -F 'phase3c-ci-server-secret-sentinel-do-not-expose' .output/public; then
+            echo 'Server-only Supabase secret value leaked into client bundle.' >&2
+            exit 1
+          fi
+          if grep -R -F 'SUPABASE_SECRET_KEY' .output/public; then
+            echo 'Server-only Supabase env name found in client bundle.' >&2
             exit 1
           fi
 
