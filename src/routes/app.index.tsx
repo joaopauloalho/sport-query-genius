@@ -169,10 +169,10 @@ function Dashboard() {
 
       <section className="surface-card mt-12 p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <Clock className="size-4 text-primary" /> Consultas recentes neste navegador
+          <Clock className="size-4 text-primary" /> Consultas recentes da sua conta
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Este histórico é local neste dispositivo e ainda não é sincronizado com conta ou nuvem.
+          O histórico é persistido no Supabase e acompanha sua sessão em outros navegadores.
         </p>
         {history.length === 0 ? (
           <p className="mt-4 text-sm text-muted-foreground">
