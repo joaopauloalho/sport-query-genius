@@ -1,0 +1,111 @@
+name: Phase 3D Production Smoke
+
+on:
+  push:
+    branches:
+      - feat/phase-3d-entity-player-analysis
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install browser runner
+        shell: bash
+        run: |
+          mkdir -p /tmp/phase3d-smoke
+          cd /tmp/phase3d-smoke
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.55.0
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Run authenticated production smoke
+        shell: bash
+        env:
+          TARGET_URL: https://sport-query-genius.vercel.app
+        run: |
+          cat >/tmp/phase3d-smoke/smoke.mjs <<'NODE'
+          import { chromium } from "playwright";
+          import crypto from "node:crypto";
+
+          const base = process.env.TARGET_URL;
+          const email = `phase3d-smoke-${Date.now()}-${crypto.randomBytes(4).toString("hex")}@example.com`;
+          const password = crypto.randomBytes(24).toString("base64url");
+          const browser = await chromium.launch({ headless: true });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
+
+          async function bodyText() {
+            return (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
+          }
+
+          async function ask(label, question) {
+            await page.goto(`${base}/app/resultado?q=${encodeURIComponent(question)}`, {
+              waitUntil: "domcontentloaded",
+              timeout: 60000,
+            });
+            await page.waitForFunction(
+              () => {
+                const text = document.body.innerText;
+                return (
+                  text.includes("Exportar CSV") ||
+                  text.includes("Time não encontrado") ||
+                  text.includes("Jogador não encontrado") ||
+                  text.includes("Entidade ambígua") ||
+                  text.includes("Dados insuficientes") ||
+                  text.includes("Provider indisponível") ||
+                  text.includes("Limite do provider atingido") ||
+                  text.includes("Não foi possível analisar") ||
+                  text.includes("DeepSeek indisponível") ||
+                  text.includes("Resposta inválida do DeepSeek")
+                );
+              },
+              { timeout: 120000 },
+            );
+            const text = await bodyText();
+            console.log(`SMOKE|${label}|${question}|${text.slice(0, 3500)}`);
+            return text;
+          }
+
+          try {
+            await page.goto(`${base}/login`, { waitUntil: "networkidle", timeout: 60000 });
+            const loginText = await bodyText();
+            if (loginText.includes("Supabase Auth ainda não está configurado")) {
+              throw new Error("Production Supabase Auth is not configured");
+            }
+
+            await page.getByRole("button", { name: "Criar conta" }).click();
+            await page.getByLabel("Nome").fill("Phase 3D Smoke");
+            await page.getByLabel("E-mail").fill(email);
+            await page.getByLabel("Senha").fill(password);
+            await page.locator("form").getByRole("button", { name: "Criar conta" }).click();
+            await page.waitForTimeout(5000);
+
+            const afterSignup = await bodyText();
+            if (afterSignup.includes("Confirme seu e-mail")) {
+              console.log(`SMOKE_AUTH|EMAIL_CONFIRMATION_REQUIRED|${email}`);
+              throw new Error("Disposable smoke signup requires email confirmation");
+            }
+            await page.waitForURL(/\/app(?:\/|$)/, { timeout: 30000 });
+            console.log(`SMOKE_AUTH|OK|${email}`);
+
+            const runs = [
+              ["Q1_BAYERN", "Qual foi a média de escanteios do Bayern de Munique nos últimos 5 jogos?"],
+              ["Q2_YURI_SHOTS", "Qual foi a média de finalizações do Yuri Alberto nos últimos 5 jogos?"],
+              ["Q3_YURI_GOALS", "Quantos gols o Yuri Alberto marcou nos últimos 10 jogos?"],
+              ["Q4_YURI_LAST_GOALS", "Quais foram os últimos 5 gols do Yuri Alberto?"],
+              ["Q2_YURI_SHOTS_REPEAT", "Qual foi a média de finalizações do Yuri Alberto nos últimos 5 jogos?"],
+            ];
+
+            for (const [label, question] of runs) {
+              const text = await ask(label, question);
+              if (["Não foi possível analisar", "Provider indisponível", "DeepSeek indisponível", "Resposta inválida do DeepSeek", "Time não encontrado", "Jogador não encontrado"].some((marker) => text.includes(marker))) {
+                throw new Error(`${label} failed`);
+              }
+              await page.waitForTimeout(1500);
+            }
+          } finally {
+            await browser.close();
+          }
+          NODE
+          cd /tmp/phase3d-smoke
+          node smoke.mjs
