@@ -3,7 +3,7 @@ import { Bookmark, Clock, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { isEventListAnalysisResult } from "@/lib/analysis";
+import { analysisResultSummary } from "@/lib/analysis-result";
 import { useScoutly } from "@/lib/store";
 
 export const Route = createFileRoute("/app/historico")({
@@ -56,7 +56,6 @@ function HistoryPage() {
         <div className="mt-8 space-y-3">
           {history.map((entry) => {
             const result = entry.result;
-            const eventList = isEventListAnalysisResult(result);
             return (
               <article key={entry.id} className="surface-card p-4 sm:p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -64,9 +63,7 @@ function HistoryPage() {
                     <p className="font-medium">{entry.question}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {new Date(entry.createdAt).toLocaleString("pt-BR")} ·{" "}
-                      {eventList
-                        ? `${result.events.length} gols comprovados`
-                        : `${result.statistics.sample_size} jogos · resultado ${result.answer.value}`}
+                      {analysisResultSummary(result)}
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-2">

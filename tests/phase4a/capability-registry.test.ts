@@ -7,7 +7,7 @@ import {
   resolveFootballCapability,
 } from "../../src/server/sports/capability-registry";
 
-describe("Phase 4A football capability registry", () => {
+describe("Phase 4A/4B football capability registry", () => {
   test("marks the preserved team corners engine as implemented", () => {
     const plan = queryPlanSchema.parse({
       sport: "football",
@@ -46,7 +46,7 @@ describe("Phase 4A football capability registry", () => {
     expect(getRegisteredCapability("competition", "ranking")?.cacheFamily).toBe("standings");
   });
 
-  test("routes team events to BSD first and API-Football as fallback", () => {
+  test("routes implemented team events to BSD first and API-Football as fallback", () => {
     const plan = queryPlanSchema.parse({
       sport: "football",
       entity: { type: "team", name: "Corinthians" },
@@ -56,7 +56,7 @@ describe("Phase 4A football capability registry", () => {
     });
     const resolution = resolveFootballCapability(plan);
 
-    expect(resolution.stage).toBe("planned");
+    expect(resolution.stage).toBe("implemented");
     expect(resolution.sources[0]?.provider).toBe("BSD");
     expect(resolution.sources[0]?.fallback).toBe(false);
     expect(resolution.sources[1]?.provider).toBe("API_FOOTBALL");
@@ -73,7 +73,9 @@ describe("Phase 4A football capability registry", () => {
     expect(FOOTBALL_CACHE_FAMILIES.standings.ttlMs).toBe(10 * 60_000);
     expect(FOOTBALL_CACHE_FAMILIES.team_stats.ttlMs).toBe(10 * 60_000);
     expect(FOOTBALL_CACHE_FAMILIES.transfers.ttlMs).toBe(24 * 60 * 60_000);
-    expect(FOOTBALL_CACHE_FAMILIES.live.ttlMs).toBeLessThan(FOOTBALL_CACHE_FAMILIES.fixtures.ttlMs);
+    expect(FOOTBALL_CACHE_FAMILIES.live.ttlMs).toBeLessThan(
+      FOOTBALL_CACHE_FAMILIES.fixtures.ttlMs,
+    );
     expect(FOOTBALL_CACHE_FAMILIES.odds.providerFreshnessPreferred).toBe(true);
   });
 });

@@ -1,6 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import { isEventListAnalysisResult, type AnalysisResult } from "@/lib/analysis";
+import {
+  isEventListAnalysisResult,
+  isHeadToHeadAnalysisResult,
+  isMatchListAnalysisResult,
+  type AnalysisResult,
+} from "@/lib/analysis-result";
 import type { AnalysisTelemetrySnapshot } from "./telemetry.server";
 
 export type UsageTerminalStatus = "failed_user" | "failed_provider" | "failed_internal";
@@ -145,6 +150,39 @@ export async function beginAnalysisUsage(input: {
   };
 }
 
+function resultUsageMetadata(result: AnalysisResult): {
+  metric: string | null;
+  aggregation: string | null;
+  sampleCount: number;
+} {
+  if (isEventListAnalysisResult(result)) {
+    return {
+      metric: result.intent.metric ?? null,
+      aggregation: "event_list",
+      sampleCount: result.events.length,
+    };
+  }
+  if (isMatchListAnalysisResult(result)) {
+    return {
+      metric: result.intent.metric ?? null,
+      aggregation: result.intent.query_kind,
+      sampleCount: result.matches.length,
+    };
+  }
+  if (isHeadToHeadAnalysisResult(result)) {
+    return {
+      metric: result.summary.requested_metric,
+      aggregation: result.summary.requested_aggregation ?? "head_to_head",
+      sampleCount: result.summary.meetings,
+    };
+  }
+  return {
+    metric: result.intent.metric,
+    aggregation: result.intent.aggregation,
+    sampleCount: result.statistics.sample_size,
+  };
+}
+
 export async function completeAnalysisUsage(input: {
   userId: string;
   usageEventId: string;
@@ -155,10 +193,7 @@ export async function completeAnalysisUsage(input: {
   const client = getAdminClient();
   const result = input.result;
   const provider = result.source.provider || input.telemetry.providersCalled.join(",") || null;
-  const aggregation = isEventListAnalysisResult(result) ? "event_list" : result.intent.aggregation;
-  const sampleCount = isEventListAnalysisResult(result)
-    ? result.events.length
-    : result.statistics.sample_size;
+  const metadata = resultUsageMetadata(result);
 
   const { data, error } = await client.rpc("complete_analysis_usage", {
     p_user_id: input.userId,
@@ -167,9 +202,9 @@ export async function completeAnalysisUsage(input: {
     p_cache_key: result.cache_key,
     p_result_json: result,
     p_result_created_at: result.created_at,
-    p_metric: result.intent.metric,
-    p_aggregation: aggregation,
-    p_match_count: sampleCount,
+    p_metric: metadata.metric,
+    p_aggregation: metadata.aggregation,
+    p_match_count: metadata.sampleCount,
     p_provider: provider,
     p_cache_status: input.telemetry.cacheStatus,
     p_cache_hit_count: input.telemetry.cacheHitCount,
