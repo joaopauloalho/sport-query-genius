@@ -2,10 +2,6 @@ name: Phase 4B One-Time Typecheck Fix
 
 on:
   push:
-    branches:
-      - feat/phase-4b-team-events-matches-h2h-final
-    paths:
-      - ".github/workflows/phase4b-fix-once.yml"
 
 permissions:
   contents: write
