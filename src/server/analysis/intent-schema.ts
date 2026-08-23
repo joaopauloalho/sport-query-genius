@@ -16,7 +16,7 @@ const commonAggregateSchema = z.object({
   sport: z.literal("football"),
   query_kind: z.literal("aggregate"),
   entity_name: z.string().trim().min(2).max(100),
-  aggregation: z.enum(["average", "total", "median"]),
+  aggregation: z.enum(["average", "total", "median", "minimum", "maximum"]),
   match_count: supportedMatchCountSchema,
   competition: z.string().trim().min(2).max(100).nullable(),
 });
@@ -62,6 +62,7 @@ export type TeamAggregateIntentInput = z.infer<typeof teamAggregateIntentInputSc
 export type PlayerAggregateIntentInput = z.infer<typeof playerAggregateIntentInputSchema>;
 export type PlayerEventListIntentInput = z.infer<typeof playerEventListIntentInputSchema>;
 
+/** @deprecated DeepSeek now emits QueryPlan. Kept for older tests and adapters. */
 export const deepSeekIntentResponseSchema = z.union([
   queryIntentInputSchema,
   z
