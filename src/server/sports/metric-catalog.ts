@@ -108,9 +108,9 @@ export const FOOTBALL_METRIC_KEYS = [
   ...PLAYER_METRIC_KEYS.filter(
     (metric) => !(TEAM_METRIC_KEYS as readonly string[]).includes(metric),
   ),
-] as [
-  (typeof TEAM_METRIC_KEYS)[number],
-  ...Array<(typeof PLAYER_METRIC_KEYS)[number]>,
+] as unknown as [
+  (typeof TEAM_METRIC_KEYS)[number] | (typeof PLAYER_METRIC_KEYS)[number],
+  ...Array<(typeof TEAM_METRIC_KEYS)[number] | (typeof PLAYER_METRIC_KEYS)[number]>,
 ];
 
 export type TeamMetric = (typeof TEAM_METRIC_KEYS)[number];
