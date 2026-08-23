@@ -73,9 +73,7 @@ describe("Phase 4A football capability registry", () => {
     expect(FOOTBALL_CACHE_FAMILIES.standings.ttlMs).toBe(10 * 60_000);
     expect(FOOTBALL_CACHE_FAMILIES.team_stats.ttlMs).toBe(10 * 60_000);
     expect(FOOTBALL_CACHE_FAMILIES.transfers.ttlMs).toBe(24 * 60 * 60_000);
-    expect(FOOTBALL_CACHE_FAMILIES.live.ttlMs).toBeLessThan(
-      FOOTBALL_CACHE_FAMILIES.fixtures.ttlMs,
-    );
+    expect(FOOTBALL_CACHE_FAMILIES.live.ttlMs).toBeLessThan(FOOTBALL_CACHE_FAMILIES.fixtures.ttlMs);
     expect(FOOTBALL_CACHE_FAMILIES.odds.providerFreshnessPreferred).toBe(true);
   });
 });

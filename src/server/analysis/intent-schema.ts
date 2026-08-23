@@ -2,13 +2,7 @@ import { z } from "zod";
 
 import { analysisVenueSchema, supportedMatchCountSchema } from "@/lib/analysis-request";
 
-export const SUPPORTED_METRICS = [
-  "corners",
-  "goals",
-  "shots",
-  "shots_on_target",
-  "cards",
-] as const;
+export const SUPPORTED_METRICS = ["corners", "goals", "shots", "shots_on_target", "cards"] as const;
 
 export const PLAYER_METRICS = ["goals", "shots", "shots_on_target", "cards"] as const;
 

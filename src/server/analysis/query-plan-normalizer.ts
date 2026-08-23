@@ -372,7 +372,11 @@ function compact(record: JsonRecord): JsonRecord {
   return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
 }
 
-function normalizeEntity(raw: unknown, fallbackType?: unknown, fallbackName?: unknown): JsonRecord | undefined {
+function normalizeEntity(
+  raw: unknown,
+  fallbackType?: unknown,
+  fallbackName?: unknown,
+): JsonRecord | undefined {
   const record = asRecord(raw);
   const type = normalizeEntityType(record?.type ?? fallbackType);
   const name = text(record?.name ?? fallbackName);
@@ -411,7 +415,8 @@ export function normalizeQueryPlanCandidate(raw: unknown): unknown {
   });
 
   const eventType = normalizeEventType(record.event_type);
-  const metric = queryKind === "event_list" ? undefined : normalizeMetric(record.metric, entityType);
+  const metric =
+    queryKind === "event_list" ? undefined : normalizeMetric(record.metric, entityType);
 
   return compact({
     sport: alias(record.sport ?? "football", {

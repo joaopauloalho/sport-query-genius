@@ -385,9 +385,11 @@ export function getRegisteredCapability(
   entityType: FootballEntityType,
   queryKind: FootballQueryKind,
 ): FootballCapabilityDefinition | null {
-  return CAPABILITIES.find(
-    (entry) => entry.entityType === entityType && entry.queryKind === queryKind,
-  ) ?? null;
+  return (
+    CAPABILITIES.find(
+      (entry) => entry.entityType === entityType && entry.queryKind === queryKind,
+    ) ?? null
+  );
 }
 
 export function resolveFootballCapability(plan: QueryPlan): CapabilityResolution {
@@ -435,10 +437,18 @@ export function resolveFootballCapability(plan: QueryPlan): CapabilityResolution
   let stage = capability.stage;
   if (plan.query_kind === "aggregate") {
     if (!plan.aggregation || !LEGACY_AGGREGATIONS.has(plan.aggregation)) stage = "planned";
-    if (plan.metric && plan.entity.type === "team" && !LEGACY_TEAM_AGGREGATE_METRICS.has(plan.metric)) {
+    if (
+      plan.metric &&
+      plan.entity.type === "team" &&
+      !LEGACY_TEAM_AGGREGATE_METRICS.has(plan.metric)
+    ) {
       stage = "planned";
     }
-    if (plan.metric && plan.entity.type === "player" && !LEGACY_PLAYER_AGGREGATE_METRICS.has(plan.metric)) {
+    if (
+      plan.metric &&
+      plan.entity.type === "player" &&
+      !LEGACY_PLAYER_AGGREGATE_METRICS.has(plan.metric)
+    ) {
       stage = "planned";
     }
   }

@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  aggregateNumericValues,
-  aggregateRatio,
-} from "../../src/server/analysis/aggregation";
+import { aggregateNumericValues, aggregateRatio } from "../../src/server/analysis/aggregation";
 
 describe("Phase 4A deterministic aggregation", () => {
   test("calculates total, average, median, minimum and maximum from the same sample", () => {

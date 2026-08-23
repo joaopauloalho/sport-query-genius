@@ -16,9 +16,7 @@ export interface NumericAggregationResult {
 function median(values: readonly number[]): number {
   const ordered = [...values].sort((a, b) => a - b);
   const middle = Math.floor(ordered.length / 2);
-  return ordered.length % 2 === 1
-    ? ordered[middle]
-    : (ordered[middle - 1] + ordered[middle]) / 2;
+  return ordered.length % 2 === 1 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
 }
 
 function round(value: number): number {
@@ -44,7 +42,8 @@ export function aggregateNumericValues(
 
   let value: number;
   if (aggregation === "total") value = known.reduce((sum, item) => sum + item, 0);
-  else if (aggregation === "average") value = known.reduce((sum, item) => sum + item, 0) / known.length;
+  else if (aggregation === "average")
+    value = known.reduce((sum, item) => sum + item, 0) / known.length;
   else if (aggregation === "median") value = median(known);
   else if (aggregation === "minimum") value = Math.min(...known);
   else if (aggregation === "maximum") value = Math.max(...known);

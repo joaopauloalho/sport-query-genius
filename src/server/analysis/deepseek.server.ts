@@ -116,7 +116,9 @@ const asRecord = (value: unknown): JsonRecord | null =>
     ? (value as JsonRecord)
     : null;
 
-function validationSummary(error: { issues: Array<{ path: Array<string | number>; code: string }> }) {
+function validationSummary(error: {
+  issues: Array<{ path: Array<string | number>; code: string }>;
+}) {
   return error.issues.slice(0, 10).map((issue) => ({
     path: issue.path.join("."),
     code: issue.code,
@@ -189,7 +191,10 @@ async function requestJsonPlan(
   try {
     return JSON.parse(content) as unknown;
   } catch {
-    throw new AnalysisPipelineError("INVALID_DEEPSEEK_OUTPUT", "O DeepSeek retornou JSON inválido.");
+    throw new AnalysisPipelineError(
+      "INVALID_DEEPSEEK_OUTPUT",
+      "O DeepSeek retornou JSON inválido.",
+    );
   }
 }
 
@@ -199,7 +204,8 @@ function resolveParsedPlan(
 ): QueryPlan {
   const rawRecord = asRecord(raw);
   if (rawRecord?.error === "unsupported_metric") {
-    const metric = typeof rawRecord.metric === "string" ? rawRecord.metric.trim() : "métrica não informada";
+    const metric =
+      typeof rawRecord.metric === "string" ? rawRecord.metric.trim() : "métrica não informada";
     throw new AnalysisPipelineError(
       "UNSUPPORTED_METRIC",
       `A métrica "${metric}" não pôde ser normalizada para o catálogo canônico.`,

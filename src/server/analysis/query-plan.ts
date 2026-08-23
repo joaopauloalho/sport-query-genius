@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-import {
-  FOOTBALL_METRIC_KEYS,
-  type FootballMetric,
-} from "../sports/metric-catalog";
+import { FOOTBALL_METRIC_KEYS, type FootballMetric } from "../sports/metric-catalog";
 
 export const FOOTBALL_ENTITY_TYPES = [
   "team",
@@ -76,8 +73,14 @@ export const queryScopeSchema = z
   .object({
     last_matches: z.number().int().min(1).max(20).optional(),
     limit: z.number().int().min(1).max(50).optional(),
-    date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    date_from: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    date_to: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
     season: z.string().trim().min(1).max(40).optional(),
     competition: z.string().trim().min(1).max(120).optional(),
     venue: z.enum(["home", "away", "all"]).default("all"),
@@ -125,7 +128,10 @@ export const queryPlanSchema = z
       });
     }
 
-    if ((plan.query_kind === "comparison" || plan.query_kind === "head_to_head") && !plan.compare_with) {
+    if (
+      (plan.query_kind === "comparison" || plan.query_kind === "head_to_head") &&
+      !plan.compare_with
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["compare_with"],

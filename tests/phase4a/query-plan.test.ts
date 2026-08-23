@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  queryPlanSchema,
-  queryPlanSignature,
-} from "../../src/server/analysis/query-plan";
+import { queryPlanSchema, queryPlanSignature } from "../../src/server/analysis/query-plan";
 import { normalizeQueryPlanCandidate } from "../../src/server/analysis/query-plan-normalizer";
 
 type BankEntry = {
