@@ -1,19 +1,24 @@
 name: Phase 4B One-Time Typecheck Fix
 
 on:
-  push:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/phase4b-fix-once.yml"
 
 permissions:
   contents: write
 
 jobs:
   fix:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Phase 4B branch
+      - name: Checkout Phase 4B head
         uses: actions/checkout@v4
         with:
-          ref: feat/phase-4b-team-events-matches-h2h-final
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Apply minimal TypeScript fixes
         shell: python
@@ -54,4 +59,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/server/analysis/analyze-universal.server.ts src/server/sports/universal-provider.server.ts src/routes/app.resultado.tsx .github/workflows/phase4b-fix-once.yml
           git commit -m "fix: Phase 4B typecheck issues"
-          git push origin HEAD:feat/phase-4b-team-events-matches-h2h-final
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
