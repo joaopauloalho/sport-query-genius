@@ -3,7 +3,7 @@ import type {
   FootballEventType,
   FootballQueryKind,
   QueryPlan,
-} from "@/server/analysis/query-plan";
+} from "../analysis/query-plan";
 import {
   getFootballMetricDefinition,
   metricIsSupportedForEntity,
@@ -73,24 +73,39 @@ const source = (
   ...(options.paidAddonRequired ? { paidAddonRequired: true } : {}),
 });
 
+const bsdEvents = source("BSD", "/events/", "fixtures", { conditionalCoverage: false });
+const apiFixtures = source("API_FOOTBALL", "/fixtures", "fixtures");
+const bsdStats = source("BSD", "/events/{event_id}/stats/", "fixture_stats");
+const apiStats = source("API_FOOTBALL", "/fixtures/statistics", "fixture_stats");
+const bsdPlayerStats = source(
+  "BSD",
+  "/players/{player_id}/stats/ + /events/{event_id}/player-stats/",
+  "player_match_stats",
+);
+const bsdIncidents = source("BSD", "/events/{event_id}/incidents/", "incidents", {
+  conditionalCoverage: false,
+});
+const apiIncidents = source("API_FOOTBALL", "/fixtures/events", "incidents");
+const bsdLineups = source("BSD", "/events/{event_id}/lineups/", "lineups");
+const apiLineups = source("API_FOOTBALL", "/fixtures/lineups", "lineups");
+const bsdStandings = source("BSD", "/leagues/{league_id}/standings/?season_id=…", "standings");
+const apiStandings = source("API_FOOTBALL", "/standings", "standings");
+
 const CAPABILITIES: FootballCapabilityDefinition[] = [
   {
     entityType: "team",
     queryKind: "aggregate",
     stage: "implemented",
     cacheFamily: "team_stats",
-    sources: [
-      source("BSD", "/events/ + /events/{event_id}/stats/", "fixture_score_or_stats", { conditionalCoverage: true }),
-      source("API_FOOTBALL", "/fixtures + /fixtures/statistics", "fixture_score_or_stats", { conditionalCoverage: true }),
-    ],
-    note: "Only the legacy metric subset is executable in Phase 4A; the registry exposes broader provider coverage separately.",
+    sources: [bsdEvents, bsdStats, apiFixtures, apiStats],
+    note: "Phase 4A preserves the previously wired team metric subset; broader catalog entries are planned until their provider mappings are executed deterministically.",
   },
   {
     entityType: "player",
     queryKind: "aggregate",
     stage: "implemented",
     cacheFamily: "player_stats",
-    sources: [source("BSD", "/players/{player_id}/stats/ + /events/{event_id}/player-stats/", "player_match_stats")],
+    sources: [bsdPlayerStats],
   },
   {
     entityType: "player",
@@ -106,136 +121,177 @@ const CAPABILITIES: FootballCapabilityDefinition[] = [
     stage: "planned",
     cacheFamily: "incidents_finished",
     events: ["goal", "assist", "yellow_card", "red_card", "substitution", "var", "penalty"],
-    sources: [
-      source("BSD", "/events/{event_id}/incidents/", "incidents", { conditionalCoverage: false }),
-      source("API_FOOTBALL", "/fixtures/events", "incidents"),
-    ],
+    sources: [bsdIncidents, apiIncidents],
   },
   {
     entityType: "team",
     queryKind: "match_list",
     stage: "planned",
     cacheFamily: "fixtures",
-    sources: [source("BSD", "/events/", "fixtures", { conditionalCoverage: false }), source("API_FOOTBALL", "/fixtures", "fixtures")],
+    sources: [bsdEvents, apiFixtures],
   },
   {
     entityType: "team",
     queryKind: "schedule",
     stage: "planned",
     cacheFamily: "fixtures",
-    sources: [source("BSD", "/events/", "fixtures", { conditionalCoverage: false }), source("API_FOOTBALL", "/fixtures", "fixtures")],
+    sources: [bsdEvents, apiFixtures],
   },
   {
     entityType: "team",
     queryKind: "head_to_head",
     stage: "planned",
     cacheFamily: "fixtures",
-    sources: [source("BSD", "/events/{event_id}/h2h/", "head_to_head"), source("API_FOOTBALL", "/fixtures/headtohead", "head_to_head")],
+    sources: [
+      source("BSD", "/events/{event_id}/h2h/", "head_to_head"),
+      source("API_FOOTBALL", "/fixtures/headtohead", "head_to_head"),
+    ],
   },
   {
     entityType: "team",
     queryKind: "comparison",
     stage: "planned",
     cacheFamily: "team_stats",
-    sources: [source("BSD", "/events/ + /events/{event_id}/stats/", "fixture_score_or_stats"), source("API_FOOTBALL", "/fixtures + /fixtures/statistics", "fixture_score_or_stats")],
+    sources: [bsdEvents, bsdStats, apiFixtures, apiStats],
   },
   {
     entityType: "player",
     queryKind: "comparison",
     stage: "planned",
     cacheFamily: "player_stats",
-    sources: [source("BSD", "/players/{player_id}/stats/ + /events/{event_id}/player-stats/", "player_match_stats")],
+    sources: [bsdPlayerStats],
+  },
+  {
+    entityType: "team",
+    queryKind: "standings",
+    stage: "planned",
+    cacheFamily: "standings",
+    sources: [bsdStandings, apiStandings],
   },
   {
     entityType: "competition",
     queryKind: "standings",
     stage: "planned",
     cacheFamily: "standings",
-    sources: [source("BSD", "/leagues/{league_id}/standings/?season_id=…", "standings"), source("API_FOOTBALL", "/standings", "standings")],
+    sources: [bsdStandings, apiStandings],
   },
   {
     entityType: "competition",
     queryKind: "ranking",
     stage: "planned",
     cacheFamily: "standings",
-    sources: [source("BSD", "/leagues/{league_id}/… leaderboards", "leaderboards"), source("API_FOOTBALL", "/players/topscorers|topassists|topyellowcards|topredcards", "leaderboards")],
+    sources: [
+      source("BSD", "/leagues/{league_id}/ leaderboards", "leaderboards"),
+      source(
+        "API_FOOTBALL",
+        "/players/topscorers|topassists|topyellowcards|topredcards",
+        "leaderboards",
+      ),
+    ],
   },
   {
     entityType: "team",
     queryKind: "profile",
     stage: "planned",
     cacheFamily: "entity_identity",
-    sources: [source("BSD", "/teams/{team_id}/", "team_profile", { conditionalCoverage: false }), source("API_FOOTBALL", "/teams", "team_profile")],
+    sources: [
+      source("BSD", "/teams/{team_id}/", "team_profile", { conditionalCoverage: false }),
+      source("API_FOOTBALL", "/teams", "team_profile"),
+    ],
   },
   {
     entityType: "player",
     queryKind: "profile",
     stage: "planned",
     cacheFamily: "entity_identity",
-    sources: [source("BSD", "/players/{player_id}/", "player_profile", { conditionalCoverage: false }), source("API_FOOTBALL", "/players", "player_profile")],
+    sources: [
+      source("BSD", "/players/{player_id}/", "player_profile", { conditionalCoverage: false }),
+      source("API_FOOTBALL", "/players", "player_profile"),
+    ],
   },
   {
     entityType: "team",
     queryKind: "squad",
     stage: "planned",
     cacheFamily: "squad",
-    sources: [source("BSD", "/teams/{team_id}/squad/", "squad"), source("API_FOOTBALL", "/players/squads", "squad")],
+    sources: [
+      source("BSD", "/teams/{team_id}/squad/", "squad"),
+      source("API_FOOTBALL", "/players/squads", "squad"),
+    ],
   },
   {
     entityType: "team",
     queryKind: "availability",
     stage: "planned",
     cacheFamily: "availability",
-    sources: [source("BSD", "/teams/{team_id}/squad/ availability", "availability"), source("API_FOOTBALL", "/injuries + /sidelined", "availability")],
+    sources: [
+      source("BSD", "/teams/{team_id}/squad/ availability", "availability"),
+      source("API_FOOTBALL", "/injuries + /sidelined", "availability"),
+    ],
   },
   {
     entityType: "player",
     queryKind: "availability",
     stage: "planned",
     cacheFamily: "availability",
-    sources: [source("BSD", "/teams/{team_id}/squad/ availability", "availability"), source("API_FOOTBALL", "/injuries + /sidelined", "availability")],
+    sources: [
+      source("BSD", "/teams/{team_id}/squad/ availability", "availability"),
+      source("API_FOOTBALL", "/injuries + /sidelined", "availability"),
+    ],
   },
   {
     entityType: "team",
     queryKind: "lineup",
     stage: "planned",
     cacheFamily: "lineups_predicted",
-    sources: [source("BSD", "/events/{event_id}/lineups/", "lineup"), source("API_FOOTBALL", "/fixtures/lineups", "lineup")],
+    sources: [bsdLineups, apiLineups],
   },
   {
     entityType: "match",
     queryKind: "lineup",
     stage: "planned",
     cacheFamily: "lineups_predicted",
-    sources: [source("BSD", "/events/{event_id}/lineups/", "lineup"), source("API_FOOTBALL", "/fixtures/lineups", "lineup")],
+    sources: [bsdLineups, apiLineups],
   },
   {
     entityType: "match",
     queryKind: "match_detail",
     stage: "planned",
     cacheFamily: "finished_match_detail",
-    sources: [source("BSD", "/events/{event_id}/ + subresources", "match_detail"), source("API_FOOTBALL", "/fixtures?id=… + fixture subresources", "match_detail")],
+    sources: [
+      source("BSD", "/events/{event_id}/ + stats/incidents/lineups", "match_detail"),
+      source("API_FOOTBALL", "/fixtures?id=… + fixture subresources", "match_detail"),
+    ],
   },
   {
     entityType: "team",
     queryKind: "transfer_list",
     stage: "planned",
     cacheFamily: "transfers",
-    sources: [source("BSD", "/transfers/ or /players/{player_id}/transfers/", "transfers"), source("API_FOOTBALL", "/transfers", "transfers")],
+    sources: [
+      source("BSD", "/transfers/", "transfers"),
+      source("API_FOOTBALL", "/transfers", "transfers"),
+    ],
   },
   {
     entityType: "player",
     queryKind: "transfer_list",
     stage: "planned",
     cacheFamily: "transfers",
-    sources: [source("BSD", "/players/{player_id}/transfers/", "transfers"), source("API_FOOTBALL", "/transfers", "transfers")],
+    sources: [
+      source("BSD", "/players/{player_id}/transfers/", "transfers"),
+      source("API_FOOTBALL", "/transfers", "transfers"),
+    ],
   },
   {
     entityType: "manager",
     queryKind: "profile",
     stage: "planned",
     cacheFamily: "people_places",
-    sources: [source("BSD", "/managers/ + /managers/{manager_id}/", "manager_profile"), source("API_FOOTBALL", "/coachs", "manager_profile")],
+    sources: [
+      source("BSD", "/managers/ + /managers/{manager_id}/", "manager_profile"),
+      source("API_FOOTBALL", "/coachs", "manager_profile"),
+    ],
   },
   {
     entityType: "manager",
@@ -249,7 +305,7 @@ const CAPABILITIES: FootballCapabilityDefinition[] = [
     queryKind: "profile",
     stage: "planned",
     cacheFamily: "people_places",
-    sources: [source("BSD", "/referees/ + referee detail", "referee_profile")],
+    sources: [source("BSD", "/referees/", "referee_profile")],
   },
   {
     entityType: "referee",
@@ -263,30 +319,42 @@ const CAPABILITIES: FootballCapabilityDefinition[] = [
     queryKind: "profile",
     stage: "planned",
     cacheFamily: "people_places",
-    sources: [source("BSD", "/venues/ + /venues/{venue_id}/", "venue_profile"), source("API_FOOTBALL", "/venues", "venue_profile")],
+    sources: [
+      source("BSD", "/venues/ + /venues/{venue_id}/", "venue_profile"),
+      source("API_FOOTBALL", "/venues", "venue_profile"),
+    ],
   },
   {
     entityType: "match",
     queryKind: "odds",
     stage: "planned",
     cacheFamily: "odds",
-    sources: [source("BSD", "/events/{event_id}/odds/ or /odds/", "consensus_odds"), source("API_FOOTBALL", "/odds", "bookmaker_odds")],
-    note: "BSD best-price/per-bookmaker Unlimited endpoints are deliberately excluded from the free capability path.",
+    sources: [
+      source("BSD", "/events/{event_id}/odds/ or /odds/", "consensus_odds"),
+      source("API_FOOTBALL", "/odds", "bookmaker_odds"),
+    ],
+    note: "Free-path registry deliberately excludes BSD Unlimited best-price/per-bookmaker endpoints.",
   },
   {
     entityType: "match",
     queryKind: "prediction",
     stage: "planned",
     cacheFamily: "prediction",
-    sources: [source("BSD", "/events/{event_id}/prediction/ or /predictions/", "model_prediction"), source("API_FOOTBALL", "/predictions", "model_prediction")],
+    sources: [
+      source("BSD", "/events/{event_id}/prediction/ or /predictions/", "model_prediction"),
+      source("API_FOOTBALL", "/predictions", "model_prediction"),
+    ],
   },
   {
     entityType: "match",
     queryKind: "live_status",
     stage: "planned",
     cacheFamily: "live",
-    sources: [source("BSD", "/events/live/ + match subresources", "live_rest"), source("API_FOOTBALL", "/fixtures?live=…", "live_rest")],
-    note: "REST is sufficient for this phase; paid WebSocket is not required.",
+    sources: [
+      source("BSD", "/events/live/ + match subresources", "live_rest"),
+      source("API_FOOTBALL", "/fixtures?live=…", "live_rest"),
+    ],
+    note: "REST is the registered path for Phase 4; the optional paid WebSocket add-on is not required.",
   },
 ];
 
@@ -303,6 +371,7 @@ const LEGACY_PLAYER_AGGREGATE_METRICS = new Set<FootballMetric>([
   "shots_on_target",
   "cards",
 ]);
+const LEGACY_AGGREGATIONS = new Set(["average", "total", "median"]);
 
 export interface CapabilityResolution {
   supported: boolean;
@@ -312,14 +381,17 @@ export interface CapabilityResolution {
   reason: string | null;
 }
 
-function baseCapability(plan: QueryPlan): FootballCapabilityDefinition | null {
+export function getRegisteredCapability(
+  entityType: FootballEntityType,
+  queryKind: FootballQueryKind,
+): FootballCapabilityDefinition | null {
   return CAPABILITIES.find(
-    (entry) => entry.entityType === plan.entity.type && entry.queryKind === plan.query_kind,
+    (entry) => entry.entityType === entityType && entry.queryKind === queryKind,
   ) ?? null;
 }
 
 export function resolveFootballCapability(plan: QueryPlan): CapabilityResolution {
-  const capability = baseCapability(plan);
+  const capability = getRegisteredCapability(plan.entity.type, plan.query_kind);
   if (!capability) {
     return {
       supported: false,
@@ -330,25 +402,24 @@ export function resolveFootballCapability(plan: QueryPlan): CapabilityResolution
     };
   }
 
-  if (plan.metric) {
-    if (plan.entity.type !== "team" && plan.entity.type !== "player") {
-      return {
-        supported: false,
-        stage: "unsupported",
-        capability,
-        sources: capability.sources,
-        reason: `Metric ${plan.metric} is not attached to entity type ${plan.entity.type}.`,
-      };
-    }
-    if (!metricIsSupportedForEntity(plan.metric, plan.entity.type)) {
-      return {
-        supported: false,
-        stage: "unsupported",
-        capability,
-        sources: capability.sources,
-        reason: `Metric ${plan.metric} is not catalogued for ${plan.entity.type}.`,
-      };
-    }
+  const metricUsesEntityCatalog =
+    Boolean(plan.metric) &&
+    (plan.query_kind === "aggregate" || plan.query_kind === "comparison") &&
+    (plan.entity.type === "team" || plan.entity.type === "player");
+
+  if (
+    metricUsesEntityCatalog &&
+    plan.metric &&
+    (plan.entity.type === "team" || plan.entity.type === "player") &&
+    !metricIsSupportedForEntity(plan.metric, plan.entity.type)
+  ) {
+    return {
+      supported: false,
+      stage: "unsupported",
+      capability,
+      sources: capability.sources,
+      reason: `Metric ${plan.metric} is not catalogued for ${plan.entity.type}.`,
+    };
   }
 
   if (plan.event_type && capability.events && !capability.events.includes(plan.event_type)) {
@@ -362,9 +433,14 @@ export function resolveFootballCapability(plan: QueryPlan): CapabilityResolution
   }
 
   let stage = capability.stage;
-  if (plan.query_kind === "aggregate" && plan.metric) {
-    if (plan.entity.type === "team" && !LEGACY_TEAM_AGGREGATE_METRICS.has(plan.metric)) stage = "planned";
-    if (plan.entity.type === "player" && !LEGACY_PLAYER_AGGREGATE_METRICS.has(plan.metric)) stage = "planned";
+  if (plan.query_kind === "aggregate") {
+    if (!plan.aggregation || !LEGACY_AGGREGATIONS.has(plan.aggregation)) stage = "planned";
+    if (plan.metric && plan.entity.type === "team" && !LEGACY_TEAM_AGGREGATE_METRICS.has(plan.metric)) {
+      stage = "planned";
+    }
+    if (plan.metric && plan.entity.type === "player" && !LEGACY_PLAYER_AGGREGATE_METRICS.has(plan.metric)) {
+      stage = "planned";
+    }
   }
   if (
     plan.entity.type === "player" &&
@@ -374,28 +450,28 @@ export function resolveFootballCapability(plan: QueryPlan): CapabilityResolution
     stage = "planned";
   }
 
-  const metricSources =
+  const metricDefinition =
     plan.metric && (plan.entity.type === "team" || plan.entity.type === "player")
-      ? Object.entries(getFootballMetricDefinition(plan.metric, plan.entity.type)?.providers ?? {}).map(
-          ([provider, mapping]) =>
-            source(
-              provider as MetricProvider,
-              mapping!.endpoint,
-              mapping!.dataFamily,
-              {
-                fallback: provider === "API_FOOTBALL",
-                conditionalCoverage: mapping!.coverage === "conditional",
-              },
-            ),
-        )
-      : capability.sources;
+      ? getFootballMetricDefinition(plan.metric, plan.entity.type)
+      : null;
+  const metricSources = metricDefinition
+    ? Object.entries(metricDefinition.providers).map(([provider, mapping]) =>
+        source(provider as MetricProvider, mapping!.endpoint, mapping!.dataFamily, {
+          fallback: provider === "API_FOOTBALL",
+          conditionalCoverage: mapping!.coverage === "conditional",
+        }),
+      )
+    : [];
 
   return {
     supported: true,
     stage,
     capability,
     sources: metricSources.length > 0 ? metricSources : capability.sources,
-    reason: stage === "implemented" ? null : "Capability is provider-backed but not yet wired to a deterministic result engine in this phase.",
+    reason:
+      stage === "implemented"
+        ? null
+        : "Capability is provider-backed but not yet wired to a deterministic result engine in this phase.",
   };
 }
 
