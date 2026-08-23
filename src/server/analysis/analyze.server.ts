@@ -20,10 +20,7 @@ import {
   analyzePlayerEventList,
   type ResolvedCompetitionFilter,
 } from "./analyze-player.server";
-import {
-  analyzeUniversalQueryPlan,
-  isPhase4bUniversalPlan,
-} from "./analyze-universal.server";
+import { analyzeUniversalQueryPlan, isPhase4bUniversalPlan } from "./analyze-universal.server";
 import { parseQueryPlanWithDeepSeek } from "./deepseek.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type AnalysisPipelineOutcome } from "./errors";
@@ -134,7 +131,8 @@ export async function analyzeQuestionServer(
       if (capability.stage !== "implemented") {
         throw new AnalysisPipelineError(
           "UNSUPPORTED_CAPABILITY",
-          capability.reason ?? "A capability foi compreendida, mas ainda não possui executor determinístico.",
+          capability.reason ??
+            "A capability foi compreendida, mas ainda não possui executor determinístico.",
         );
       }
       const result = await analyzeUniversalQueryPlan({

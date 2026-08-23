@@ -142,11 +142,12 @@ function nested(
   return null;
 }
 
-export function extractPayloadList(payload: unknown, keys: readonly string[]): Record<string, unknown>[] {
+export function extractPayloadList(
+  payload: unknown,
+  keys: readonly string[],
+): Record<string, unknown>[] {
   if (Array.isArray(payload)) {
-    return payload
-      .map(asRecord)
-      .filter((item): item is Record<string, unknown> => item !== null);
+    return payload.map(asRecord).filter((item): item is Record<string, unknown> => item !== null);
   }
   const root = asRecord(payload);
   if (!root) return [];
@@ -193,11 +194,12 @@ function eventTeam(
     (team ? readNumber(team, ["id", "team_id"]) : null) ??
     readNumber(record, ["team_id", "teamId"]);
   const directName =
-    (team ? readString(team, ["name", "team_name"]) : null) ??
-    readString(record, ["team_name"]);
+    (team ? readString(team, ["name", "team_name"]) : null) ?? readString(record, ["team_name"]);
   if (directId !== null) {
-    if (directId === fixture.home.id) return { id: directId, name: directName ?? fixture.home.name };
-    if (directId === fixture.away.id) return { id: directId, name: directName ?? fixture.away.name };
+    if (directId === fixture.home.id)
+      return { id: directId, name: directName ?? fixture.home.name };
+    if (directId === fixture.away.id)
+      return { id: directId, name: directName ?? fixture.away.name };
     return { id: directId, name: directName };
   }
 
@@ -207,7 +209,9 @@ function eventTeam(
   return { id: null, name: directName };
 }
 
-function canonicalIncidentType(record: Record<string, unknown>): FootballIncident["eventType"] | null {
+function canonicalIncidentType(
+  record: Record<string, unknown>,
+): FootballIncident["eventType"] | null {
   const type = normalize(
     [
       readString(record, ["incident_type", "event_type", "type", "incidentType"]) ?? "",
@@ -257,10 +261,7 @@ function isShootout(record: Record<string, unknown>): boolean {
   return text.includes("shootout") || text.includes("penalty shootout");
 }
 
-export function parseBsdIncidents(
-  payload: unknown,
-  fixture: ProviderFixture,
-): FootballIncident[] {
+export function parseBsdIncidents(payload: unknown, fixture: ProviderFixture): FootballIncident[] {
   return extractPayloadList(payload, ["results", "incidents", "events", "items"])
     .map((record, index): FootballIncident | null => {
       const eventType = canonicalIncidentType(record);
@@ -410,7 +411,11 @@ export function enrichBsdGoalsWithShotmap(
         if (actorId !== null && actorId !== undefined && shotPlayerId !== actorId) return false;
         if (shotHome !== null && shotHome !== home) return false;
         const shotMinute = readNumber(shot, ["min", "minute"]);
-        return incident.minute === null || shotMinute === null || Math.abs(shotMinute - incident.minute) <= 1;
+        return (
+          incident.minute === null ||
+          shotMinute === null ||
+          Math.abs(shotMinute - incident.minute) <= 1
+        );
       });
     if (candidates.length !== 1) return { ...incident };
     used.add(candidates[0].index);
@@ -433,10 +438,7 @@ export function incidentToTeamEvent(
 ): TeamFootballEvent | null {
   const isTeamEvent = incident.teamId === team.id;
   if (!isTeamEvent) return null;
-  if (
-    (requestedType === "yellow_card" || requestedType === "red_card") &&
-    incident.rescinded
-  ) {
+  if ((requestedType === "yellow_card" || requestedType === "red_card") && incident.rescinded) {
     return null;
   }
 
@@ -453,8 +455,7 @@ export function incidentToTeamEvent(
   const isHome = fixture.home.id === team.id;
   const opponent = isHome ? fixture.away : fixture.home;
   return {
-    eventKey:
-      requestedType === "assist" ? `${incident.eventKey}:assist` : incident.eventKey,
+    eventKey: requestedType === "assist" ? `${incident.eventKey}:assist` : incident.eventKey,
     fixtureId: fixture.id,
     date: fixture.date,
     timestamp: fixture.timestamp,
@@ -498,7 +499,8 @@ export function fixtureMatchesScope(
   if (scope.status && status !== scope.status) return false;
   if (scope.venue === "home" && fixture.home.id !== team.id) return false;
   if (scope.venue === "away" && fixture.away.id !== team.id) return false;
-  if (scope.competition && normalize(fixture.competition) !== normalize(scope.competition)) return false;
+  if (scope.competition && normalize(fixture.competition) !== normalize(scope.competition))
+    return false;
   if (scope.opponent) {
     const opponent = fixture.home.id === team.id ? fixture.away.name : fixture.home.name;
     if (normalize(opponent) !== normalize(scope.opponent)) return false;

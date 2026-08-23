@@ -24,7 +24,8 @@ export interface ProviderPayloadCacheRepository {
 }
 
 function fail(operation: string, error: { message: string } | null): void {
-  if (error) throw new Error(`Supabase provider payload cache ${operation} failed: ${error.message}`);
+  if (error)
+    throw new Error(`Supabase provider payload cache ${operation} failed: ${error.message}`);
 }
 
 export class SupabaseProviderPayloadCacheRepository implements ProviderPayloadCacheRepository {

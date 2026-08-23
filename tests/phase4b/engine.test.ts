@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  analyzeUniversalQueryPlanWithSources,
-} from "../../src/server/analysis/analyze-universal.server";
+import { analyzeUniversalQueryPlanWithSources } from "../../src/server/analysis/analyze-universal.server";
 import { AnalysisPipelineError } from "../../src/server/analysis/errors";
 import { queryPlanSchema } from "../../src/server/analysis/query-plan";
 import type { ProviderFixture, ResolvedTeam } from "../../src/server/sports/provider";
@@ -81,7 +79,10 @@ const upcomingFixtures: ProviderFixture[] = [
   },
 ];
 
-const incident = (params: Partial<FootballIncident> & Pick<FootballIncident, "fixtureId" | "eventKey" | "eventType">): FootballIncident => ({
+const incident = (
+  params: Partial<FootballIncident> &
+    Pick<FootballIncident, "fixtureId" | "eventKey" | "eventType">,
+): FootballIncident => ({
   teamId: 1,
   teamName: "Corinthians",
   actor: { id: 10, name: "Yuri Alberto" },
@@ -118,7 +119,10 @@ class FakeSource implements UniversalFootballSource {
     throw new AnalysisPipelineError("TEAM_NOT_FOUND", "time fake não encontrado");
   }
 
-  async listTeamFixtures(_team: ResolvedTeam, scope: Parameters<UniversalFootballSource["listTeamFixtures"]>[1]) {
+  async listTeamFixtures(
+    _team: ResolvedTeam,
+    scope: Parameters<UniversalFootballSource["listTeamFixtures"]>[1],
+  ) {
     if (this.fail) {
       throw new AnalysisPipelineError("PROVIDER_UNAVAILABLE", "provider fake indisponível");
     }
@@ -152,7 +156,11 @@ class FakeSource implements UniversalFootballSource {
     return { incidents: [...incidents], meta: null };
   }
 
-  async getFixtureMetric(fixture: ProviderFixture, _teamId: number, metric: "goals" | "corners" | "shots" | "shots_on_target" | "cards") {
+  async getFixtureMetric(
+    fixture: ProviderFixture,
+    _teamId: number,
+    metric: "goals" | "corners" | "shots" | "shots_on_target" | "cards",
+  ) {
     return this.metricValues.get(`${fixture.id}:${metric}`) ?? null;
   }
 }

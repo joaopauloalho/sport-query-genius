@@ -149,11 +149,7 @@ describe("Phase 4B provider incident contracts", () => {
       fixture,
     );
 
-    expect(events.map((event) => event.eventType)).toEqual([
-      "goal",
-      "yellow_card",
-      "substitution",
-    ]);
+    expect(events.map((event) => event.eventType)).toEqual(["goal", "yellow_card", "substitution"]);
     expect(events[0]?.secondaryActor?.name).toBe("Rodrigo Garro");
     expect(events[2]?.actor?.name).toBe("Entrou");
     expect(events[2]?.secondaryActor?.name).toBe("Saiu");

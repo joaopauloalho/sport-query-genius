@@ -61,11 +61,7 @@ export function analysisResultSummary(result: AnalysisResult): string {
 
 function csv(rows: readonly (readonly (string | number | null)[])[]): string {
   return rows
-    .map((row) =>
-      row
-        .map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`)
-        .join(","),
-    )
+    .map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(","))
     .join("\n");
 }
 

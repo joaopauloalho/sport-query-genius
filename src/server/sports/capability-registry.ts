@@ -63,9 +63,7 @@ const source = (
   provider: MetricProvider,
   endpoint: string,
   dataFamily: string,
-  options: Partial<
-    Omit<ProviderCapabilitySource, "provider" | "endpoint" | "dataFamily">
-  > = {},
+  options: Partial<Omit<ProviderCapabilitySource, "provider" | "endpoint" | "dataFamily">> = {},
 ): ProviderCapabilitySource => ({
   provider,
   endpoint,
@@ -90,11 +88,7 @@ const bsdIncidents = source("BSD", "/events/{event_id}/incidents/", "incidents",
 const apiIncidents = source("API_FOOTBALL", "/fixtures/events", "incidents");
 const bsdLineups = source("BSD", "/events/{event_id}/lineups/", "lineups");
 const apiLineups = source("API_FOOTBALL", "/fixtures/lineups", "lineups");
-const bsdStandings = source(
-  "BSD",
-  "/leagues/{league_id}/standings/?season_id=…",
-  "standings",
-);
+const bsdStandings = source("BSD", "/leagues/{league_id}/standings/?season_id=…", "standings");
 const apiStandings = source("API_FOOTBALL", "/standings", "standings");
 
 const CAPABILITIES: FootballCapabilityDefinition[] = [
@@ -272,11 +266,7 @@ const CAPABILITIES: FootballCapabilityDefinition[] = [
     cacheFamily: "finished_match_detail",
     sources: [
       source("BSD", "/events/{event_id}/ + stats/incidents/lineups", "match_detail"),
-      source(
-        "API_FOOTBALL",
-        "/fixtures?id=… + fixture subresources",
-        "match_detail",
-      ),
+      source("API_FOOTBALL", "/fixtures?id=… + fixture subresources", "match_detail"),
     ],
   },
   {
