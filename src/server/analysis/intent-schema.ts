@@ -16,7 +16,7 @@ const commonAggregateSchema = z.object({
   sport: z.literal("football"),
   query_kind: z.literal("aggregate"),
   entity_name: z.string().trim().min(2).max(100),
-  aggregation: z.enum(["average", "total", "median", "minimum", "maximum"]),
+  aggregation: z.enum(["average", "total", "median"]),
   match_count: supportedMatchCountSchema,
   competition: z.string().trim().min(2).max(100).nullable(),
 });
