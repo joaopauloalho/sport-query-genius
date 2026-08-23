@@ -36,6 +36,7 @@ const aggregationCases = [
 ] as const;
 const windows = [1, 3, 5, 10] as const;
 
+// This generated matrix exercises hundreds of semantic combinations without provider calls.
 const intentBank: BankEntry[] = [];
 for (const team of teams) {
   for (const metric of metricCases) {
