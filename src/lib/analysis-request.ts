@@ -1,8 +1,10 @@
 import { z } from "zod";
 
-export const SUPPORTED_MATCH_COUNTS = [5, 10, 15, 20] as const;
+export const SUPPORTED_MATCH_COUNTS = [1, 3, 5, 10, 15, 20] as const;
 
 export const supportedMatchCountSchema = z.union([
+  z.literal(1),
+  z.literal(3),
   z.literal(5),
   z.literal(10),
   z.literal(15),
