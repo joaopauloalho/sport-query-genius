@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   FOOTBALL_METRIC_KEYS,
   type FootballMetric,
-} from "@/server/sports/metric-catalog";
+} from "../sports/metric-catalog";
 
 export const FOOTBALL_ENTITY_TYPES = [
   "team",
