@@ -110,8 +110,7 @@ function parseBsdFixture(
   if (id === null || !when || !home || !away) return null;
   const league = nested(record, ["league", "competition"]);
   const leagueId =
-    readNumber(record, ["league_id"]) ??
-    (league ? readNumber(league, ["id", "league_id"]) : null);
+    readNumber(record, ["league_id"]) ?? (league ? readNumber(league, ["id", "league_id"]) : null);
   const competition =
     (league ? readString(league, ["name", "league_name", "competition_name"]) : null) ??
     readString(record, ["league_name", "competition_name"]) ??
@@ -184,11 +183,7 @@ async function cachedRead<T>(params: {
 }): Promise<{ payload: T; meta: ProviderReadMeta }> {
   if (params.repository) {
     try {
-      const cached = await params.repository.get<T>(
-        params.provider,
-        params.dataFamily,
-        params.key,
-      );
+      const cached = await params.repository.get<T>(params.provider, params.dataFamily, params.key);
       if (cached) {
         params.observer?.cacheHit(params.provider, params.dataFamily);
         return {
@@ -273,7 +268,7 @@ function wrapIdentityProvider(
 abstract class BaseUniversalSource implements UniversalFootballSource {
   abstract readonly name: UniversalProviderName;
 
-  protected constructor(
+  constructor(
     protected readonly identityProvider: SportsDataProvider,
     protected readonly observer?: SportsCacheObserver,
     protected readonly payloadCache = getProviderPayloadCacheRepository(),
@@ -392,9 +387,7 @@ export class BsdUniversalFootballSource extends BaseUniversalSource {
     const from = scope.date_from
       ? new Date(`${scope.date_from}T00:00:00.000Z`)
       : new Date(now.getTime());
-    const to = scope.date_to
-      ? new Date(`${scope.date_to}T23:59:59.999Z`)
-      : new Date(now.getTime());
+    const to = scope.date_to ? new Date(`${scope.date_to}T23:59:59.999Z`) : new Date(now.getTime());
     if (!scope.date_from) {
       if (status === "upcoming") from.setUTCDate(from.getUTCDate() - 1);
       else from.setUTCDate(from.getUTCDate() - 730);
@@ -518,7 +511,9 @@ export class ApiFootballUniversalSource extends BaseUniversalSource {
     const url = new URL(`${API_FOOTBALL_BASE_URL}${path}`);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
 
-    const perform = async (header: ApiAuthHeader): Promise<{ response: Response; payload: unknown }> => {
+    const perform = async (
+      header: ApiAuthHeader,
+    ): Promise<{ response: Response; payload: unknown }> => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
       try {
@@ -617,7 +612,8 @@ export class ApiFootballUniversalSource extends BaseUniversalSource {
   }
 
   async listTeamFixtures(team: ResolvedTeam, scope: QueryScope): Promise<UniversalFixtureRead> {
-    const requestedSeason = scope.season && /^\d{4}$/.test(scope.season) ? Number(scope.season) : null;
+    const requestedSeason =
+      scope.season && /^\d{4}$/.test(scope.season) ? Number(scope.season) : null;
     const currentSeason = requestedSeason ?? new Date().getUTCFullYear();
     const current = await this.loadFixturesForSeason(team, scope, currentSeason);
     let fixtures = current.fixtures;

@@ -7,9 +7,7 @@ import type {
 import type { AnalysisOverrides } from "@/lib/analysis-request";
 import type { SportsCacheObserver } from "@/server/sports/cache/cache-observer";
 import type { ProviderFixture, ResolvedTeam } from "@/server/sports/provider";
-import {
-  createUniversalFootballSources,
-} from "@/server/sports/universal-provider.server";
+import { createUniversalFootballSources } from "@/server/sports/universal-provider.server";
 import {
   incidentToTeamEvent,
   type ProviderReadMeta,
@@ -269,10 +267,7 @@ async function analyzeTeamEvents(params: {
         .filter((event): event is TeamFootballEvent => event !== null),
     )
     .filter((event) => eventWithinHalf(event, plan.scope.half))
-    .sort(
-      (a, b) =>
-        b.timestamp - a.timestamp || (b.periodSecond ?? 0) - (a.periodSecond ?? 0),
-    );
+    .sort((a, b) => b.timestamp - a.timestamp || (b.periodSecond ?? 0) - (a.periodSecond ?? 0));
   const limited = requestedEvents ? events.slice(0, requestedEvents) : events;
   if (requestedEvents && limited.length < requestedEvents) {
     throw new AnalysisPipelineError(
@@ -292,7 +287,8 @@ async function analyzeTeamEvents(params: {
       event.minute === null ||
       (["goal", "assist", "yellow_card", "red_card", "substitution", "penalty"].includes(
         event.eventType,
-      ) && !event.actor?.name),
+      ) &&
+        !event.actor?.name),
   ).length;
   const intent = universalIntent({
     plan,
@@ -437,10 +433,7 @@ async function analyzeMatchList(params: {
   };
 }
 
-function h2hOutcome(
-  fixture: ProviderFixture,
-  primary: ResolvedTeam,
-): "a" | "b" | "draw" | null {
+function h2hOutcome(fixture: ProviderFixture, primary: ResolvedTeam): "a" | "b" | "draw" | null {
   const primaryHome = fixture.home.id === primary.id;
   const primaryGoals = primaryHome ? fixture.goals.home : fixture.goals.away;
   const otherGoals = primaryHome ? fixture.goals.away : fixture.goals.home;
@@ -487,10 +480,7 @@ async function h2hMetricValues(params: {
     });
   }
   const legacyMetric =
-    metric === "corners" ||
-    metric === "cards" ||
-    metric === "shots" ||
-    metric === "shots_on_target"
+    metric === "corners" || metric === "cards" || metric === "shots" || metric === "shots_on_target"
       ? metric
       : null;
   if (!legacyMetric) {
@@ -602,7 +592,9 @@ async function analyzeHeadToHead(params: {
     ) {
       const numerator = metricValues.some((value) => value === null)
         ? null
-        : metricValues.reduce((sum, value) => sum + (value ?? 0), 0);
+        : metricValues
+            .filter((value): value is number => value !== null)
+            .reduce((sum, value) => sum + value, 0);
       const aggregate = aggregateRatio(numerator, meetings.length, aggregation);
       requestedValue = aggregate.value;
       metricMissing = metricValues.filter((value) => value === null).length;
@@ -612,7 +604,9 @@ async function analyzeHeadToHead(params: {
       metricSample = metricValues.length - metricMissing;
       requestedValue =
         metricMissing === 0
-          ? metricValues.reduce((sum, value) => sum + (value ?? 0), 0)
+          ? metricValues
+              .filter((value): value is number => value !== null)
+              .reduce((sum, value) => sum + value, 0)
           : null;
     } else {
       const aggregate = aggregateNumericValues(
@@ -664,9 +658,7 @@ async function analyzeHeadToHead(params: {
       team_b_goals: teamBGoals,
       both_teams_scored: bothScored,
       average_total_goals:
-        knownScores > 0
-          ? Math.round(((teamAGoals + teamBGoals) / knownScores) * 100) / 100
-          : null,
+        knownScores > 0 ? Math.round(((teamAGoals + teamBGoals) / knownScores) * 100) / 100 : null,
       requested_metric: plan.metric ?? null,
       requested_aggregation: plan.aggregation ?? null,
       requested_value: requestedValue,

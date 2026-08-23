@@ -166,7 +166,7 @@ function ResultPage() {
     if (invalid_match_count) {
       setError({
         code: "UNSUPPORTED_FILTER",
-        reason: "Período não suportado. Use exatamente 5, 10, 15 ou 20 partidas.",
+        reason: "Período não suportado. Use exatamente 1, 3, 5, 10, 15 ou 20 partidas.",
       });
       setLoading(false);
       return () => {
