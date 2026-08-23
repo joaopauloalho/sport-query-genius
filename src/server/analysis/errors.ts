@@ -1,4 +1,4 @@
-import type { AnalysisResult } from "@/lib/analysis";
+import type { AnalysisResult } from "@/lib/analysis-result";
 
 export type AnalysisErrorCode =
   | "TEAM_NOT_FOUND"

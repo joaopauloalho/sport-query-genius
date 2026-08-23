@@ -1,16 +1,13 @@
 import { COMPETITIONS } from "@/data/sports";
 import type { QueryIntent } from "@/lib/analysis";
-import {
-  SUPPORTED_MATCH_COUNTS,
-  type AnalysisRequest,
-  type SupportedMatchCount,
-} from "@/lib/analysis-request";
+import type { AnalysisRequest } from "@/lib/analysis-request";
 import { AliasAwareTeamProvider } from "@/server/sports/alias-aware-provider.server";
 import type { SportsCacheObserver } from "@/server/sports/cache/cache-observer";
 import {
   getSportsCacheRepository,
   withSportsCache,
 } from "@/server/sports/cache/sports-cache.server";
+import { resolveFootballCapability } from "@/server/sports/capability-registry";
 import { FilteredSportsDataProvider } from "@/server/sports/filtered-provider.server";
 import { getPhase3dSportsRepository } from "@/server/sports/phase3d-repository.server";
 import { FootballProviderOrchestrator } from "@/server/sports/provider-fallback.server";
@@ -23,11 +20,13 @@ import {
   analyzePlayerEventList,
   type ResolvedCompetitionFilter,
 } from "./analyze-player.server";
-import { parseIntentWithDeepSeek } from "./deepseek.server";
+import { analyzeUniversalQueryPlan, isPhase4bUniversalPlan } from "./analyze-universal.server";
+import { parseQueryPlanWithDeepSeek } from "./deepseek.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type AnalysisPipelineOutcome } from "./errors";
 import type { TeamAggregateIntentInput } from "./intent-schema";
 import { applyOverrides } from "./overrides";
+import { queryPlanToLegacyIntent } from "./query-plan-adapter";
 
 const METRIC_LABELS = {
   corners: "Escanteios",
@@ -85,24 +84,6 @@ function createFootballOrchestrator(observer?: SportsCacheObserver): FootballPro
   );
 }
 
-function assertSupportedExplicitPeriod(question: string): void {
-  const normalized = question
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  const matches = normalized.matchAll(/\b(\d{1,3})\s*(?:jogos?|partidas?)\b/g);
-
-  for (const match of matches) {
-    const count = Number(match[1]);
-    if (!SUPPORTED_MATCH_COUNTS.includes(count as SupportedMatchCount)) {
-      throw new AnalysisPipelineError(
-        "UNSUPPORTED_FILTER",
-        `Período de ${count} partidas não suportado. Use exatamente 5, 10, 15 ou 20 partidas.`,
-      );
-    }
-  }
-}
-
 function resolveCompetition(value: string | null): ResolvedCompetitionFilter {
   if (value === null) return { intentValue: null, providerNames: null };
   const normalized = normalizeCompetition(value);
@@ -137,8 +118,33 @@ export async function analyzeQuestionServer(
   observer?: SportsCacheObserver,
 ): Promise<AnalysisPipelineOutcome> {
   try {
-    assertSupportedExplicitPeriod(request.question);
-    const parsedIntent = await parseIntentWithDeepSeek(request.question);
+    const queryPlan = await parseQueryPlanWithDeepSeek(request.question);
+    const capability = resolveFootballCapability(queryPlan);
+    if (!capability.supported) {
+      throw new AnalysisPipelineError(
+        "UNSUPPORTED_CAPABILITY",
+        capability.reason ?? "A combinação solicitada não está registrada no motor universal.",
+      );
+    }
+
+    if (isPhase4bUniversalPlan(queryPlan)) {
+      if (capability.stage !== "implemented") {
+        throw new AnalysisPipelineError(
+          "UNSUPPORTED_CAPABILITY",
+          capability.reason ??
+            "A capability foi compreendida, mas ainda não possui executor determinístico.",
+        );
+      }
+      const result = await analyzeUniversalQueryPlan({
+        question: request.question,
+        plan: queryPlan,
+        overrides: request.overrides,
+        observer,
+      });
+      return { ok: true, result };
+    }
+
+    const parsedIntent = queryPlanToLegacyIntent(queryPlan);
     const effectiveIntent = applyOverrides(parsedIntent, request.overrides);
     const competition = resolveCompetition(effectiveIntent.competition);
 

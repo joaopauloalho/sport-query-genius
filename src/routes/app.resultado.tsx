@@ -4,6 +4,7 @@ import { Bookmark, Calendar, Download, RefreshCw, Sparkles, Target, Trophy } fro
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { UniversalResultView } from "@/components/analysis/universal-result-view";
 import { MatchesTable } from "@/components/scoutly/matches-table";
 import { MetricCard } from "@/components/scoutly/metric-card";
 import { PerformanceChart } from "@/components/scoutly/performance-chart";
@@ -17,7 +18,14 @@ import {
 import { EmptyState, ProcessingSteps } from "@/components/scoutly/states";
 import { Button } from "@/components/ui/button";
 import { getCompetition } from "@/data/sports";
-import { isEventListAnalysisResult, toCsv, type AnalysisResult } from "@/lib/analysis";
+import {
+  isHeadToHeadAnalysisResult,
+  isMatchListAnalysisResult,
+  isPlayerEventListAnalysisResult,
+  isTeamEventListAnalysisResult,
+  toCsv,
+  type AnalysisResult,
+} from "@/lib/analysis-result";
 import {
   SUPPORTED_MATCH_COUNTS,
   type AnalysisOverrides,
@@ -26,6 +34,7 @@ import {
 } from "@/lib/analysis-request";
 import { analyzeQuestion } from "@/lib/analysis.functions";
 import { useScoutly } from "@/lib/store";
+import type { UniversalAnalysisResult } from "@/lib/universal-analysis";
 
 function parseMatchCount(value: unknown): SupportedMatchCount | undefined {
   if (value === undefined || value === null || value === "") return undefined;
@@ -86,6 +95,7 @@ const ERROR_TITLES: Record<string, string> = {
   QUESTION_NOT_UNDERSTOOD: "Pergunta não compreendida",
   UNSUPPORTED_METRIC: "Métrica não suportada",
   UNSUPPORTED_FILTER: "Filtro não suportado",
+  UNSUPPORTED_CAPABILITY: "Consulta ainda não suportada",
   API_LIMIT_REACHED: "Limite do provider atingido",
   PROVIDER_UNAVAILABLE: "Provider indisponível",
   DATA_INSUFFICIENT: "Dados insuficientes",
@@ -156,7 +166,7 @@ function ResultPage() {
     if (invalid_match_count) {
       setError({
         code: "UNSUPPORTED_FILTER",
-        reason: "Período não suportado. Use exatamente 5, 10, 15 ou 20 partidas.",
+        reason: "Período não suportado. Use exatamente 1, 3, 5, 10, 15 ou 20 partidas.",
       });
       setLoading(false);
       return () => {
@@ -293,7 +303,25 @@ function ResultPage() {
   const competitionLabel =
     getCompetition(result.intent.competition)?.name ?? result.intent.competition ?? null;
 
-  if (isEventListAnalysisResult(result)) {
+  if (
+    isTeamEventListAnalysisResult(result) ||
+    isMatchListAnalysisResult(result) ||
+    isHeadToHeadAnalysisResult(result)
+  ) {
+    return (
+      <UniversalResultView
+        q={q}
+        result={result as UniversalAnalysisResult}
+        saved={isSaved(result.cache_key)}
+        onExport={exportCsv}
+        onRefresh={() => ask(q, requestOverrides)}
+        onAsk={(question) => ask(question)}
+        onToggleSaved={() => toggleSaved(result)}
+      />
+    );
+  }
+
+  if (isPlayerEventListAnalysisResult(result)) {
     return (
       <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-8 sm:px-6 sm:py-10">
         <SmartSearch

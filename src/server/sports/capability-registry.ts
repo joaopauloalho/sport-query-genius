@@ -98,7 +98,7 @@ const CAPABILITIES: FootballCapabilityDefinition[] = [
     stage: "implemented",
     cacheFamily: "team_stats",
     sources: [bsdEvents, bsdStats, apiFixtures, apiStats],
-    note: "Phase 4A preserves the previously wired team metric subset; broader catalog entries are planned until their provider mappings are executed deterministically.",
+    note: "Legacy deterministic aggregate subset remains active while broader catalog metrics migrate to universal executors.",
   },
   {
     entityType: "player",
@@ -118,34 +118,38 @@ const CAPABILITIES: FootballCapabilityDefinition[] = [
   {
     entityType: "team",
     queryKind: "event_list",
-    stage: "planned",
+    stage: "implemented",
     cacheFamily: "incidents_finished",
     events: ["goal", "assist", "yellow_card", "red_card", "substitution", "var", "penalty"],
     sources: [bsdIncidents, apiIncidents],
+    note: "Phase 4B reads chronological incidents; BSD shotmap only enriches proven goal incidents with optional xG/body-part fields.",
   },
   {
     entityType: "team",
     queryKind: "match_list",
-    stage: "planned",
+    stage: "implemented",
     cacheFamily: "fixtures",
     sources: [bsdEvents, apiFixtures],
   },
   {
     entityType: "team",
     queryKind: "schedule",
-    stage: "planned",
+    stage: "implemented",
     cacheFamily: "fixtures",
     sources: [bsdEvents, apiFixtures],
   },
   {
     entityType: "team",
     queryKind: "head_to_head",
-    stage: "planned",
+    stage: "implemented",
     cacheFamily: "fixtures",
     sources: [
-      source("BSD", "/events/{event_id}/h2h/", "head_to_head"),
-      source("API_FOOTBALL", "/fixtures/headtohead", "head_to_head"),
+      source("BSD", "/events/?team_id=… + resolved-opponent filter", "fixtures", {
+        conditionalCoverage: false,
+      }),
+      source("API_FOOTBALL", "/fixtures?team=… + resolved-opponent filter", "fixtures"),
     ],
+    note: "Phase 4B resolves both teams conservatively, filters fixture history by provider IDs, and calculates H2H deterministically. Dedicated provider H2H endpoints remain an optional future optimization.",
   },
   {
     entityType: "team",
@@ -205,7 +209,9 @@ const CAPABILITIES: FootballCapabilityDefinition[] = [
     stage: "planned",
     cacheFamily: "entity_identity",
     sources: [
-      source("BSD", "/players/{player_id}/", "player_profile", { conditionalCoverage: false }),
+      source("BSD", "/players/{player_id}/", "player_profile", {
+        conditionalCoverage: false,
+      }),
       source("API_FOOTBALL", "/players", "player_profile"),
     ],
   },
