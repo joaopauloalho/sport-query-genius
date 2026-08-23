@@ -1,0 +1,61 @@
+name: Phase 4B One-Time Typecheck Fix
+
+on:
+  push:
+    branches:
+      - feat/phase-4b-team-events-matches-h2h-final
+    paths:
+      - ".github/workflows/phase4b-fix-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Phase 4B branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/phase-4b-team-events-matches-h2h-final
+
+      - name: Apply minimal TypeScript fixes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          analysis = Path("src/server/analysis/analyze-universal.server.ts")
+          text = analysis.read_text()
+          old = "metricValues.reduce((sum, value) => sum + (value ?? 0), 0)"
+          new = "metricValues.filter((value): value is number => value !== null).reduce((sum, value) => sum + value, 0)"
+          if text.count(old) != 2:
+              raise SystemExit(f"Expected exactly two nullable reduce sites, found {text.count(old)}")
+          analysis.write_text(text.replace(old, new))
+
+          provider = Path("src/server/sports/universal-provider.server.ts")
+          text = provider.read_text()
+          old = "  protected constructor(\n"
+          if text.count(old) != 1:
+              raise SystemExit(f"Expected one protected base constructor, found {text.count(old)}")
+          provider.write_text(text.replace(old, "  constructor(\n", 1))
+
+          route = Path("src/routes/app.resultado.tsx")
+          text = route.read_text()
+          old = "Período não suportado. Use exatamente 5, 10, 15 ou 20 partidas."
+          new = "Período não suportado. Use exatamente 1, 3, 5, 10, 15 ou 20 partidas."
+          if old not in text:
+              raise SystemExit("Expected legacy supported-period message was not found")
+          route.write_text(text.replace(old, new))
+
+      - name: Format touched files
+        run: bunx prettier --write src/server/analysis/analyze-universal.server.ts src/server/sports/universal-provider.server.ts src/routes/app.resultado.tsx
+
+      - name: Remove one-time workflow and commit
+        shell: bash
+        run: |
+          rm .github/workflows/phase4b-fix-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/server/analysis/analyze-universal.server.ts src/server/sports/universal-provider.server.ts src/routes/app.resultado.tsx .github/workflows/phase4b-fix-once.yml
+          git commit -m "fix: Phase 4B typecheck issues"
+          git push origin HEAD:feat/phase-4b-team-events-matches-h2h-final
