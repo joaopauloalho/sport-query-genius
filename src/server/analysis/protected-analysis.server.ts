@@ -21,9 +21,12 @@ function logAnalysis(event: string, fields: Record<string, unknown>): void {
 function terminalStatus(code: AnalysisErrorCode): UsageTerminalStatus {
   if (
     code === "TEAM_NOT_FOUND" ||
+    code === "PLAYER_NOT_FOUND" ||
+    code === "ENTITY_AMBIGUOUS" ||
     code === "QUESTION_NOT_UNDERSTOOD" ||
     code === "UNSUPPORTED_METRIC" ||
-    code === "UNSUPPORTED_FILTER"
+    code === "UNSUPPORTED_FILTER" ||
+    code === "UNSUPPORTED_CAPABILITY"
   ) {
     return "failed_user";
   }

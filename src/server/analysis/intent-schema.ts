@@ -2,13 +2,7 @@ import { z } from "zod";
 
 import { analysisVenueSchema, supportedMatchCountSchema } from "@/lib/analysis-request";
 
-export const SUPPORTED_METRICS = [
-  "corners",
-  "goals",
-  "shots",
-  "shots_on_target",
-  "cards",
-] as const;
+export const SUPPORTED_METRICS = ["corners", "goals", "shots", "shots_on_target", "cards"] as const;
 
 export const PLAYER_METRICS = ["goals", "shots", "shots_on_target", "cards"] as const;
 
@@ -62,6 +56,7 @@ export type TeamAggregateIntentInput = z.infer<typeof teamAggregateIntentInputSc
 export type PlayerAggregateIntentInput = z.infer<typeof playerAggregateIntentInputSchema>;
 export type PlayerEventListIntentInput = z.infer<typeof playerEventListIntentInputSchema>;
 
+/** @deprecated DeepSeek now emits QueryPlan. Kept for older tests and adapters. */
 export const deepSeekIntentResponseSchema = z.union([
   queryIntentInputSchema,
   z

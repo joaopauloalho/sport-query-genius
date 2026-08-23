@@ -1,86 +1,106 @@
-import {
-  PLAYER_METRICS,
-  SUPPORTED_METRICS,
-  deepSeekIntentResponseSchema,
-  type QueryIntentInput,
-} from "./intent-schema";
 import { AnalysisPipelineError } from "./errors";
+import type { QueryIntentInput } from "./intent-schema";
+import {
+  FOOTBALL_AGGREGATIONS,
+  FOOTBALL_ENTITY_TYPES,
+  FOOTBALL_EVENT_TYPES,
+  FOOTBALL_QUERY_KINDS,
+  queryPlanResponseSchema,
+  type QueryPlan,
+} from "./query-plan";
+import { queryPlanToLegacyIntent } from "./query-plan-adapter";
+import { normalizeQueryPlanCandidate } from "./query-plan-normalizer";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const DEFAULT_MODEL = "deepseek-v4-flash";
 const TIMEOUT_MS = 15_000;
 
-const SYSTEM_PROMPT = `Você é um parser de intenção para uma plataforma de estatísticas esportivas.
-Sua única função é converter a pergunta do usuário em JSON. Nunca responda estatísticas, nunca estime números,
-nunca consulte dados, nunca gere SQL/URLs e nunca use conhecimento próprio para preencher resultados esportivos.
+const SYSTEM_PROMPT = `Você é exclusivamente um parser semântico para consultas de futebol.
+Converta a pergunta para um QueryPlan JSON canônico. Nunca responda a pergunta esportiva, nunca invente
+números, nunca estime estatísticas, nunca escolha IDs, nunca gere SQL/URLs e nunca use conhecimento próprio
+para preencher resultado. O backend resolve entidades, capabilities, providers, cache e cálculos depois.
 
-Existem três formatos aceitos.
-
-1) Agregação de TIME:
+Contrato:
 {
-  "sport":"football","query_kind":"aggregate","entity_type":"team","entity_name":"Corinthians",
-  "metric":"corners","aggregation":"average","match_count":5,"competition":null,"venue":"all"
+  "sport":"football",
+  "entity":{"type":"team|player|competition|match|manager|referee|venue","name":"texto extraído"},
+  "query_kind":"aggregate|event_list|match_list|match_detail|comparison|head_to_head|standings|ranking|profile|squad|availability|lineup|transfer_list|schedule|live_status|odds|prediction",
+  "metric":"métrica canônica opcional",
+  "event_type":"goal|assist|yellow_card|red_card|substitution|var|penalty opcional",
+  "aggregation":"total|average|median|minimum|maximum|count|percentage|rate opcional",
+  "scope":{"last_matches":5,"limit":5,"date_from":"YYYY-MM-DD","date_to":"YYYY-MM-DD","season":"texto","competition":"texto","venue":"home|away|all","opponent":"texto","half":"first|second|full","status":"finished|live|upcoming"},
+  "compare_with":{"type":"team|player|competition|match|manager|referee|venue","name":"texto"}
 }
 
-2) Agregação de JOGADOR:
-{
-  "sport":"football","query_kind":"aggregate","entity_type":"player","entity_name":"Yuri Alberto",
-  "metric":"shots","aggregation":"average","match_count":5,"competition":null,"venue":"all"
-}
+Regras:
+- aggregate exige metric + aggregation; event_list exige event_type.
+- comparison e head_to_head exigem compare_with; head_to_head usa dois times.
+- Em event_list, "eventos nos últimos N jogos" => scope.last_matches=N; "últimos N gols/eventos" => scope.limit=N.
+- venue padrão all e half padrão full. Não defina resolved_id.
+- Não invente período, competição ou temporada. "temporada atual" pode ser season="current".
+- Nomes devem permanecer como escritos pelo usuário; o backend resolve aliases/IDs conservadoramente.
 
-3) Lista de EVENTOS de gol de jogador:
-{
-  "sport":"football","query_kind":"event_list","entity_type":"player","entity_name":"Yuri Alberto",
-  "metric":"goals","event_type":"goal","event_count":5,"competition":null,"venue":"all"
-}
+Métricas canônicas de time:
+goals_for, goals_against, goal_difference, wins, draws, losses, points, win_rate, unbeaten_rate,
+clean_sheets, failed_to_score, both_teams_scored, shots, shots_on_target, shots_off_target,
+blocked_shots, shots_inside_box, shots_outside_box, hit_woodwork, big_chances, big_chances_scored,
+big_chances_missed, xg, touches_in_box, final_third_entries, offsides, corners, passes,
+accurate_passes, pass_accuracy, long_balls, accurate_long_balls, crosses, accurate_crosses,
+possession, duels, duels_won, ground_duels, ground_duels_won, aerial_duels, aerial_duels_won,
+dribbles, successful_dribbles, dispossessed, tackles, tackles_won, interceptions, clearances,
+recoveries, fouls, yellow_cards, red_cards, cards, saves, big_saves, goals_prevented.
 
-Regras semânticas obrigatórias:
-- "média de escanteios do Bayern de Munique nos últimos 5 jogos" => team + aggregate + corners + average + 5.
-- "média de finalizações do Yuri Alberto nos últimos 5 jogos" => player + aggregate + shots + average + 5.
-- "Yuri Alberto fez quantos gols nos últimos 10 jogos?" => player + aggregate + goals + total + 10.
-- "quantos chutes no gol o Yuri teve nas últimas 5 partidas?" => player + aggregate + shots_on_target + total + 5.
-- "quais foram os últimos 5 gols do Yuri Alberto?" => player + event_list + goal + event_count=5.
-- "me mostra os últimos cinco gols do Yuri Alberto" => exatamente a mesma intenção event_list; NÃO significa gols nos últimos cinco jogos.
+Métricas canônicas de jogador incluem:
+minutes, goals, assists, shots, shots_on_target, shots_off_target, blocked_shots, rating, passes,
+accurate_passes, pass_accuracy, key_passes, crosses, accurate_crosses, long_balls,
+accurate_long_balls, duels, duels_won, ground_duels, ground_duels_won, aerial_duels,
+aerial_duels_won, dribbles, successful_dribbles, dispossessed, tackles, tackles_won,
+interceptions, clearances, recoveries, fouls, fouls_drawn, yellow_cards, red_cards, cards,
+xg, xgot, big_chances, big_chances_scored, big_chances_missed, saves, big_saves, goals_prevented.
 
-Restrições:
-- sport: somente "football".
-- query_kind: "aggregate" ou "event_list".
-- entity_type: "team" ou "player".
-- métricas de time: corners, goals, shots, shots_on_target, cards.
-- métricas de jogador no MVP: goals, shots, shots_on_target, cards.
-- aggregation em aggregate: average, total ou median.
-- match_count em aggregate: exatamente 5, 10, 15 ou 20.
-- event_list: somente jogador + goals + event_type="goal" + event_count de 1 a 20.
-- venue: time pode ser all/home/away; jogador deve ser all.
-- competition: texto explícito da pergunta ou null.
-- Não desambigue nomes usando conhecimento próprio: extraia o nome pedido e deixe o backend resolver a entidade.
+Normalize semanticamente, não por frase fechada:
+- chutes/finalizações/arremates => shots; chutes certos/finalizações no alvo => shots_on_target
+- escanteios/cantos/tiros de canto => corners
+- cartões amarelos/amarelos => yellow_cards; vermelhos/expulsões => red_cards
+- desarmes => tackles; posse de bola => possession; passes certos/completos => accurate_passes
+- time: gols marcados => goals_for; gols sofridos/levou/tomou gols => goals_against
+- time: jogos sem sofrer gol/clean sheet => clean_sheets
+- jogador: gols => goals; assistências => assists; minutos => minutes; nota => rating
+- média => average; soma/total => total; mediana => median; maior => maximum; menor => minimum;
+  quantidade => count; porcentagem => percentage; taxa => rate.
 
-Se a pergunta não puder ser compreendida com segurança, devolva exatamente:
-{"error":"question_not_understood"}
+Exemplos:
+"Qual a média de escanteios do Corinthians nos últimos 5 jogos?"
+=> {"sport":"football","entity":{"type":"team","name":"Corinthians"},"query_kind":"aggregate","metric":"corners","aggregation":"average","scope":{"last_matches":5,"venue":"all","half":"full"}}
+"Quantos gols o Corinthians marcou nos últimos 5 jogos?"
+=> {"sport":"football","entity":{"type":"team","name":"Corinthians"},"query_kind":"aggregate","metric":"goals_for","aggregation":"total","scope":{"last_matches":5,"venue":"all","half":"full"}}
+"Quem fez gol do Corinthians nos últimos 5 jogos?"
+=> {"sport":"football","entity":{"type":"team","name":"Corinthians"},"query_kind":"event_list","event_type":"goal","scope":{"last_matches":5,"venue":"all","half":"full"}}
+"Quais foram os últimos 5 gols do Yuri Alberto?"
+=> {"sport":"football","entity":{"type":"player","name":"Yuri Alberto"},"query_kind":"event_list","event_type":"goal","scope":{"limit":5,"venue":"all","half":"full"}}
+"Quem fez mais gols nos últimos 10 jogos, Yuri Alberto ou Memphis?"
+=> {"sport":"football","entity":{"type":"player","name":"Yuri Alberto"},"query_kind":"comparison","metric":"goals","aggregation":"total","scope":{"last_matches":10,"venue":"all","half":"full"},"compare_with":{"type":"player","name":"Memphis"}}
+"Últimos 5 Corinthians x Palmeiras"
+=> {"sport":"football","entity":{"type":"team","name":"Corinthians"},"query_kind":"head_to_head","scope":{"last_matches":5,"venue":"all","half":"full"},"compare_with":{"type":"team","name":"Palmeiras"}}
+"Em que posição está o Corinthians no Brasileirão?"
+=> {"sport":"football","entity":{"type":"team","name":"Corinthians"},"query_kind":"standings","scope":{"competition":"Brasileirão","venue":"all","half":"full"}}
+"Quem está lesionado no Corinthians?"
+=> {"sport":"football","entity":{"type":"team","name":"Corinthians"},"query_kind":"availability","scope":{"venue":"all","half":"full"}}
+"Qual a provável escalação do Corinthians para o próximo jogo?"
+=> {"sport":"football","entity":{"type":"team","name":"Corinthians"},"query_kind":"lineup","scope":{"status":"upcoming","venue":"all","half":"full"}}
 
-Se a pergunta pedir uma métrica esportiva fora do contrato daquela entidade, devolva:
-{"error":"unsupported_metric","metric":"nome pedido"}
+Se não puder converter com segurança, devolva exatamente {"error":"question_not_understood"}.
+Retorne somente JSON válido.`;
 
-A resposta deve conter apenas JSON válido.`;
-
-const REPAIR_PROMPT = `Você corrige JSON de intenção de futebol. Retorne somente JSON válido, sem comentários e sem markdown.
-Nunca responda ou estime a estatística esportiva.
-
-Contratos:
-TEAM aggregate: sport=football, query_kind=aggregate, entity_type=team, entity_name string,
-metric=corners|goals|shots|shots_on_target|cards, aggregation=average|total|median,
-match_count=5|10|15|20, competition string|null, venue=all|home|away.
-
-PLAYER aggregate: sport=football, query_kind=aggregate, entity_type=player, entity_name string,
-metric=goals|shots|shots_on_target|cards, aggregation=average|total|median,
-match_count=5|10|15|20, competition string|null, venue=all.
-
-PLAYER event_list: sport=football, query_kind=event_list, entity_type=player, entity_name string,
-metric=goals, event_type=goal, event_count=1..20, competition string|null, venue=all.
-"últimos N gols" é event_list; NÃO converta para "gols nos últimos N jogos".
-
-Se a métrica não estiver no contrato da entidade, retorne {"error":"unsupported_metric","metric":"nome pedido"}.
-Se não for possível corrigir com segurança, retorne {"error":"question_not_understood"}.`;
+const REPAIR_PROMPT = `Você corrige somente JSON de QueryPlan de futebol; não responda estatísticas.
+Retorne somente JSON válido, sem markdown, preservando a semântica original.
+entity.type: ${FOOTBALL_ENTITY_TYPES.join("|")}
+query_kind: ${FOOTBALL_QUERY_KINDS.join("|")}
+event_type: ${FOOTBALL_EVENT_TYPES.join("|")}
+aggregation: ${FOOTBALL_AGGREGATIONS.join("|")}
+aggregate exige metric+aggregation; event_list exige event_type; comparison/head_to_head exigem compare_with.
+Nunca invente resolved_id, números esportivos ou filtros não pedidos. Se não der para corrigir com segurança,
+retorne {"error":"question_not_understood"}.`;
 
 type DeepSeekResponse = {
   choices?: Array<{
@@ -96,169 +116,16 @@ const asRecord = (value: unknown): JsonRecord | null =>
     ? (value as JsonRecord)
     : null;
 
-function normalizeToken(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, "_");
-}
-
-function normalizeAlias(value: unknown, aliases: Record<string, string>): unknown {
-  if (typeof value !== "string") return value;
-  const normalized = normalizeToken(value);
-  return aliases[normalized] ?? value.trim();
-}
-
-function numericValue(value: unknown): unknown {
-  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim());
-  return value;
-}
-
-function normalizeCompetition(value: unknown): string | null | unknown {
-  if (typeof value !== "string") return value ?? null;
-  const trimmed = value.trim();
-  const normalized = normalizeToken(trimmed);
-  return ["", "all", "todas", "todos", "qualquer", "none", "null"].includes(normalized)
-    ? null
-    : trimmed;
-}
-
-function normalizeIntentCandidate(raw: unknown): unknown {
-  const record = asRecord(raw);
-  if (!record) return raw;
-
-  if (typeof record.error === "string") {
-    if (record.error === "unsupported_metric") {
-      return {
-        error: "unsupported_metric",
-        metric: typeof record.metric === "string" ? record.metric.trim() : "métrica não informada",
-      };
-    }
-    if (record.error === "question_not_understood") return { error: "question_not_understood" };
-  }
-
-  const sport = normalizeAlias(record.sport, {
-    football: "football",
-    futebol: "football",
-    soccer: "football",
-  });
-  const entityType = normalizeAlias(record.entity_type, {
-    team: "team",
-    time: "team",
-    equipe: "team",
-    club: "team",
-    clube: "team",
-    player: "player",
-    jogador: "player",
-    atleta: "player",
-  });
-  const queryKind = normalizeAlias(record.query_kind, {
-    aggregate: "aggregate",
-    aggregation: "aggregate",
-    agregado: "aggregate",
-    event_list: "event_list",
-    events: "event_list",
-    lista_de_eventos: "event_list",
-  });
-  const metric = normalizeAlias(record.metric, {
-    corners: "corners",
-    corner: "corners",
-    corner_kicks: "corners",
-    escanteio: "corners",
-    escanteios: "corners",
-    goals: "goals",
-    goal: "goals",
-    goals_scored: "goals",
-    gols: "goals",
-    gol: "goals",
-    shots: "shots",
-    total_shots: "shots",
-    finalizacoes: "shots",
-    finalizacao: "shots",
-    chutes: "shots",
-    shots_on_target: "shots_on_target",
-    shots_on_goal: "shots_on_target",
-    finalizacoes_no_alvo: "shots_on_target",
-    finalizacao_no_alvo: "shots_on_target",
-    chutes_no_gol: "shots_on_target",
-    chutes_no_alvo: "shots_on_target",
-    cards: "cards",
-    card: "cards",
-    cartoes: "cards",
-    cartao: "cards",
-  });
-  const aggregation = normalizeAlias(record.aggregation, {
-    average: "average",
-    avg: "average",
-    mean: "average",
-    media: "average",
-    total: "total",
-    sum: "total",
-    soma: "total",
-    quantos: "total",
-    median: "median",
-    mediana: "median",
-  });
-  const venue = normalizeAlias(record.venue, {
-    all: "all",
-    todos: "all",
-    todas: "all",
-    geral: "all",
-    home: "home",
-    casa: "home",
-    away: "away",
-    fora: "away",
-  });
-  const eventType = normalizeAlias(record.event_type, {
-    goal: "goal",
-    goals: "goal",
-    gol: "goal",
-    gols: "goal",
-  });
-
-  const inferredKind =
-    queryKind ?? (record.event_count !== undefined || eventType === "goal" ? "event_list" : "aggregate");
-  const competition = normalizeCompetition(record.competition);
-  const entityName =
-    typeof record.entity_name === "string" ? record.entity_name.trim() : record.entity_name;
-
-  if (inferredKind === "event_list") {
-    return {
-      sport,
-      query_kind: "event_list",
-      entity_type: entityType,
-      entity_name: entityName,
-      metric,
-      event_type: eventType,
-      event_count: numericValue(record.event_count),
-      competition: competition ?? null,
-      venue: entityType === "player" ? "all" : venue,
-    };
-  }
-
-  return {
-    sport,
-    query_kind: "aggregate",
-    entity_type: entityType,
-    entity_name: entityName,
-    metric,
-    aggregation,
-    match_count: numericValue(record.match_count),
-    competition: competition ?? null,
-    venue: entityType === "player" ? "all" : venue,
-  };
-}
-
-function validationSummary(error: { issues: Array<{ path: Array<string | number>; code: string }> }) {
-  return error.issues.slice(0, 8).map((issue) => ({
+function validationSummary(error: {
+  issues: Array<{ path: Array<string | number>; code: string }>;
+}) {
+  return error.issues.slice(0, 10).map((issue) => ({
     path: issue.path.join("."),
     code: issue.code,
   }));
 }
 
-async function requestJsonIntent(
+async function requestJsonPlan(
   systemPrompt: string,
   userContent: string,
   apiKey: string,
@@ -282,7 +149,7 @@ async function requestJsonIntent(
         ],
         response_format: { type: "json_object" },
         temperature: 0,
-        max_tokens: 500,
+        max_tokens: 900,
         thinking: { type: "disabled" },
       }),
       signal: controller.signal,
@@ -317,65 +184,50 @@ async function requestJsonIntent(
   if (!content || payload.choices?.[0]?.finish_reason === "length") {
     throw new AnalysisPipelineError(
       "INVALID_DEEPSEEK_OUTPUT",
-      "O DeepSeek retornou uma intenção vazia ou incompleta.",
+      "O DeepSeek retornou um QueryPlan vazio ou incompleto.",
     );
   }
 
   try {
     return JSON.parse(content) as unknown;
   } catch {
-    throw new AnalysisPipelineError("INVALID_DEEPSEEK_OUTPUT", "O DeepSeek retornou JSON inválido.");
+    throw new AnalysisPipelineError(
+      "INVALID_DEEPSEEK_OUTPUT",
+      "O DeepSeek retornou JSON inválido.",
+    );
   }
 }
 
-function resolveParsedIntent(
-  parsed: ReturnType<typeof deepSeekIntentResponseSchema.safeParse>,
-): QueryIntentInput {
-  if (!parsed.success) {
+function resolveParsedPlan(
+  parsed: ReturnType<typeof queryPlanResponseSchema.safeParse>,
+  raw: unknown,
+): QueryPlan {
+  const rawRecord = asRecord(raw);
+  if (rawRecord?.error === "unsupported_metric") {
+    const metric =
+      typeof rawRecord.metric === "string" ? rawRecord.metric.trim() : "métrica não informada";
     throw new AnalysisPipelineError(
-      "INVALID_DEEPSEEK_OUTPUT",
-      "A intenção produzida pelo DeepSeek não passou pela validação de segurança.",
+      "UNSUPPORTED_METRIC",
+      `A métrica "${metric}" não pôde ser normalizada para o catálogo canônico.`,
     );
   }
 
+  if (!parsed.success) {
+    throw new AnalysisPipelineError(
+      "INVALID_DEEPSEEK_OUTPUT",
+      "O QueryPlan produzido pelo DeepSeek não passou pela validação de segurança.",
+    );
+  }
   if ("error" in parsed.data) {
-    if (parsed.data.error === "unsupported_metric") {
-      throw new AnalysisPipelineError(
-        "UNSUPPORTED_METRIC",
-        `A métrica "${parsed.data.metric}" ainda não é suportada nesta fase.`,
-      );
-    }
     throw new AnalysisPipelineError(
       "QUESTION_NOT_UNDERSTOOD",
       "Não conseguimos compreender a pergunta com segurança suficiente para consultar dados reais.",
     );
   }
-
   return parsed.data;
 }
 
-function assertMetricCompatible(normalized: unknown): void {
-  const record = asRecord(normalized);
-  if (!record || typeof record.metric !== "string") return;
-  const metric = record.metric;
-  if (!SUPPORTED_METRICS.includes(metric as (typeof SUPPORTED_METRICS)[number])) {
-    throw new AnalysisPipelineError(
-      "UNSUPPORTED_METRIC",
-      `A métrica "${metric}" ainda não é suportada nesta fase.`,
-    );
-  }
-  if (
-    record.entity_type === "player" &&
-    !PLAYER_METRICS.includes(metric as (typeof PLAYER_METRICS)[number])
-  ) {
-    throw new AnalysisPipelineError(
-      "UNSUPPORTED_METRIC",
-      `A métrica "${metric}" ainda não é suportada para jogadores nesta fase.`,
-    );
-  }
-}
-
-export async function parseIntentWithDeepSeek(question: string): Promise<QueryIntentInput> {
+export async function parseQueryPlanWithDeepSeek(question: string): Promise<QueryPlan> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     throw new AnalysisPipelineError(
@@ -384,32 +236,35 @@ export async function parseIntentWithDeepSeek(question: string): Promise<QueryIn
     );
   }
 
-  const raw = await requestJsonIntent(SYSTEM_PROMPT, question, apiKey);
-  const normalized = normalizeIntentCandidate(raw);
-  assertMetricCompatible(normalized);
-  const firstPass = deepSeekIntentResponseSchema.safeParse(normalized);
-  if (firstPass.success) return resolveParsedIntent(firstPass);
+  const raw = await requestJsonPlan(SYSTEM_PROMPT, question, apiKey);
+  const normalized = normalizeQueryPlanCandidate(raw);
+  const firstPass = queryPlanResponseSchema.safeParse(normalized);
+  if (firstPass.success) return resolveParsedPlan(firstPass, normalized);
 
-  console.warn("[deepseek-intent] first-pass validation failed", {
+  console.warn("[deepseek-query-plan] first-pass validation failed", {
     issues: validationSummary(firstPass.error),
     keys: asRecord(raw) ? Object.keys(asRecord(raw)!).slice(0, 16) : [],
   });
 
-  const repairedRaw = await requestJsonIntent(
+  const repairedRaw = await requestJsonPlan(
     REPAIR_PROMPT,
     `Pergunta original: ${question}\nJSON a corrigir: ${JSON.stringify(raw)}\nErros de validação: ${JSON.stringify(validationSummary(firstPass.error))}`,
     apiKey,
   );
-  const repaired = normalizeIntentCandidate(repairedRaw);
-  assertMetricCompatible(repaired);
-  const secondPass = deepSeekIntentResponseSchema.safeParse(repaired);
+  const repaired = normalizeQueryPlanCandidate(repairedRaw);
+  const secondPass = queryPlanResponseSchema.safeParse(repaired);
 
   if (!secondPass.success) {
-    console.warn("[deepseek-intent] repair validation failed", {
+    console.warn("[deepseek-query-plan] repair validation failed", {
       issues: validationSummary(secondPass.error),
       keys: asRecord(repairedRaw) ? Object.keys(asRecord(repairedRaw)!).slice(0, 16) : [],
     });
   }
 
-  return resolveParsedIntent(secondPass);
+  return resolveParsedPlan(secondPass, repaired);
+}
+
+/** Compatibility bridge while Phase 4 capabilities migrate to QueryPlan executors. */
+export async function parseIntentWithDeepSeek(question: string): Promise<QueryIntentInput> {
+  return queryPlanToLegacyIntent(await parseQueryPlanWithDeepSeek(question));
 }
