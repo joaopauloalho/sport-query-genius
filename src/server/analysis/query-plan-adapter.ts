@@ -1,7 +1,8 @@
+import { resolveFootballCapability } from "@/server/sports/capability-registry";
+
 import { AnalysisPipelineError } from "./errors";
 import type { QueryIntentInput } from "./intent-schema";
 import type { QueryPlan } from "./query-plan";
-import { resolveFootballCapability } from "@/server/sports/capability-registry";
 
 const TEAM_METRIC_TO_LEGACY = {
   goals_for: "goals",
@@ -18,15 +19,9 @@ const PLAYER_METRIC_TO_LEGACY = {
   cards: "cards",
 } as const;
 
-function legacyAggregation(plan: QueryPlan): "average" | "total" | "median" | "minimum" | "maximum" {
+function legacyAggregation(plan: QueryPlan): "average" | "total" | "median" {
   const value = plan.aggregation;
-  if (
-    value === "average" ||
-    value === "total" ||
-    value === "median" ||
-    value === "minimum" ||
-    value === "maximum"
-  ) {
+  if (value === "average" || value === "total" || value === "median") {
     return value;
   }
   throw new AnalysisPipelineError(
