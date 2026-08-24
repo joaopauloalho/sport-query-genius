@@ -1,6 +1,11 @@
 import { AnalysisPipelineError } from "@/server/analysis/errors";
 import { resolveFootballEntityCandidates } from "@/server/sports/entity-resolver";
 import type { ResolvedTeam } from "@/server/sports/provider";
+import {
+  classifyApiFootballError,
+  getApiFootballErrorPayload,
+  type ApiFootballErrorKind,
+} from "./api-football-errors";
 import { ApiFootballProvider } from "./api-football.server";
 
 const API_FOOTBALL_BASE_URL = "https://v3.football.api-sports.io";
@@ -13,15 +18,9 @@ type TeamSearchPayload = {
     team?: { id?: number; name?: string; country?: string | null };
   }>;
   errors?: unknown;
+  error?: unknown;
+  message?: unknown;
 };
-
-function hasApiErrors(value: unknown): boolean {
-  if (!value) return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length > 0;
-  return true;
-}
 
 function authHeaders(authHeader: AuthHeader, apiKey: string): Record<string, string> {
   if (authHeader === "x-rapidapi-key") {
@@ -31,6 +30,65 @@ function authHeaders(authHeader: AuthHeader, apiKey: string): Record<string, str
     };
   }
   return { "x-apisports-key": apiKey };
+}
+
+function safeErrorForLog(value: unknown, apiKey: string): string {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    serialized = String(value);
+  }
+  return serialized.replaceAll(apiKey, "[redacted]").slice(0, 800);
+}
+
+function classifyFailure(status: number, payload: unknown): ApiFootballErrorKind {
+  const errorPayload = getApiFootballErrorPayload(payload);
+  if (errorPayload !== null) {
+    const classified = classifyApiFootballError(errorPayload);
+    if (classified !== "provider") return classified;
+  }
+  if (status === 429) return "limit";
+  if (status === 401 || status === 403) return "auth";
+  if (status === 402) return "plan";
+  return "provider";
+}
+
+function teamSearchErrorFor(kind: ApiFootballErrorKind): AnalysisPipelineError {
+  if (kind === "account") {
+    return new AnalysisPipelineError(
+      "PROVIDER_UNAVAILABLE",
+      "A conta da API-FOOTBALL está suspensa, desativada ou inativa.",
+    );
+  }
+  if (kind === "limit") {
+    return new AnalysisPipelineError(
+      "API_LIMIT_REACHED",
+      "O limite de requisições da API-FOOTBALL foi atingido.",
+    );
+  }
+  if (kind === "auth") {
+    return new AnalysisPipelineError(
+      "PROVIDER_UNAVAILABLE",
+      "A chave da API-FOOTBALL não foi aceita na busca de times.",
+    );
+  }
+  if (kind === "plan") {
+    return new AnalysisPipelineError(
+      "PROVIDER_UNAVAILABLE",
+      "A API-FOOTBALL recusou a busca de times por restrição do plano ou assinatura.",
+    );
+  }
+  if (kind === "parameter") {
+    return new AnalysisPipelineError(
+      "PROVIDER_UNAVAILABLE",
+      "A API-FOOTBALL recusou um parâmetro da busca de times.",
+    );
+  }
+  return new AnalysisPipelineError(
+    "PROVIDER_UNAVAILABLE",
+    "A API-FOOTBALL recusou a busca de times.",
+  );
 }
 
 export class SafeApiFootballProvider extends ApiFootballProvider {
@@ -64,13 +122,6 @@ export class SafeApiFootballProvider extends ApiFootballProvider {
         clearTimeout(timeout);
       }
 
-      if (response.status === 429) {
-        throw new AnalysisPipelineError(
-          "API_LIMIT_REACHED",
-          "O limite de requisições da API-FOOTBALL foi atingido.",
-        );
-      }
-
       let payload: TeamSearchPayload;
       try {
         payload = (await response.json()) as TeamSearchPayload;
@@ -81,12 +132,24 @@ export class SafeApiFootballProvider extends ApiFootballProvider {
         );
       }
 
-      if (!response.ok || hasApiErrors(payload.errors)) {
-        if (authHeader === "x-apisports-key") return perform("x-rapidapi-key");
-        throw new AnalysisPipelineError(
-          "PROVIDER_UNAVAILABLE",
-          "A API-FOOTBALL recusou a busca de times.",
-        );
+      const errorPayload = getApiFootballErrorPayload(payload);
+      if (!response.ok || errorPayload !== null) {
+        const kind = classifyFailure(response.status, payload);
+        console.warn("[api-football-safe] team search failure", {
+          authHeader,
+          status: response.status,
+          kind,
+          remaining: response.headers.get("x-ratelimit-requests-remaining"),
+          detail: safeErrorForLog(errorPayload ?? payload, apiKey),
+        });
+
+        // Retry with RapidAPI headers only when the response explicitly indicates an
+        // authentication/header mismatch. Retrying account/plan/limit/provider failures
+        // only burns quota and cannot make those failures valid.
+        if (authHeader === "x-apisports-key" && kind === "auth") {
+          return perform("x-rapidapi-key");
+        }
+        throw teamSearchErrorFor(kind);
       }
       return payload;
     };
