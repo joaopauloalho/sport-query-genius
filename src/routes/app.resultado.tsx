@@ -58,10 +58,7 @@ export const Route = createFileRoute("/app/resultado")({
         : undefined;
     const venue = parseVenue(search.venue);
     const invalidMatchCount =
-      rawMatchCount !== undefined &&
-      rawMatchCount !== null &&
-      rawMatchCount !== "" &&
-      !match_count;
+      rawMatchCount !== undefined && rawMatchCount !== null && rawMatchCount !== "" && !match_count;
 
     return {
       q: String(search.q ?? ""),
