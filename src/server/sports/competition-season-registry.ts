@@ -50,8 +50,16 @@ const DEFINITIONS: CompetitionDefinition[] = [
     // API-Football documents league id 39 for the Premier League.
     provider_refs: [{ provider: "API_FOOTBALL", competition_id: "39" }],
   },
-  { canonical_name: "La Liga", aliases: ["la liga", "laliga", "primera division"], provider_refs: [] },
-  { canonical_name: "Bundesliga", aliases: ["bundesliga", "bundesliga alema"], provider_refs: [] },
+  {
+    canonical_name: "La Liga",
+    aliases: ["la liga", "laliga", "primera division"],
+    provider_refs: [],
+  },
+  {
+    canonical_name: "Bundesliga",
+    aliases: ["bundesliga", "bundesliga alema"],
+    provider_refs: [],
+  },
   {
     canonical_name: "UEFA Champions League",
     aliases: ["champions", "champions league", "uefa champions league", "ucl"],
@@ -98,23 +106,20 @@ export function competitionAliases(value: string): readonly string[] {
 }
 
 export type SeasonTruthStatus =
-  | { executable: true; status: "not_requested" | "user_bounded"; reason: null }
+  | { executable: true; status: "not_requested"; reason: null }
   | { executable: false; status: "provider_resolution_required"; reason: string };
 
 /**
- * Phase 5A stops inferring calendar windows from a league name or a year label. A season is
- * executable only when the user already supplied an explicit date window. The provider-backed
- * CompetitionSeason resolver interface above is the migration point for Phase 5B+.
+ * Phase 5A never turns a season label into dates by heuristic. Any scope.season must first be
+ * resolved to a real provider CompetitionSeason (competition id, season id, dates and coverage).
+ * Explicit date_from/date_to queries remain available when they are requested without a season.
  */
 export function seasonTruthStatus(query: SemanticQuery): SeasonTruthStatus {
   if (!query.scope.season) return { executable: true, status: "not_requested", reason: null };
-  if (query.scope.date_from && query.scope.date_to) {
-    return { executable: true, status: "user_bounded", reason: null };
-  }
   return {
     executable: false,
     status: "provider_resolution_required",
-    reason: `A temporada "${query.scope.season}" foi compreendida, mas ainda exige resolução real de CompetitionSeason no provider (id, início, fim e coverage). Nenhuma janela de ano-calendário será inferida.`,
+    reason: `A temporada "${query.scope.season}" foi compreendida, mas ainda exige resolução real de CompetitionSeason no provider (competition id, season id, início, fim e coverage). Nenhuma janela de calendário será inferida; use um intervalo de datas explícito sem season enquanto o resolver provider-backed não estiver conectado.`,
   };
 }
 
