@@ -119,3 +119,36 @@ jobs:
           src/server/sports/team-query-capability.ts
           tests/phase4c/engine.test.ts
           tests/phase4c/query-plan.test.ts
+
+  prod_smoke:
+    if: github.event_name == 'pull_request' && github.head_ref == 'smoke/prod-auth-20260824'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install isolated Playwright
+        shell: bash
+        run: |
+          mkdir -p /tmp/scoutly-prod-smoke
+          cp "$GITHUB_WORKSPACE/.github/scripts/prod-smoke.mjs" /tmp/scoutly-prod-smoke/prod-smoke.mjs
+          cd /tmp/scoutly-prod-smoke
+          npm init -y >/dev/null 2>&1
+          npm install --no-fund --no-audit playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run authenticated production smoke
+        shell: bash
+        env:
+          BASE_URL: https://sport-query-genius.vercel.app
+          SMOKE_EMAIL: smoke.prod.20260824.0740@example.com
+          SMOKE_PASSWORD: Scoutly-Smoke-2026!
+        run: |
+          cd /tmp/scoutly-prod-smoke
+          node prod-smoke.mjs
