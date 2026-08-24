@@ -39,11 +39,28 @@ page.setDefaultTimeout(30_000);
 
 try {
   console.log(`SMOKE_BASE_URL=${baseUrl}`);
-  await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle", timeout: 60_000 });
+  await page.waitForTimeout(2_000);
 
-  await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Senha").fill(password);
-  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  const emailInput = page.locator('input[type="email"]');
+  const passwordInput = page.locator('input[type="password"]');
+  const loginButton = page.getByRole("button", { name: "Entrar", exact: true });
+
+  await emailInput.fill(email);
+  await passwordInput.fill(password);
+  await page.waitForFunction(
+    ({ expectedEmail, expectedPasswordLength }) => {
+      const emailElement = document.querySelector('input[type="email"]');
+      const passwordElement = document.querySelector('input[type="password"]');
+      return (
+        emailElement?.value === expectedEmail &&
+        passwordElement?.value.length === expectedPasswordLength
+      );
+    },
+    { expectedEmail: email, expectedPasswordLength: password.length },
+  );
+  console.log(`AUTH_FIELDS_READY email=${await emailInput.inputValue()} password_length=${(await passwordInput.inputValue()).length}`);
+  await loginButton.click();
 
   await page.waitForTimeout(4_000);
   const authBody = await page.locator("body").innerText();
