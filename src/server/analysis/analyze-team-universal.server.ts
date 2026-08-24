@@ -565,8 +565,9 @@ async function metricValuesForRows(params: {
   if (params.execution.kind === "derived") {
     return params.rows.map((row) => metricValue(row, params.metric));
   }
+  const rawMetric = params.execution.rawMetric;
   return mapWithConcurrency(params.rows, DATA_CONCURRENCY, (row) =>
-    params.source.getFixtureMetric(row.fixture, params.team.id, params.execution.rawMetric),
+    params.source.getFixtureMetric(row.fixture, params.team.id, rawMetric),
   );
 }
 
@@ -894,7 +895,7 @@ export async function analyzePhase4cUniversalTeamPlanWithSources(params: {
       `A Phase 4C não executa ${plan.entity.type}/${plan.query_kind}.`,
     );
   }
-  return firstSuccessful(params.sources, (source) =>
+  return firstSuccessful<Phase4cTeamResult>(params.sources, (source) =>
     plan.query_kind === "aggregate"
       ? analyzeAggregate({ question: params.question, plan, source })
       : analyzeMatchList({ question: params.question, plan, source }),
