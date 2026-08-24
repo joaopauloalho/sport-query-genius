@@ -25,7 +25,8 @@ export function buildExecutionPlan(semantic: SemanticPlan): ExecutionPlan {
   if (!negotiation.supported || !negotiation.query_plan || !negotiation.executor) {
     throw new AnalysisPipelineError(
       negotiation.error_code ?? "UNSUPPORTED_CAPABILITY",
-      negotiation.reason ?? "A pergunta foi compreendida, mas não existe ExecutionPlan integral e seguro.",
+      negotiation.reason ??
+        "A pergunta foi compreendida, mas não existe ExecutionPlan integral e seguro.",
     );
   }
 
