@@ -113,8 +113,8 @@ function Landing() {
               Analise futebol sem <span className="text-gradient">horas de pesquisa</span>.
             </h1>
             <p className="animate-rise mx-auto mt-5 max-w-2xl text-base text-pretty text-muted-foreground sm:text-lg">
-              Faça uma pergunta e receba números calculados sobre partidas reais, com escopo, fonte e
-              amostra identificados.
+              Faça uma pergunta e receba números calculados sobre partidas reais, com escopo, fonte
+              e amostra identificados.
             </p>
             <div className="animate-rise mt-8 flex flex-wrap justify-center gap-3">
               <Button size="lg" className="gap-2" asChild>
