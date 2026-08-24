@@ -280,7 +280,11 @@ export const queryPlanSchema = z
       });
     }
 
-    if ((plan.sort || plan.limit) && plan.group_by.length === 0 && plan.query_kind === "aggregate") {
+    if (
+      (plan.sort || plan.limit) &&
+      plan.group_by.length === 0 &&
+      plan.query_kind === "aggregate"
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["sort"],
