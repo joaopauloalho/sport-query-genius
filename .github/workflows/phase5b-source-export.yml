@@ -1,0 +1,34 @@
+name: Phase 5B Source Export
+
+on:
+  push:
+    branches:
+      - feat/phase-5b-normalized-fixture-stats
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prove clean checkout
+        run: git diff --exit-code
+      - name: Package exact source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/source-export
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.output \
+            --exclude=.wrangler \
+            -czf /tmp/source-export/sport-query-genius-source.tgz .
+          git rev-parse HEAD > /tmp/source-export/HEAD.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase5b-source-export
+          path: /tmp/source-export
+          if-no-files-found: error
