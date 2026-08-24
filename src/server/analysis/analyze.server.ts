@@ -20,8 +20,12 @@ import {
   analyzePlayerEventList,
   type ResolvedCompetitionFilter,
 } from "./analyze-player.server";
+import {
+  analyzePhase4cUniversalTeamPlan,
+  isPhase4cUniversalTeamPlan,
+} from "./analyze-team-universal.server";
 import { analyzeUniversalQueryPlan, isPhase4bUniversalPlan } from "./analyze-universal.server";
-import { parseQueryPlanWithDeepSeek } from "./deepseek.server";
+import { parseUniversalQueryPlanWithDeepSeek } from "./deepseek-v4c.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type AnalysisPipelineOutcome } from "./errors";
 import type { TeamAggregateIntentInput } from "./intent-schema";
@@ -118,7 +122,7 @@ export async function analyzeQuestionServer(
   observer?: SportsCacheObserver,
 ): Promise<AnalysisPipelineOutcome> {
   try {
-    const queryPlan = await parseQueryPlanWithDeepSeek(request.question);
+    const queryPlan = await parseUniversalQueryPlanWithDeepSeek(request.question);
     const capability = resolveFootballCapability(queryPlan);
     if (!capability.supported) {
       throw new AnalysisPipelineError(
@@ -127,7 +131,26 @@ export async function analyzeQuestionServer(
       );
     }
 
+    // Phase 4C owns team aggregate/match-list semantics. It runs before the legacy stage gate
+    // because several score-derived metrics were intentionally marked "planned" only while
+    // the legacy 1/3/5/10/15/20 adapter was still the executor.
+    if (isPhase4cUniversalTeamPlan(queryPlan)) {
+      const result = await analyzePhase4cUniversalTeamPlan({
+        question: request.question,
+        plan: queryPlan,
+        overrides: request.overrides,
+        observer,
+      });
+      return { ok: true, result };
+    }
+
     if (isPhase4bUniversalPlan(queryPlan)) {
+      if (queryPlan.filters.length || queryPlan.group_by.length || queryPlan.sort || queryPlan.limit) {
+        throw new AnalysisPipelineError(
+          "UNSUPPORTED_CAPABILITY",
+          `Filtros/group_by/sort/limit foram compreendidos, mas ${queryPlan.query_kind} ainda não executa essas operações na Phase 4B.`,
+        );
+      }
       if (capability.stage !== "implemented") {
         throw new AnalysisPipelineError(
           "UNSUPPORTED_CAPABILITY",
@@ -142,6 +165,16 @@ export async function analyzeQuestionServer(
         observer,
       });
       return { ok: true, result };
+    }
+
+    if (
+      queryPlan.entity.type === "player" &&
+      (queryPlan.filters.length || queryPlan.group_by.length || queryPlan.sort || queryPlan.limit)
+    ) {
+      throw new AnalysisPipelineError(
+        "UNSUPPORTED_CAPABILITY",
+        "Filtros, agrupamento, ordenação e limit de apresentação para jogador já fazem parte do QueryPlan, mas ainda não são executados pelo adapter de jogador desta subfase.",
+      );
     }
 
     const parsedIntent = queryPlanToLegacyIntent(queryPlan);
@@ -166,6 +199,7 @@ export async function analyzeQuestionServer(
       return { ok: true, result };
     }
 
+    // Kept as a compatibility fallback for any old team intent not yet routed through Phase 4C.
     const orchestrator = createFootballOrchestrator(observer);
     const selection = await orchestrator.selectTeamFixtures(
       effectiveIntent.entity_name,

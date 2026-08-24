@@ -17,6 +17,7 @@
     "test:phase3d": "node --experimental-transform-types --test tests/phase3d/*.test.mjs",
     "test:phase4a": "bun test tests/phase4a",
     "test:phase4b": "bun test tests/phase4b",
+    "test:phase4c": "bun test tests/phase4c",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -58,7 +59,6 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
-    "input-otp": "^1.4.2",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",

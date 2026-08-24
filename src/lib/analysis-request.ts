@@ -1,15 +1,21 @@
 import { z } from "zod";
 
-export const SUPPORTED_MATCH_COUNTS = [1, 3, 5, 10, 15, 20] as const;
+export const MAX_ANALYSIS_MATCH_COUNT = 100;
 
-export const supportedMatchCountSchema = z.union([
-  z.literal(1),
-  z.literal(3),
-  z.literal(5),
-  z.literal(10),
-  z.literal(15),
-  z.literal(20),
-]);
+/** Every technically accepted explicit match window. Kept for backwards-compatible route validation. */
+export const SUPPORTED_MATCH_COUNTS: readonly number[] = Array.from(
+  { length: MAX_ANALYSIS_MATCH_COUNT },
+  (_, index) => index + 1,
+);
+
+/** Compact UI presets; natural-language and URL overrides still accept any integer from 1 to 100. */
+export const MATCH_COUNT_PRESETS = [1, 3, 5, 7, 10, 12, 15, 20, 25, 30, 38, 50, 100] as const;
+
+export const supportedMatchCountSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(MAX_ANALYSIS_MATCH_COUNT);
 
 export const analysisVenueSchema = z.enum(["all", "home", "away"]);
 
