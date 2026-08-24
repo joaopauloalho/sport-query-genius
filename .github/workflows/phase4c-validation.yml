@@ -84,6 +84,20 @@ jobs:
 
       - name: Lint Phase 4C files
         run: >-
+          bunx eslint --fix
+          src/lib/analysis-request.ts
+          src/components/scoutly/smart-search.tsx
+          src/server/analysis/analyze.server.ts
+          src/server/analysis/analyze-team-universal.server.ts
+          src/server/analysis/deepseek-v4c.server.ts
+          src/server/analysis/query-plan.ts
+          src/server/analysis/query-plan-v4c-normalizer.ts
+          src/server/sports/team-query-capability.ts
+          tests/phase4c/engine.test.ts
+          tests/phase4c/query-plan.test.ts
+
+      - name: Verify lint after safe fixes
+        run: >-
           bunx eslint
           src/lib/analysis-request.ts
           src/components/scoutly/smart-search.tsx
