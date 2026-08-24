@@ -36,6 +36,26 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ locale: "pt-BR" });
 const page = await context.newPage();
 page.setDefaultTimeout(30_000);
+page.on("console", (message) => console.log(`BROWSER_CONSOLE|${message.type()}|${message.text()}`));
+page.on("pageerror", (error) => console.log(`BROWSER_PAGEERROR|${error.message}`));
+
+async function waitForResult(question) {
+  for (let attempt = 1; attempt <= 8; attempt += 1) {
+    await page.waitForTimeout(5_000);
+    const body = await page.locator("body").innerText();
+    const compact = body.replace(/\s+/g, " ").slice(0, 1200);
+    console.log(`RESULT_POLL|${attempt}|${question}|${compact}`);
+    const matchedError = errorTitles.find((title) => body.includes(title));
+    if (matchedError) {
+      throw new Error(`QUERY_FAILED question=${JSON.stringify(question)} error=${matchedError} body=${compact}`);
+    }
+    if (body.includes("Dados reais")) return body;
+  }
+  const body = await page.locator("body").innerText();
+  throw new Error(
+    `QUERY_UI_TIMEOUT question=${JSON.stringify(question)} url=${page.url()} body=${body.replace(/\s+/g, " ").slice(0, 1800)}`,
+  );
+}
 
 try {
   console.log(`SMOKE_BASE_URL=${baseUrl}`);
@@ -75,22 +95,7 @@ try {
     const target = `${baseUrl}/app/resultado?q=${encodeURIComponent(question)}`;
     await page.goto(target, { waitUntil: "domcontentloaded", timeout: 60_000 });
 
-    await page.waitForFunction(
-      ({ errors }) => {
-        const text = document.body?.innerText ?? "";
-        return text.includes("Dados reais") || errors.some((title) => text.includes(title));
-      },
-      { errors: errorTitles },
-      { timeout: 120_000 },
-    );
-
-    const body = await page.locator("body").innerText();
-    const matchedError = errorTitles.find((title) => body.includes(title));
-    if (matchedError || !body.includes("Dados reais")) {
-      const compact = body.replace(/\s+/g, " ").slice(0, 1400);
-      throw new Error(`QUERY_FAILED question=${JSON.stringify(question)} error=${matchedError ?? "missing real-data badge"} body=${compact}`);
-    }
-
+    const body = await waitForResult(question);
     const compact = body.replace(/\s+/g, " ").slice(0, 600);
     console.log(`QUERY_PASS|${question}|${compact}`);
 
