@@ -20,16 +20,14 @@ import {
   analyzePlayerEventList,
   type ResolvedCompetitionFilter,
 } from "./analyze-player.server";
-import {
-  analyzePhase4cUniversalTeamPlan,
-  isPhase4cUniversalTeamPlan,
-} from "./analyze-team-universal.server";
+import { isPhase4cUniversalTeamPlan } from "./analyze-team-universal.server";
 import { analyzeUniversalQueryPlan, isPhase4bUniversalPlan } from "./analyze-universal.server";
 import { parseUniversalQueryPlanWithDeepSeek } from "./deepseek-v4c.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type AnalysisPipelineOutcome } from "./errors";
 import type { TeamAggregateIntentInput } from "./intent-schema";
 import { applyOverrides } from "./overrides";
+import { analyzePhase4cWithFreshnessFallback } from "./phase4c-freshness.server";
 import { queryPlanToLegacyIntent } from "./query-plan-adapter";
 
 const METRIC_LABELS = {
@@ -135,7 +133,7 @@ export async function analyzeQuestionServer(
     // because several score-derived metrics were intentionally marked "planned" only while
     // the legacy 1/3/5/10/15/20 adapter was still the executor.
     if (isPhase4cUniversalTeamPlan(queryPlan)) {
-      const result = await analyzePhase4cUniversalTeamPlan({
+      const result = await analyzePhase4cWithFreshnessFallback({
         question: request.question,
         plan: queryPlan,
         overrides: request.overrides,
