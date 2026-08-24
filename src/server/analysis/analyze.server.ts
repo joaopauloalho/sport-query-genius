@@ -145,7 +145,12 @@ export async function analyzeQuestionServer(
     }
 
     if (isPhase4bUniversalPlan(queryPlan)) {
-      if (queryPlan.filters.length || queryPlan.group_by.length || queryPlan.sort || queryPlan.limit) {
+      if (
+        queryPlan.filters.length ||
+        queryPlan.group_by.length ||
+        queryPlan.sort ||
+        queryPlan.limit
+      ) {
         throw new AnalysisPipelineError(
           "UNSUPPORTED_CAPABILITY",
           `Filtros/group_by/sort/limit foram compreendidos, mas ${queryPlan.query_kind} ainda não executa essas operações na Phase 4B.`,
