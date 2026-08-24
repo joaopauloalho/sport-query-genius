@@ -17,6 +17,7 @@
     "test:phase3d": "node --experimental-transform-types --test tests/phase3d/*.test.mjs",
     "test:phase4a": "bun test tests/phase4a",
     "test:phase4b": "bun test tests/phase4b",
+    "test:phase4c": "bun test tests/phase4c",
     "format": "prettier --write ."
   },
   "dependencies": {

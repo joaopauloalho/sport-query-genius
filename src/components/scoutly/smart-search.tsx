@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { COMPETITIONS, SPORTS } from "@/data/sports";
 import {
-  SUPPORTED_MATCH_COUNTS,
+  MATCH_COUNT_PRESETS,
   type AnalysisOverrides,
   type AnalysisVenue,
   type SupportedMatchCount,
@@ -150,7 +150,7 @@ export function SmartSearch({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {SUPPORTED_MATCH_COUNTS.map((period) => (
+              {MATCH_COUNT_PRESETS.map((period) => (
                 <SelectItem key={period} value={String(period)}>
                   Últimos {period} jogos
                 </SelectItem>

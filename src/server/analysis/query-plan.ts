@@ -2,6 +2,9 @@ import { z } from "zod";
 
 import { FOOTBALL_METRIC_KEYS, type FootballMetric } from "../sports/metric-catalog";
 
+export const MAX_QUERY_MATCHES = 100;
+export const MAX_RESULT_ROWS = 100;
+
 export const FOOTBALL_ENTITY_TYPES = [
   "team",
   "player",
@@ -19,6 +22,8 @@ export const FOOTBALL_QUERY_KINDS = [
   "match_detail",
   "comparison",
   "head_to_head",
+  "distribution",
+  "streak",
   "standings",
   "ranking",
   "profile",
@@ -53,6 +58,31 @@ export const FOOTBALL_AGGREGATIONS = [
   "rate",
 ] as const;
 
+export const FOOTBALL_FILTER_OPERATORS = ["eq", "neq", "gt", "gte", "lt", "lte", "in"] as const;
+export const FOOTBALL_FILTER_FIELDS = [
+  "outcome",
+  "goals_for",
+  "goals_against",
+  "goal_difference",
+  "points",
+  "clean_sheet",
+  "failed_to_score",
+  "both_teams_scored",
+  "venue",
+  "competition",
+  "opponent",
+] as const;
+export const FOOTBALL_GROUP_BY_FIELDS = [
+  "venue",
+  "competition",
+  "season",
+  "opponent",
+  "month",
+  "year",
+  "outcome",
+] as const;
+export const FOOTBALL_SORT_FIELDS = ["value", "sample_size", "group"] as const;
+
 export const footballEntityTypeSchema = z.enum(FOOTBALL_ENTITY_TYPES);
 export const footballQueryKindSchema = z.enum(FOOTBALL_QUERY_KINDS);
 export const footballEventTypeSchema = z.enum(FOOTBALL_EVENT_TYPES);
@@ -60,6 +90,9 @@ export const footballAggregationSchema = z.enum(FOOTBALL_AGGREGATIONS);
 export const footballMetricSchema = z.enum(
   FOOTBALL_METRIC_KEYS as [FootballMetric, ...FootballMetric[]],
 );
+export const footballFilterOperatorSchema = z.enum(FOOTBALL_FILTER_OPERATORS);
+export const footballFilterFieldSchema = z.enum(FOOTBALL_FILTER_FIELDS);
+export const footballGroupByFieldSchema = z.enum(FOOTBALL_GROUP_BY_FIELDS);
 
 export const queryEntitySchema = z
   .object({
@@ -69,9 +102,87 @@ export const queryEntitySchema = z
   })
   .strict();
 
+const filterScalarSchema = z.union([
+  z.string().trim().min(1).max(120),
+  z.number().finite(),
+  z.boolean(),
+]);
+const filterValueSchema = z.union([filterScalarSchema, z.array(filterScalarSchema).min(1).max(50)]);
+
+export const queryFilterSchema = z
+  .object({
+    field: footballFilterFieldSchema,
+    operator: footballFilterOperatorSchema,
+    value: filterValueSchema,
+  })
+  .strict()
+  .superRefine((filter, context) => {
+    const numericFields = new Set(["goals_for", "goals_against", "goal_difference", "points"]);
+    const booleanFields = new Set(["clean_sheet", "failed_to_score", "both_teams_scored"]);
+    const stringFields = new Set(["outcome", "venue", "competition", "opponent"]);
+
+    if (filter.operator === "in") {
+      if (!Array.isArray(filter.value)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["value"],
+          message: "in requires an array value",
+        });
+      }
+      return;
+    }
+
+    if (Array.isArray(filter.value)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["value"],
+        message: `${filter.operator} requires a scalar value`,
+      });
+      return;
+    }
+
+    if (numericFields.has(filter.field)) {
+      if (typeof filter.value !== "number") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["value"],
+          message: `${filter.field} requires a numeric value`,
+        });
+      }
+      return;
+    }
+
+    if (booleanFields.has(filter.field)) {
+      if (!["eq", "neq"].includes(filter.operator) || typeof filter.value !== "boolean") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["operator"],
+          message: `${filter.field} supports eq/neq with a boolean value`,
+        });
+      }
+      return;
+    }
+
+    if (stringFields.has(filter.field) && !["eq", "neq"].includes(filter.operator)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["operator"],
+        message: `${filter.field} supports eq/neq/in only`,
+      });
+    }
+  });
+
+export const querySortSchema = z
+  .object({
+    field: z.enum(FOOTBALL_SORT_FIELDS).default("value"),
+    direction: z.enum(["asc", "desc"]),
+  })
+  .strict();
+
 export const queryScopeSchema = z
   .object({
-    last_matches: z.number().int().min(1).max(20).optional(),
+    last_matches: z.number().int().min(1).max(MAX_QUERY_MATCHES).optional(),
+    // Legacy event-count field. Canonical presentation limiting is QueryPlan.limit.
     limit: z.number().int().min(1).max(50).optional(),
     date_from: z
       .string()
@@ -99,6 +210,10 @@ export const queryPlanSchema = z
     event_type: footballEventTypeSchema.optional(),
     aggregation: footballAggregationSchema.optional(),
     scope: queryScopeSchema.default({ venue: "all", half: "full" }),
+    filters: z.array(queryFilterSchema).max(12).default([]),
+    group_by: z.array(footballGroupByFieldSchema).max(3).default([]),
+    sort: querySortSchema.optional(),
+    limit: z.number().int().min(1).max(MAX_RESULT_ROWS).optional(),
     compare_with: queryEntitySchema.optional(),
   })
   .strict()
@@ -156,6 +271,26 @@ export const queryPlanSchema = z
         message: "date_to must not be earlier than date_from",
       });
     }
+
+    if (plan.group_by.length > 0 && plan.query_kind !== "aggregate") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["group_by"],
+        message: "group_by is currently executable only for aggregate",
+      });
+    }
+
+    if (
+      (plan.sort || plan.limit) &&
+      plan.group_by.length === 0 &&
+      plan.query_kind === "aggregate"
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sort"],
+        message: "aggregate sort/limit requires group_by; it never truncates the input sample",
+      });
+    }
   });
 
 export const queryPlanResponseSchema = z.union([
@@ -167,7 +302,11 @@ export type FootballEntityType = z.infer<typeof footballEntityTypeSchema>;
 export type FootballQueryKind = z.infer<typeof footballQueryKindSchema>;
 export type FootballEventType = z.infer<typeof footballEventTypeSchema>;
 export type FootballAggregation = z.infer<typeof footballAggregationSchema>;
+export type FootballFilterOperator = z.infer<typeof footballFilterOperatorSchema>;
+export type FootballFilterField = z.infer<typeof footballFilterFieldSchema>;
+export type FootballGroupByField = z.infer<typeof footballGroupByFieldSchema>;
 export type QueryEntity = z.infer<typeof queryEntitySchema>;
+export type QueryFilter = z.infer<typeof queryFilterSchema>;
 export type QueryScope = z.infer<typeof queryScopeSchema>;
 export type QueryPlan = z.infer<typeof queryPlanSchema>;
 export type QueryPlanResponse = z.infer<typeof queryPlanResponseSchema>;
@@ -182,7 +321,7 @@ export function queryPlanSignature(plan: QueryPlan): string {
     aggregation: plan.aggregation ?? null,
     scope: {
       last_matches: plan.scope.last_matches ?? null,
-      limit: plan.scope.limit ?? null,
+      event_limit: plan.scope.limit ?? null,
       date_from: plan.scope.date_from ?? null,
       date_to: plan.scope.date_to ?? null,
       season: plan.scope.season ?? null,
@@ -192,6 +331,10 @@ export function queryPlanSignature(plan: QueryPlan): string {
       half: plan.scope.half,
       status: plan.scope.status ?? null,
     },
+    filters: plan.filters,
+    group_by: plan.group_by,
+    sort: plan.sort ?? null,
+    limit: plan.limit ?? null,
     compare_with_type: plan.compare_with?.type ?? null,
   };
 
