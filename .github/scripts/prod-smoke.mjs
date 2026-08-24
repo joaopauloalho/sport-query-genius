@@ -41,12 +41,9 @@ try {
   console.log(`SMOKE_BASE_URL=${baseUrl}`);
   await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded", timeout: 60_000 });
 
-  const createAccountToggle = page.getByRole("button", { name: "Criar conta", exact: true });
-  await createAccountToggle.click();
-  await page.getByLabel("Nome").fill("Production Smoke");
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Senha").fill(password);
-  await page.getByRole("button", { name: "Criar conta", exact: true }).click();
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
 
   await page.waitForTimeout(4_000);
   const authBody = await page.locator("body").innerText();
