@@ -23,90 +23,28 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
+      - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      - name: Preserve Phase 2B fallback coverage
-        run: bun run test:phase2b
-
-      - name: Preserve Phase 3A cache coverage
-        run: bun run test:phase3a
-
-      - name: Preserve Phase 3B auth persistence coverage
-        run: bun run test:phase3b
-
-      - name: Preserve Phase 3C server protection coverage
-        run: bun run test:phase3c
-
-      - name: Preserve Phase 3D entity player coverage
-        run: bun run test:phase3d
-
-      - name: Preserve Phase 4A universal-plan coverage
-        run: bun run test:phase4a
-
-      - name: Preserve Phase 4B events matches H2H coverage
-        run: bun run test:phase4b
-
-      - name: Phase 4C universal team query tests
-        run: bun run test:phase4c
-
+      - name: Preserve all Phase 2B through 4C coverage
+        run: bun run test:phase2b && bun run test:phase3a && bun run test:phase3b && bun run test:phase3c && bun run test:phase3d && bun run test:phase4a && bun run test:phase4b && bun run test:phase4c
       - name: Typecheck
         run: bun run typecheck
-
       - name: Build
         env:
           SUPABASE_SECRET_KEY: phase4c-ci-server-secret-sentinel-do-not-expose
         run: bun run build
-
       - name: Prove server secret is absent from client bundle
         shell: bash
         run: |
           test -d .output/public
-          if grep -R -F 'phase4c-ci-server-secret-sentinel-do-not-expose' .output/public; then
-            echo 'Server-only Supabase secret value leaked into client bundle.' >&2
-            exit 1
-          fi
-          if grep -R -F 'SUPABASE_SECRET_KEY' .output/public; then
-            echo 'Server-only Supabase env name found in client bundle.' >&2
-            exit 1
-          fi
-
-      - name: Normalize lint-only regex escape
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('src/server/analysis/analyze-team-universal.server.ts')
-          text = path.read_text()
-          path.write_text(text.replace(r'[\/-]', r'[/-]'))
-          PY
-
-      - name: Lint Phase 4C files
-        run: >-
-          bunx eslint --fix
-          src/lib/analysis-request.ts
-          src/components/scoutly/smart-search.tsx
-          src/server/analysis/analyze.server.ts
-          src/server/analysis/analyze-team-universal.server.ts
-          src/server/analysis/deepseek-v4c.server.ts
-          src/server/analysis/query-plan.ts
-          src/server/analysis/query-plan-v4c-normalizer.ts
-          src/server/sports/team-query-capability.ts
-          tests/phase4c/engine.test.ts
-          tests/phase4c/query-plan.test.ts
-
-      - name: Verify lint after safe fixes
+          ! grep -R -F 'phase4c-ci-server-secret-sentinel-do-not-expose' .output/public
+          ! grep -R -F 'SUPABASE_SECRET_KEY' .output/public
+      - name: Lint Phase 4C files without mutation
         run: >-
           bunx eslint
           src/lib/analysis-request.ts
@@ -119,3 +57,5 @@ jobs:
           src/server/sports/team-query-capability.ts
           tests/phase4c/engine.test.ts
           tests/phase4c/query-plan.test.ts
+      - name: Prove workflow did not mutate tracked code
+        run: git diff --exit-code

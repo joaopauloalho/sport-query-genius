@@ -7,7 +7,10 @@ import {
   getSportsCacheRepository,
   withSportsCache,
 } from "@/server/sports/cache/sports-cache.server";
-import { resolveFootballCapability } from "@/server/sports/capability-registry";
+import {
+  canonicalizeCompetitionName,
+  competitionAliases,
+} from "@/server/sports/competition-season-registry";
 import { FilteredSportsDataProvider } from "@/server/sports/filtered-provider.server";
 import { getPhase3dSportsRepository } from "@/server/sports/phase3d-repository.server";
 import { FootballProviderOrchestrator } from "@/server/sports/provider-fallback.server";
@@ -22,13 +25,15 @@ import {
 } from "./analyze-player.server";
 import { isPhase4cUniversalTeamPlan } from "./analyze-team-universal.server";
 import { analyzeUniversalQueryPlan, isPhase4bUniversalPlan } from "./analyze-universal.server";
-import { parseUniversalQueryPlanWithDeepSeek } from "./deepseek-v4c.server";
+import { parseUniversalSemanticPlanWithDeepSeek } from "./deepseek-v5a.server";
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError, toSafeAnalysisError, type AnalysisPipelineOutcome } from "./errors";
+import { buildExecutionPlan } from "./execution-plan";
 import type { TeamAggregateIntentInput } from "./intent-schema";
 import { applyOverrides } from "./overrides";
 import { analyzePhase4cWithFreshnessFallback } from "./phase4c-freshness.server";
 import { queryPlanToLegacyIntent } from "./query-plan-adapter";
+import { calculateDeterministicTrend } from "./trend";
 
 const METRIC_LABELS = {
   corners: "Escanteios",
@@ -37,21 +42,6 @@ const METRIC_LABELS = {
   shots_on_target: "Finalizações no alvo",
   cards: "Cartões",
 } as const;
-
-const COMPETITION_ALIASES: Record<string, readonly string[]> = {
-  brasileirao: [
-    "Brasileirão Série A",
-    "Brasileirao Serie A",
-    "Brasileirão",
-    "Brasileirao",
-    "Campeonato Brasileiro Série A",
-    "Campeonato Brasileiro Serie A",
-    "Brazilian Serie A",
-  ],
-  laliga: ["La Liga", "LaLiga", "Primera División", "Primera Division"],
-  premier: ["Premier League"],
-  ucl: ["UEFA Champions League", "Champions League"],
-};
 
 const normalizeCompetition = (value: string) =>
   value
@@ -88,22 +78,23 @@ function createFootballOrchestrator(observer?: SportsCacheObserver): FootballPro
 
 function resolveCompetition(value: string | null): ResolvedCompetitionFilter {
   if (value === null) return { intentValue: null, providerNames: null };
-  const normalized = normalizeCompetition(value);
+  const canonical = canonicalizeCompetitionName(value);
+  const normalized = normalizeCompetition(canonical);
   const footballCompetitions = COMPETITIONS.filter(
     (competition) => competition.sport === "football",
   );
-  const known = footballCompetitions.find((competition) => {
-    if (normalizeCompetition(competition.id) === normalized) return true;
-    if (normalizeCompetition(competition.name) === normalized) return true;
-    return (COMPETITION_ALIASES[competition.id] ?? []).some(
-      (alias) => normalizeCompetition(alias) === normalized,
-    );
-  });
-  if (!known) return { intentValue: value, providerNames: [value] };
-  const aliases = COMPETITION_ALIASES[known.id] ?? [known.name];
+  const known = footballCompetitions.find(
+    (competition) =>
+      normalizeCompetition(competition.id) === normalized ||
+      normalizeCompetition(competition.name) === normalized ||
+      normalizeCompetition(canonicalizeCompetitionName(competition.name)) === normalized,
+  );
+  if (!known) return { intentValue: canonical, providerNames: [...competitionAliases(canonical)] };
   return {
     intentValue: known.id,
-    providerNames: Array.from(new Set([known.name, ...aliases])),
+    providerNames: Array.from(
+      new Set([known.name, ...competitionAliases(known.name), ...competitionAliases(canonical)]),
+    ),
   };
 }
 
@@ -120,18 +111,18 @@ export async function analyzeQuestionServer(
   observer?: SportsCacheObserver,
 ): Promise<AnalysisPipelineOutcome> {
   try {
-    const queryPlan = await parseUniversalQueryPlanWithDeepSeek(request.question);
-    const capability = resolveFootballCapability(queryPlan);
-    if (!capability.supported) {
+    const semanticPlan = await parseUniversalSemanticPlanWithDeepSeek(request.question);
+    const executionPlan = buildExecutionPlan(semanticPlan);
+    const queryPlan = executionPlan.query_plan;
+    const capability = executionPlan.negotiation.capability;
+    if (!capability) {
       throw new AnalysisPipelineError(
         "UNSUPPORTED_CAPABILITY",
-        capability.reason ?? "A combinação solicitada não está registrada no motor universal.",
+        "A capability não pôde ser materializada no ExecutionPlan.",
       );
     }
 
-    // Phase 4C owns team aggregate/match-list semantics. It runs before the legacy stage gate
-    // because several score-derived metrics were intentionally marked "planned" only while
-    // the legacy 1/3/5/10/15/20 adapter was still the executor.
+    // Phase 5A truth-gates the entire semantic request before any executor is selected.
     if (isPhase4cUniversalTeamPlan(queryPlan)) {
       const result = await analyzePhase4cWithFreshnessFallback({
         question: request.question,
@@ -139,10 +130,16 @@ export async function analyzeQuestionServer(
         overrides: request.overrides,
         observer,
       });
+      if (result.result_type === "aggregate") {
+        result.statistics.trend = calculateDeterministicTrend(
+          result.chart_data.map((point) => point.value),
+        );
+      }
       return { ok: true, result };
     }
 
     if (isPhase4bUniversalPlan(queryPlan)) {
+      // Defensive checks remain even though capability negotiation already fail-closes them.
       if (
         queryPlan.filters.length ||
         queryPlan.group_by.length ||
@@ -151,7 +148,7 @@ export async function analyzeQuestionServer(
       ) {
         throw new AnalysisPipelineError(
           "UNSUPPORTED_CAPABILITY",
-          `Filtros/group_by/sort/limit foram compreendidos, mas ${queryPlan.query_kind} ainda não executa essas operações na Phase 4B.`,
+          `Filtros/group_by/sort/limit foram compreendidos, mas ${queryPlan.query_kind} ainda não executa essas operações.`,
         );
       }
       if (capability.stage !== "implemented") {
@@ -176,7 +173,7 @@ export async function analyzeQuestionServer(
     ) {
       throw new AnalysisPipelineError(
         "UNSUPPORTED_CAPABILITY",
-        "Filtros, agrupamento, ordenação e limit de apresentação para jogador já fazem parte do QueryPlan, mas ainda não são executados pelo adapter de jogador desta subfase.",
+        "Filtros, agrupamento, ordenação e limit de apresentação para jogador foram compreendidos, mas ainda não são executados pelo adapter atual.",
       );
     }
 
@@ -202,7 +199,7 @@ export async function analyzeQuestionServer(
       return { ok: true, result };
     }
 
-    // Kept as a compatibility fallback for any old team intent not yet routed through Phase 4C.
+    // Compatibility fallback for old team intents not yet routed through the universal executor.
     const orchestrator = createFootballOrchestrator(observer);
     const selection = await orchestrator.selectTeamFixtures(
       effectiveIntent.entity_name,

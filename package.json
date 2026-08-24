@@ -18,6 +18,9 @@
     "test:phase4a": "bun test tests/phase4a",
     "test:phase4b": "bun test tests/phase4b",
     "test:phase4c": "bun test tests/phase4c",
+    "test:phase5a": "bun test tests/genius",
+    "benchmark:genius": "bun run tests/genius/benchmark.ts",
+    "test:all": "bun run test:phase2b && bun run test:phase3a && bun run test:phase3b && bun run test:phase3c && bun run test:phase3d && bun run test:phase4a && bun run test:phase4b && bun run test:phase4c && bun run test:phase5a",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -87,7 +90,6 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
-    "nitro": "3.0.260603-beta",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
