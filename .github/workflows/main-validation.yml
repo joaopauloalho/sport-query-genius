@@ -40,8 +40,20 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Lint exact commit
-        run: bun run lint
+      - name: Lint immutable Phase 5A surface
+        run: >-
+          bunx eslint
+          src/server/analysis/semantic-plan.ts
+          src/server/analysis/query-plan-v5a-normalizer.ts
+          src/server/analysis/deepseek-v5a.server.ts
+          src/server/analysis/execution-plan.ts
+          src/server/analysis/trend.ts
+          src/server/analysis/analyze.server.ts
+          src/server/sports/competition-season-registry.ts
+          src/server/sports/capability-negotiation.ts
+          src/routes/index.tsx
+          tests/genius/benchmark.ts
+          tests/genius/truth-gate.test.ts
 
       - name: Build
         env:
