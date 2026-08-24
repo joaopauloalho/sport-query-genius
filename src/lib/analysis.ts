@@ -115,13 +115,13 @@ export interface EventListAnalysisResult {
 
 export type AnalysisResult = AggregateAnalysisResult | EventListAnalysisResult;
 
-export function isEventListAnalysisResult(result: AnalysisResult): result is EventListAnalysisResult {
+export function isEventListAnalysisResult(
+  result: AnalysisResult,
+): result is EventListAnalysisResult {
   return result.result_type === "event_list";
 }
 
-export type AnalysisOutcome =
-  | { ok: true; result: AnalysisResult }
-  | { ok: false; reason: string };
+export type AnalysisOutcome = { ok: true; result: AnalysisResult } | { ok: false; reason: string };
 
 const normalize = (s: string) =>
   s
@@ -166,8 +166,20 @@ export function parseIntent(question: string): QueryIntent | null {
   const q = normalize(question);
 
   const entities = [
-    ...TEAMS.map((t) => ({ id: t.id, name: t.name, type: "team" as const, sport: "football" as SportId, competitionId: t.competitionId })),
-    ...PLAYERS.map((p) => ({ id: p.id, name: p.name, type: "player" as const, sport: p.sport, competitionId: p.competitionId })),
+    ...TEAMS.map((t) => ({
+      id: t.id,
+      name: t.name,
+      type: "team" as const,
+      sport: "football" as SportId,
+      competitionId: t.competitionId,
+    })),
+    ...PLAYERS.map((p) => ({
+      id: p.id,
+      name: p.name,
+      type: "player" as const,
+      sport: p.sport,
+      competitionId: p.competitionId,
+    })),
   ];
 
   const found = entities
@@ -178,14 +190,14 @@ export function parseIntent(question: string): QueryIntent | null {
   if (found.length === 0) return null;
 
   const primary = found[0].e;
-  const secondary = found.find((x) => x.e.id !== primary.id && x.e.type === primary.type)?.e ?? null;
+  const secondary =
+    found.find((x) => x.e.id !== primary.id && x.e.type === primary.type)?.e ?? null;
   const sport = primary.sport;
   const metrics = getSport(sport).metrics;
   const metric: MetricDef =
     metrics.find((m) => m.aliases.some((a) => q.includes(normalize(a)))) ?? metrics[0];
   const countMatch =
-    q.match(/(?:ultim[oa]s?|last)\s+(\d{1,3})/) ??
-    q.match(/(\d{1,3})\s*(?:jogos|partidas|games)/);
+    q.match(/(?:ultim[oa]s?|last)\s+(\d{1,3})/) ?? q.match(/(\d{1,3})\s*(?:jogos|partidas|games)/);
   const match_count = Math.min(50, Math.max(3, countMatch ? parseInt(countMatch[1], 10) : 10));
   const venue: QueryIntent["venue"] = /fora de casa|visitante|away/.test(q)
     ? "away"

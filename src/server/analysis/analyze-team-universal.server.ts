@@ -16,10 +16,7 @@ import {
   type TeamMetricExecutionPlan,
 } from "@/server/sports/team-query-capability";
 import { createUniversalFootballSources } from "@/server/sports/universal-provider.server";
-import type {
-  ProviderReadMeta,
-  UniversalFootballSource,
-} from "@/server/sports/universal-football";
+import type { ProviderReadMeta, UniversalFootballSource } from "@/server/sports/universal-football";
 
 import { aggregateNumericValues, aggregateRatio } from "./aggregation";
 import { AnalysisPipelineError } from "./errors";
@@ -151,7 +148,9 @@ function normalizeText(value: string): string {
 
 function canonicalCompetitionOverride(value: string): string {
   const normalized = normalizeText(value);
-  if (["brasileirao", "brasileirao serie a", "campeonato brasileiro serie a"].includes(normalized)) {
+  if (
+    ["brasileirao", "brasileirao serie a", "campeonato brasileiro serie a"].includes(normalized)
+  ) {
     return "Brasileirão Série A";
   }
   if (["premier", "premier league"].includes(normalized)) return "Premier League";
@@ -219,10 +218,11 @@ function seasonWindow(
     return { date_from: `${year}-01-01`, date_to: `${year}-12-31` };
   }
 
-  const split = value.match(/^(\d{4})\s*[\/-]\s*(\d{2}|\d{4})$/);
+  const split = value.match(/^(\d{4})\s*[/-]\s*(\d{2}|\d{4})$/);
   if (split) {
     const start = Number(split[1]);
-    const end = split[2].length === 2 ? Math.floor(start / 100) * 100 + Number(split[2]) : Number(split[2]);
+    const end =
+      split[2].length === 2 ? Math.floor(start / 100) * 100 + Number(split[2]) : Number(split[2]);
     if (end === start + 1) {
       return { date_from: `${start}-07-01`, date_to: `${end}-06-30` };
     }
@@ -233,9 +233,7 @@ function seasonWindow(
 
 function executionScope(plan: QueryPlan): QueryScope {
   const status = plan.scope.status ?? "finished";
-  const window = plan.scope.season
-    ? seasonWindow(plan.scope.season, plan.scope.competition)
-    : null;
+  const window = plan.scope.season ? seasonWindow(plan.scope.season, plan.scope.competition) : null;
   if (plan.scope.season && !window) {
     throw new AnalysisPipelineError(
       "UNSUPPORTED_FILTER",
@@ -287,7 +285,10 @@ function fixtureInsideScope(
 ): boolean {
   if (scope.status && scope.status !== "finished") return false;
   if (scope.venue !== "all" && row.venue !== scope.venue) return false;
-  if (scope.competition && !competitionNamesEquivalent(scope.competition, row.fixture.competition)) {
+  if (
+    scope.competition &&
+    !competitionNamesEquivalent(scope.competition, row.fixture.competition)
+  ) {
     return false;
   }
   if (opponent) {
@@ -300,7 +301,10 @@ function fixtureInsideScope(
   return true;
 }
 
-function filterFieldValue(row: ScoreRow, field: QueryFilter["field"]): string | number | boolean | null {
+function filterFieldValue(
+  row: ScoreRow,
+  field: QueryFilter["field"],
+): string | number | boolean | null {
   if (field === "outcome") return row.outcome;
   if (field === "goals_for") return row.goalsFor;
   if (field === "goals_against") return row.goalsAgainst;
@@ -391,9 +395,11 @@ function metricValue(row: ScoreRow, metric: FootballMetric): number | null {
   if (metric === "losses") return row.outcome === null ? null : row.outcome === "loss" ? 1 : 0;
   if (metric === "points") return row.points;
   if (metric === "win_rate") return row.outcome === null ? null : row.outcome === "win" ? 1 : 0;
-  if (metric === "unbeaten_rate") return row.outcome === null ? null : row.outcome !== "loss" ? 1 : 0;
+  if (metric === "unbeaten_rate")
+    return row.outcome === null ? null : row.outcome !== "loss" ? 1 : 0;
   if (metric === "clean_sheets") return row.cleanSheet === null ? null : row.cleanSheet ? 1 : 0;
-  if (metric === "failed_to_score") return row.failedToScore === null ? null : row.failedToScore ? 1 : 0;
+  if (metric === "failed_to_score")
+    return row.failedToScore === null ? null : row.failedToScore ? 1 : 0;
   if (metric === "both_teams_scored") {
     return row.bothTeamsScored === null ? null : row.bothTeamsScored ? 1 : 0;
   }
@@ -451,14 +457,19 @@ function aggregateMetric(
   return { value: result.value, known: result.coverage.known, missing: result.coverage.missing };
 }
 
-function groupDimensions(row: ScoreRow, fields: readonly FootballGroupByField[], scope: QueryScope) {
+function groupDimensions(
+  row: ScoreRow,
+  fields: readonly FootballGroupByField[],
+  scope: QueryScope,
+) {
   const dimensions: Partial<Record<FootballGroupByField, string>> = {};
   for (const field of fields) {
     if (field === "venue") dimensions[field] = row.venue === "home" ? "Casa" : "Fora";
     else if (field === "competition") dimensions[field] = row.fixture.competition;
     else if (field === "opponent") dimensions[field] = row.opponent;
     else if (field === "outcome") {
-      dimensions[field] = row.outcome === "win" ? "Vitória" : row.outcome === "draw" ? "Empate" : "Derrota";
+      dimensions[field] =
+        row.outcome === "win" ? "Vitória" : row.outcome === "draw" ? "Empate" : "Derrota";
     } else if (field === "month") dimensions[field] = row.fixture.date.slice(0, 7);
     else if (field === "year") dimensions[field] = row.fixture.date.slice(0, 4);
     else if (field === "season") dimensions[field] = scope.season ?? row.fixture.date.slice(0, 4);
@@ -466,11 +477,17 @@ function groupDimensions(row: ScoreRow, fields: readonly FootballGroupByField[],
   return dimensions;
 }
 
-function groupKey(dimensions: Partial<Record<FootballGroupByField, string>>, fields: readonly FootballGroupByField[]) {
+function groupKey(
+  dimensions: Partial<Record<FootballGroupByField, string>>,
+  fields: readonly FootballGroupByField[],
+) {
   return fields.map((field) => `${field}:${dimensions[field] ?? "-"}`).join("|");
 }
 
-function formatGroupLabel(dimensions: Partial<Record<FootballGroupByField, string>>, fields: readonly FootballGroupByField[]) {
+function formatGroupLabel(
+  dimensions: Partial<Record<FootballGroupByField, string>>,
+  fields: readonly FootballGroupByField[],
+) {
   return fields.map((field) => dimensions[field] ?? "-").join(" · ");
 }
 
@@ -487,7 +504,14 @@ function fixtureSummary(row: ScoreRow, source: UniversalFootballSource): Analysi
     opponent: row.opponent,
     venue: row.venue,
     result: `${row.fixture.goals.home ?? "-"}-${row.fixture.goals.away ?? "-"}`,
-    outcome: row.outcome === "win" ? "V" : row.outcome === "draw" ? "E" : row.outcome === "loss" ? "D" : null,
+    outcome:
+      row.outcome === "win"
+        ? "V"
+        : row.outcome === "draw"
+          ? "E"
+          : row.outcome === "loss"
+            ? "D"
+            : null,
     source: source.name,
   };
 }
@@ -506,20 +530,22 @@ function matchRecord(row: ScoreRow, value: number, source: UniversalFootballSour
   };
 }
 
-function combineMeta(base: ProviderReadMeta, metricPlan: TeamMetricExecutionPlan): ProviderReadMeta {
+function combineMeta(
+  base: ProviderReadMeta,
+  metricPlan: TeamMetricExecutionPlan,
+): ProviderReadMeta {
   return {
     ...base,
     dataFamily:
-      metricPlan.kind === "derived" ? `${base.dataFamily} + fixture_score` : `${base.dataFamily} + fixture_stats`,
+      metricPlan.kind === "derived"
+        ? `${base.dataFamily} + fixture_score`
+        : `${base.dataFamily} + fixture_stats`,
     endpoint:
       metricPlan.kind === "derived" ? base.endpoint : `${base.endpoint} + fixture statistics`,
   };
 }
 
-async function resolveRows(params: {
-  source: UniversalFootballSource;
-  plan: QueryPlan;
-}): Promise<{
+async function resolveRows(params: { source: UniversalFootballSource; plan: QueryPlan }): Promise<{
   team: ResolvedTeam;
   rows: ScoreRow[];
   meta: ProviderReadMeta;
@@ -540,7 +566,11 @@ async function resolveRows(params: {
   const scoped = read.fixtures
     .map((fixture) => scoreRow(fixture, team))
     .filter((row) => fixtureInsideScope(row, scope, opponent));
-  const selected = selectScopeRows(scoped, { ...scope, season: plan.scope.season }, plan.scope.last_matches);
+  const selected = selectScopeRows(
+    scoped,
+    { ...scope, season: plan.scope.season },
+    plan.scope.last_matches,
+  );
 
   if (selected.length === 0) {
     throw new AnalysisPipelineError(
@@ -614,7 +644,10 @@ function groupRows(params: {
   limit: number | undefined;
 }): GroupedAggregateRow[] {
   if (params.fields.length === 0) return [];
-  const grouped = new Map<string, { dimensions: Partial<Record<FootballGroupByField, string>>; values: (number | null)[] }>();
+  const grouped = new Map<
+    string,
+    { dimensions: Partial<Record<FootballGroupByField, string>>; values: (number | null)[] }
+  >();
   params.rows.forEach((row, index) => {
     const dimensions = groupDimensions(row, params.fields, params.scope);
     const key = groupKey(dimensions, params.fields);
@@ -623,7 +656,7 @@ function groupRows(params: {
     grouped.set(key, current);
   });
 
-  let result = [...grouped.values()].map((entry) => {
+  const result = [...grouped.values()].map((entry) => {
     const aggregate = aggregateMetric(params.metric, params.aggregation, entry.values);
     if (aggregate.value === null) {
       throw new AnalysisPipelineError(
@@ -642,7 +675,8 @@ function groupRows(params: {
   if (params.sort) {
     const direction = params.sort.direction === "asc" ? 1 : -1;
     result.sort((left, right) => {
-      if (params.sort?.field === "sample_size") return (left.sample_size - right.sample_size) * direction;
+      if (params.sort?.field === "sample_size")
+        return (left.sample_size - right.sample_size) * direction;
       if (params.sort?.field === "group") return left.key.localeCompare(right.key) * direction;
       return (left.value - right.value) * direction;
     });
@@ -665,7 +699,10 @@ async function analyzeAggregate(params: {
 }): Promise<Phase4cTeamAggregateResult> {
   const { question, plan, source } = params;
   if (!plan.metric || !plan.aggregation) {
-    throw new AnalysisPipelineError("QUESTION_NOT_UNDERSTOOD", "Aggregate exige métrica e agregação.");
+    throw new AnalysisPipelineError(
+      "QUESTION_NOT_UNDERSTOOD",
+      "Aggregate exige métrica e agregação.",
+    );
   }
   if (plan.scope.half !== "full") {
     throw new AnalysisPipelineError(
@@ -797,14 +834,20 @@ async function analyzeAggregate(params: {
     },
     statistics: buildStatistics(knownValues),
     chart_data: filtered.map((row, index) => ({
-      label: new Date(row.fixture.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+      label: new Date(row.fixture.date).toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+      }),
       value: knownValues[index],
       opponent: row.opponent,
       venue: row.venue === "home" ? "Casa" : "Fora",
     })),
     matches: [...matches].reverse(),
     insights: groups.length
-      ? groups.map((group) => `${formatGroupLabel(group.dimensions, plan.group_by)}: ${group.value} (${group.sample_size} jogos).`)
+      ? groups.map(
+          (group) =>
+            `${formatGroupLabel(group.dimensions, plan.group_by)}: ${group.value} (${group.sample_size} jogos).`,
+        )
       : [`A amostra efetiva contém ${filtered.length} partidas após scope e filtros.`],
     related: [
       `Compare ${label.toLowerCase()} de ${resolved.team.name} em casa e fora`,
@@ -852,7 +895,8 @@ async function analyzeMatchList(params: {
     fetched_at: resolved.meta.fetchedAt,
     cache_status: resolved.meta.cacheStatus,
     sample_size: limited.length,
-    missing_values: limited.filter((row) => row.goalsFor === null || row.goalsAgainst === null).length,
+    missing_values: limited.filter((row) => row.goalsFor === null || row.goalsAgainst === null)
+      .length,
     resolved_entity_ids: [String(resolved.team.id)],
     competition: params.plan.scope.competition ?? null,
     season: params.plan.scope.season ?? null,
@@ -871,7 +915,11 @@ async function analyzeMatchList(params: {
       `Qual foi a média de gols sofridos do ${resolved.team.name} nessa amostra?`,
       `Em quantos desses jogos o ${resolved.team.name} não sofreu gol?`,
     ],
-    source: { provider: params.source.name, updated_at: resolved.meta.fetchedAt, missing: provenance.missing_values },
+    source: {
+      provider: params.source.name,
+      updated_at: resolved.meta.fetchedAt,
+      missing: provenance.missing_values,
+    },
     provenance,
     demo: false,
   };

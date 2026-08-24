@@ -44,11 +44,7 @@ function competitionAllowed(value: string, names?: readonly string[] | null): bo
   return names.some((name) => competitionKey(name) === target);
 }
 
-async function bestEffort<T>(
-  operation: string,
-  fallback: T,
-  run: () => Promise<T>,
-): Promise<T> {
+async function bestEffort<T>(operation: string, fallback: T, run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (error) {

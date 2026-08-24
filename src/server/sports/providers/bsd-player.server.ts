@@ -40,7 +40,10 @@ function readNumber(record: Record<string, unknown>, keys: readonly string[]): n
   return null;
 }
 
-function nested(record: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> | null {
+function nested(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+): Record<string, unknown> | null {
   for (const key of keys) {
     const found = asRecord(record[key]);
     if (found) return found;
@@ -69,7 +72,9 @@ function collectRecords(payload: unknown, depth = 0): Record<string, unknown>[] 
   if (Array.isArray(payload)) {
     return payload.flatMap((value) => {
       const record = asRecord(value);
-      return record ? [record, ...collectRecords(record, depth + 1)] : collectRecords(value, depth + 1);
+      return record
+        ? [record, ...collectRecords(record, depth + 1)]
+        : collectRecords(value, depth + 1);
     });
   }
   const record = asRecord(payload);
@@ -94,7 +99,8 @@ function readDate(record: Record<string, unknown>): { date: string; timestamp: n
   if (unix !== null) {
     const ms = unix > 10_000_000_000 ? unix : unix * 1000;
     const date = new Date(ms);
-    if (!Number.isNaN(date.getTime())) return { date: date.toISOString(), timestamp: Math.floor(ms / 1000) };
+    if (!Number.isNaN(date.getTime()))
+      return { date: date.toISOString(), timestamp: Math.floor(ms / 1000) };
   }
   return null;
 }
@@ -115,7 +121,9 @@ function readScore(record: Record<string, unknown>, side: "home" | "away"): numb
   const direct = readNumber(record, [`${side}_score`, `${side}_goals`, `score_${side}`]);
   if (direct !== null) return direct;
   const score = nested(record, ["score", "scores"]);
-  return score ? readNumber(score, [side, `${side}_score`, `${side}_goals`, `full_time_${side}`]) : null;
+  return score
+    ? readNumber(score, [side, `${side}_score`, `${side}_goals`, `full_time_${side}`])
+    : null;
 }
 
 function readCompetition(record: Record<string, unknown>): string {
@@ -161,7 +169,8 @@ function playerFromRecord(raw: Record<string, unknown>): ResolvedPlayer | null {
     readString(playerRecord, ["name", "player_name", "short_name"]) ??
     readString(raw, ["player_name"]);
   if (id === null || !name) return null;
-  const team = nested(raw, ["team", "current_team"]) ?? nested(playerRecord, ["team", "current_team"]);
+  const team =
+    nested(raw, ["team", "current_team"]) ?? nested(playerRecord, ["team", "current_team"]);
   return {
     id,
     name,
@@ -199,7 +208,10 @@ function playerStatFromRecord(
   if (fixtureId === null || !when) return null;
 
   const rowTeam = nested(raw, ["team", "club"]);
-  const teamId = (rowTeam ? readNumber(rowTeam, ["id", "team_id"]) : null) ?? readNumber(raw, ["team_id"]) ?? player.teamId;
+  const teamId =
+    (rowTeam ? readNumber(rowTeam, ["id", "team_id"]) : null) ??
+    readNumber(raw, ["team_id"]) ??
+    player.teamId;
   const teamName =
     (rowTeam ? readString(rowTeam, ["name", "team_name"]) : null) ??
     readString(raw, ["team_name", "club_name"]) ??
@@ -235,12 +247,13 @@ function playerStatFromRecord(
   const result =
     homeGoals !== null && awayGoals !== null
       ? `${homeGoals}-${awayGoals}`
-      : readString(raw, ["result", "score"]) ?? "";
+      : (readString(raw, ["result", "score"]) ?? "");
 
   const yellow = readNumber(raw, ["yellow_cards", "yellow_card", "cards_yellow"]);
   const red = readNumber(raw, ["red_cards", "red_card", "cards_red"]);
   const directCards = readNumber(raw, ["cards", "total_cards"]);
-  const cards = directCards ?? (yellow !== null || red !== null ? (yellow ?? 0) + (red ?? 0) : null);
+  const cards =
+    directCards ?? (yellow !== null || red !== null ? (yellow ?? 0) + (red ?? 0) : null);
 
   return {
     fixtureId,
@@ -290,7 +303,10 @@ function findShotmap(payload: unknown, depth = 0): Record<string, unknown>[] | n
 
 function shotPlayerId(shot: Record<string, unknown>): number | null {
   const player = nested(shot, ["player"]);
-  return readNumber(shot, ["player_id", "playerId"]) ?? (player ? readNumber(player, ["id", "player_id"]) : null);
+  return (
+    readNumber(shot, ["player_id", "playerId"]) ??
+    (player ? readNumber(player, ["id", "player_id"]) : null)
+  );
 }
 
 function shotType(shot: Record<string, unknown>): string {
@@ -298,17 +314,25 @@ function shotType(shot: Record<string, unknown>): string {
 }
 
 function isShootout(shot: Record<string, unknown>): boolean {
-  const situation = (readString(shot, ["situation", "incident_type", "period"]) ?? "").toLowerCase();
+  const situation = (
+    readString(shot, ["situation", "incident_type", "period"]) ?? ""
+  ).toLowerCase();
   return situation.includes("shootout") || situation.includes("penalty shootout");
 }
 
 export class BsdPlayerProvider implements PlayerSportsDataProvider {
   readonly name = "BSD";
 
-  private async request(path: string, params: Record<string, string | number> = {}): Promise<unknown> {
+  private async request(
+    path: string,
+    params: Record<string, string | number> = {},
+  ): Promise<unknown> {
     const apiKey = process.env.BSD_FOOTBALL_KEY;
     if (!apiKey) {
-      throw new AnalysisPipelineError("PROVIDER_UNAVAILABLE", "A BSD Football API não está configurada no servidor.");
+      throw new AnalysisPipelineError(
+        "PROVIDER_UNAVAILABLE",
+        "A BSD Football API não está configurada no servidor.",
+      );
     }
     const url = new URL(`${BSD_BASE_URL}${path}`);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
@@ -317,28 +341,50 @@ export class BsdPlayerProvider implements PlayerSportsDataProvider {
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let response: Response;
     try {
-      response = await fetch(url, { headers: { Authorization: `Token ${apiKey}` }, signal: controller.signal });
+      response = await fetch(url, {
+        headers: { Authorization: `Token ${apiKey}` },
+        signal: controller.signal,
+      });
     } catch {
-      throw new AnalysisPipelineError("PROVIDER_UNAVAILABLE", "A BSD Football API não respondeu à consulta de jogador.");
+      throw new AnalysisPipelineError(
+        "PROVIDER_UNAVAILABLE",
+        "A BSD Football API não respondeu à consulta de jogador.",
+      );
     } finally {
       clearTimeout(timeout);
     }
 
-    if (response.status === 401) throw new AnalysisPipelineError("PROVIDER_UNAVAILABLE", "A chave da BSD Football API não foi aceita.");
-    if (response.status === 429) throw new AnalysisPipelineError("API_LIMIT_REACHED", "O limite de requisições da BSD Football API foi atingido.");
+    if (response.status === 401)
+      throw new AnalysisPipelineError(
+        "PROVIDER_UNAVAILABLE",
+        "A chave da BSD Football API não foi aceita.",
+      );
+    if (response.status === 429)
+      throw new AnalysisPipelineError(
+        "API_LIMIT_REACHED",
+        "O limite de requisições da BSD Football API foi atingido.",
+      );
     if (!response.ok) {
-      throw new AnalysisPipelineError("PROVIDER_UNAVAILABLE", `A BSD Football API falhou ao consultar ${path} (HTTP ${response.status}).`);
+      throw new AnalysisPipelineError(
+        "PROVIDER_UNAVAILABLE",
+        `A BSD Football API falhou ao consultar ${path} (HTTP ${response.status}).`,
+      );
     }
     try {
       return (await response.json()) as unknown;
     } catch {
-      throw new AnalysisPipelineError("PROVIDER_UNAVAILABLE", "A BSD Football API retornou uma resposta de jogador inválida.");
+      throw new AnalysisPipelineError(
+        "PROVIDER_UNAVAILABLE",
+        "A BSD Football API retornou uma resposta de jogador inválida.",
+      );
     }
   }
 
   async resolvePlayer(name: string): Promise<ResolvedPlayer> {
     const payload = await this.request("/players/", { name, limit: 20 });
-    const players = extractList(payload).map(playerFromRecord).filter((player): player is ResolvedPlayer => player !== null);
+    const players = extractList(payload)
+      .map(playerFromRecord)
+      .filter((player): player is ResolvedPlayer => player !== null);
     const candidates: EntityCandidate[] = players.map((player) => ({
       id: player.id,
       name: player.name,
@@ -359,10 +405,17 @@ export class BsdPlayerProvider implements PlayerSportsDataProvider {
       );
     }
     if (resolution.status !== "resolved") {
-      throw new AnalysisPipelineError("PLAYER_NOT_FOUND", `Não encontramos o jogador "${name}" na BSD Football API.`);
+      throw new AnalysisPipelineError(
+        "PLAYER_NOT_FOUND",
+        `Não encontramos o jogador "${name}" na BSD Football API.`,
+      );
     }
     const player = players.find((candidate) => candidate.id === resolution.candidate.id);
-    if (!player) throw new AnalysisPipelineError("PLAYER_NOT_FOUND", `Não encontramos o jogador "${name}" na BSD Football API.`);
+    if (!player)
+      throw new AnalysisPipelineError(
+        "PLAYER_NOT_FOUND",
+        `Não encontramos o jogador "${name}" na BSD Football API.`,
+      );
     return player;
   }
 
@@ -370,7 +423,11 @@ export class BsdPlayerProvider implements PlayerSportsDataProvider {
     const payload = await this.request(`/players/${playerId}/`);
     const root = asRecord(payload);
     const player = root ? playerFromRecord(root) : null;
-    if (!player) throw new AnalysisPipelineError("PLAYER_NOT_FOUND", `O jogador ${playerId} não foi encontrado na BSD Football API.`);
+    if (!player)
+      throw new AnalysisPipelineError(
+        "PLAYER_NOT_FOUND",
+        `O jogador ${playerId} não foi encontrado na BSD Football API.`,
+      );
     return player;
   }
 
@@ -409,7 +466,9 @@ export class BsdPlayerProvider implements PlayerSportsDataProvider {
     if (!shotmap || shotmap.length === 0) {
       return { coverage: false, shots: null, shotsOnTarget: null };
     }
-    const playerShots = shotmap.filter((shot) => shotPlayerId(shot) === playerId && !isShootout(shot));
+    const playerShots = shotmap.filter(
+      (shot) => shotPlayerId(shot) === playerId && !isShootout(shot),
+    );
     const shotsOnTarget = playerShots.filter((shot) => {
       const type = shotType(shot);
       return type === "goal" || type === "save" || type === "saved" || type === "on target";
@@ -427,7 +486,8 @@ export class BsdPlayerProvider implements PlayerSportsDataProvider {
 
     const events: PlayerGoalEvent[] = [];
     for (const [index, shot] of shotmap.entries()) {
-      if (shotPlayerId(shot) !== playerId || isShootout(shot) || shotType(shot) !== "goal") continue;
+      if (shotPlayerId(shot) !== playerId || isShootout(shot) || shotType(shot) !== "goal")
+        continue;
       const parsedMinute = parseMinute(shot.min ?? shot.minute ?? shot.time);
       const minute = parsedMinute.minute;
       const extraTime = parsedMinute.extraTime ?? readNumber(shot, ["extra_time", "added_time"]);

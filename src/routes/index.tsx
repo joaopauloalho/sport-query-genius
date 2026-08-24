@@ -87,11 +87,19 @@ function Landing() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <Logo />
           <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
-            <a href="#funciona" className="transition-colors hover:text-foreground">Funciona hoje</a>
-            <a href="#como-funciona" className="transition-colors hover:text-foreground">Como funciona</a>
-            <a href="#limites" className="transition-colors hover:text-foreground">Limites atuais</a>
+            <a href="#funciona" className="transition-colors hover:text-foreground">
+              Funciona hoje
+            </a>
+            <a href="#como-funciona" className="transition-colors hover:text-foreground">
+              Como funciona
+            </a>
+            <a href="#limites" className="transition-colors hover:text-foreground">
+              Limites atuais
+            </a>
           </nav>
-          <Button size="sm" asChild><Link to="/app">Abrir análise</Link></Button>
+          <Button size="sm" asChild>
+            <Link to="/app">Abrir análise</Link>
+          </Button>
         </div>
       </header>
 
@@ -105,16 +113,22 @@ function Landing() {
               Analise futebol sem <span className="text-gradient">horas de pesquisa</span>.
             </h1>
             <p className="animate-rise mx-auto mt-5 max-w-2xl text-base text-pretty text-muted-foreground sm:text-lg">
-              Faça uma pergunta e receba números calculados sobre partidas reais, com escopo, fonte e amostra identificados.
+              Faça uma pergunta e receba números calculados sobre partidas reais, com escopo, fonte
+              e amostra identificados.
             </p>
             <div className="animate-rise mt-8 flex flex-wrap justify-center gap-3">
               <Button size="lg" className="gap-2" asChild>
-                <Link to="/app">Fazer uma análise <ArrowRight className="size-4" /></Link>
+                <Link to="/app">
+                  Fazer uma análise <ArrowRight className="size-4" />
+                </Link>
               </Button>
-              <Button size="lg" variant="outline" asChild><a href="#funciona">Ver o que funciona</a></Button>
+              <Button size="lg" variant="outline" asChild>
+                <a href="#funciona">Ver o que funciona</a>
+              </Button>
             </div>
             <p className="mt-5 text-sm text-muted-foreground">
-              Conta e sincronização em nuvem já estão disponíveis. Cobrança e pagamentos continuam fora desta fase.
+              Conta e sincronização em nuvem já estão disponíveis. Cobrança e pagamentos continuam
+              fora desta fase.
             </p>
           </div>
         </section>
@@ -124,7 +138,8 @@ function Landing() {
             <div className="text-center">
               <h2 className="text-3xl font-bold">O que funciona hoje</h2>
               <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
-                A superfície do produto mostra capacidades conectadas ao motor real e explicita quando algo ainda não pode ser executado.
+                A superfície do produto mostra capacidades conectadas ao motor real e explicita
+                quando algo ainda não pode ser executado.
               </p>
             </div>
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -132,7 +147,9 @@ function Landing() {
                 <div key={capability.title} className="surface-card p-5">
                   <capability.icon className="size-5 text-primary" />
                   <h3 className="mt-4 text-base font-semibold">{capability.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{capability.text}</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                    {capability.text}
+                  </p>
                 </div>
               ))}
             </div>
@@ -145,13 +162,17 @@ function Landing() {
               <Newspaper className="size-7 text-primary" />
               <h2 className="mt-4 text-3xl font-bold">Do texto ao número verificável</h2>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                A inteligência artificial interpreta a intenção. A estatística final não é inventada por ela: o cálculo acontece no backend sobre dados estruturados dos providers disponíveis.
+                A inteligência artificial interpreta a intenção. A estatística final não é inventada
+                por ela: o cálculo acontece no backend sobre dados estruturados dos providers
+                disponíveis.
               </p>
             </div>
             <ol className="surface-card space-y-4 p-6">
               {FLOW.map((step, index) => (
                 <li key={step} className="flex items-start gap-3 text-sm">
-                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">{index + 1}</span>
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                    {index + 1}
+                  </span>
                   <span className="pt-0.5 text-muted-foreground">{step}</span>
                 </li>
               ))}
@@ -163,15 +184,23 @@ function Landing() {
           <div className="mx-auto max-w-5xl">
             <div className="surface-card border-primary/20 p-6 sm:p-8">
               <h2 className="text-2xl font-bold">Limites atuais, sem esconder o que falta</h2>
-              <p className="mt-2 text-sm text-muted-foreground">Estes recursos ficam fora da experiência principal até possuírem implementação real adequada.</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Estes recursos ficam fora da experiência principal até possuírem implementação real
+                adequada.
+              </p>
               <ul className="mt-6 grid gap-3 sm:grid-cols-2">
                 {LIMITATIONS.map((item) => (
                   <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <Check className="mt-0.5 size-4 shrink-0 text-lime" />{item}
+                    <Check className="mt-0.5 size-4 shrink-0 text-lime" />
+                    {item}
                   </li>
                 ))}
               </ul>
-              <Button className="mt-7 gap-2" asChild><Link to="/app">Abrir o que já funciona <ArrowRight className="size-4" /></Link></Button>
+              <Button className="mt-7 gap-2" asChild>
+                <Link to="/app">
+                  Abrir o que já funciona <ArrowRight className="size-4" />
+                </Link>
+              </Button>
             </div>
           </div>
         </section>

@@ -24,14 +24,24 @@ type GeniusCase = {
   expected: Expected;
 };
 
-const teams = ["Corinthians", "Palmeiras", "Flamengo", "Benfica", "Arsenal", "Barcelona", "Bayern", "Inter"];
+const teams = [
+  "Corinthians",
+  "Palmeiras",
+  "Flamengo",
+  "Benfica",
+  "Arsenal",
+  "Barcelona",
+  "Bayern",
+  "Inter",
+];
 const metrics = ["goals_for", "corners", "shots", "shots_on_target"];
 const aggregations = ["average", "total", "median"];
 const venues = ["all", "home", "away"] as const;
 const naturalTemplates = [
   (team: string, metric: string) => `qual a média de ${metric} do ${team}?`,
   (team: string, metric: string) => `${team} ${metric} ultimos jogos`,
-  (team: string, metric: string) => `Me mostre, por favor, o desempenho de ${metric} do ${team} nas partidas recentes.`,
+  (team: string, metric: string) =>
+    `Me mostre, por favor, o desempenho de ${metric} do ${team} nas partidas recentes.`,
   (team: string, metric: string) => `qto de ${metric} o ${team} tem?`,
 ];
 
@@ -42,7 +52,12 @@ function baseRaw(team: string, metric: string, aggregation: string, venue: strin
     query_kind: "aggregate",
     metric,
     aggregation,
-    scope: { last_matches: [3, 5, 10, 20, 50, 100][index % 6], venue, half: "full", status: "finished" },
+    scope: {
+      last_matches: [3, 5, 10, 20, 50, 100][index % 6],
+      venue,
+      half: "full",
+      status: "finished",
+    },
     filters: [],
     group_by: [],
   };
@@ -83,10 +98,18 @@ export function buildGeniusCorpus(): GeniusCase[] {
             metric,
             aggregation: "average",
             scope: { last_matches: 30, venue: "all", half: "full", status: "finished" },
-            filters: [{ field: "resultado", operator: "eq", value: canonicalOutcomes[outcomeIndex] }],
+            filters: [
+              { field: "resultado", operator: "eq", value: canonicalOutcomes[outcomeIndex] },
+            ],
             group_by: [],
           },
-          expected: { supported: true, query_kind: "aggregate", metric, aggregation: "average", filter_field: "outcome" },
+          expected: {
+            supported: true,
+            query_kind: "aggregate",
+            metric,
+            aggregation: "average",
+            filter_field: "outcome",
+          },
         });
       }
     }
@@ -97,9 +120,14 @@ export function buildGeniusCorpus(): GeniusCase[] {
       id: "required-outcome-win",
       question: "Qual a média de escanteios do Corinthians nos jogos em que venceu?",
       raw: {
-        sport: "football", entity: { type: "team", name: "Corinthians" }, query_kind: "aggregate",
-        metric: "corners", aggregation: "average", scope: { venue: "all", half: "full", status: "finished" },
-        filters: [{ field: "resultado", operator: "eq", value: "venceu" }], group_by: [],
+        sport: "football",
+        entity: { type: "team", name: "Corinthians" },
+        query_kind: "aggregate",
+        metric: "corners",
+        aggregation: "average",
+        scope: { venue: "all", half: "full", status: "finished" },
+        filters: [{ field: "resultado", operator: "eq", value: "venceu" }],
+        group_by: [],
       },
       expected: { supported: true, metric: "corners", filter_field: "outcome" },
     },
@@ -107,9 +135,14 @@ export function buildGeniusCorpus(): GeniusCase[] {
       id: "required-possession-filter",
       question: "Qual a média de gols nos jogos em que teve mais de 60% de posse?",
       raw: {
-        sport: "football", entity: { type: "team", name: "Corinthians" }, query_kind: "aggregate",
-        metric: "goals_for", aggregation: "average", scope: { venue: "all", half: "full", status: "finished" },
-        filters: [{ field: "posse", operator: "maior que", value: 60 }], group_by: [],
+        sport: "football",
+        entity: { type: "team", name: "Corinthians" },
+        query_kind: "aggregate",
+        metric: "goals_for",
+        aggregation: "average",
+        scope: { venue: "all", half: "full", status: "finished" },
+        filters: [{ field: "posse", operator: "maior que", value: 60 }],
+        group_by: [],
       },
       expected: { supported: false, metric: "goals_for", filter_field: "possession" },
     },
@@ -117,9 +150,14 @@ export function buildGeniusCorpus(): GeniusCase[] {
       id: "required-home-away",
       question: "Compare casa e fora",
       raw: {
-        sport: "football", entity: { type: "team", name: "Corinthians" }, query_kind: "aggregate",
-        metric: "goals_for", aggregation: "average", scope: { venue: "all", half: "full", status: "finished" },
-        filters: [], group_by: ["casa e fora"],
+        sport: "football",
+        entity: { type: "team", name: "Corinthians" },
+        query_kind: "aggregate",
+        metric: "goals_for",
+        aggregation: "average",
+        scope: { venue: "all", half: "full", status: "finished" },
+        filters: [],
+        group_by: ["casa e fora"],
       },
       expected: { supported: true, group_by: "venue" },
     },
@@ -127,9 +165,16 @@ export function buildGeniusCorpus(): GeniusCase[] {
       id: "required-top-opponents",
       question: "Mostre os 5 adversários contra quem teve maior média de gols",
       raw: {
-        sport: "football", entity: { type: "team", name: "Corinthians" }, query_kind: "aggregate",
-        metric: "goals_for", aggregation: "average", scope: { venue: "all", half: "full", status: "finished" },
-        filters: [], group_by: ["adversario"], sort: { field: "value", direction: "desc" }, limit: 5,
+        sport: "football",
+        entity: { type: "team", name: "Corinthians" },
+        query_kind: "aggregate",
+        metric: "goals_for",
+        aggregation: "average",
+        scope: { venue: "all", half: "full", status: "finished" },
+        filters: [],
+        group_by: ["adversario"],
+        sort: { field: "value", direction: "desc" },
+        limit: 5,
       },
       expected: { supported: true, group_by: "opponent", sort_direction: "desc", limit: 5 },
     },
@@ -137,9 +182,14 @@ export function buildGeniusCorpus(): GeniusCase[] {
       id: "required-current-season",
       question: "Temporada atual do Benfica",
       raw: {
-        sport: "football", entity: { type: "team", name: "Benfica" }, query_kind: "aggregate",
-        metric: "goals_for", aggregation: "average", scope: { season: "current", venue: "all", half: "full", status: "finished" },
-        filters: [], group_by: [],
+        sport: "football",
+        entity: { type: "team", name: "Benfica" },
+        query_kind: "aggregate",
+        metric: "goals_for",
+        aggregation: "average",
+        scope: { season: "current", venue: "all", half: "full", status: "finished" },
+        filters: [],
+        group_by: [],
       },
       expected: { supported: false },
     },
@@ -147,8 +197,14 @@ export function buildGeniusCorpus(): GeniusCase[] {
       id: "required-metric-no-executor",
       question: "Qual a média de posse do Corinthians?",
       raw: {
-        sport: "football", entity: { type: "team", name: "Corinthians" }, query_kind: "aggregate",
-        metric: "possession", aggregation: "average", scope: { venue: "all", half: "full", status: "finished" }, filters: [], group_by: [],
+        sport: "football",
+        entity: { type: "team", name: "Corinthians" },
+        query_kind: "aggregate",
+        metric: "possession",
+        aggregation: "average",
+        scope: { venue: "all", half: "full", status: "finished" },
+        filters: [],
+        group_by: [],
       },
       expected: { supported: false, metric: "possession" },
     },
@@ -156,9 +212,14 @@ export function buildGeniusCorpus(): GeniusCase[] {
       id: "required-unknown-filter",
       question: "Média de gols quando a pressão alta passou de 7",
       raw: {
-        sport: "football", entity: { type: "team", name: "Corinthians" }, query_kind: "aggregate",
-        metric: "goals_for", aggregation: "average", scope: { venue: "all", half: "full", status: "finished" },
-        filters: [{ field: "pressao alta", operator: "gt", value: 7 }], group_by: [],
+        sport: "football",
+        entity: { type: "team", name: "Corinthians" },
+        query_kind: "aggregate",
+        metric: "goals_for",
+        aggregation: "average",
+        scope: { venue: "all", half: "full", status: "finished" },
+        filters: [{ field: "pressao alta", operator: "gt", value: 7 }],
+        group_by: [],
       },
       expected: { supported: false, filter_field: "pressao_alta" },
     },
@@ -166,8 +227,14 @@ export function buildGeniusCorpus(): GeniusCase[] {
       id: "required-unknown-group",
       question: "Agrupe a média de gols pela era do árbitro",
       raw: {
-        sport: "football", entity: { type: "team", name: "Corinthians" }, query_kind: "aggregate",
-        metric: "goals_for", aggregation: "average", scope: { venue: "all", half: "full", status: "finished" }, filters: [], group_by: ["arbitro era"],
+        sport: "football",
+        entity: { type: "team", name: "Corinthians" },
+        query_kind: "aggregate",
+        metric: "goals_for",
+        aggregation: "average",
+        scope: { venue: "all", half: "full", status: "finished" },
+        filters: [],
+        group_by: ["arbitro era"],
       },
       expected: { supported: false, group_by: "arbitro_era" },
     },
@@ -207,19 +274,24 @@ export function runGeniusBenchmark() {
     if (semanticsOk) semanticCorrect += 1;
     else failures.push(`${testCase.id}: semantic mismatch`);
 
-    if (testCase.expected.filter_field && semantic.query.filters.length === 0) silentSemanticLoss += 1;
+    if (testCase.expected.filter_field && semantic.query.filters.length === 0)
+      silentSemanticLoss += 1;
     if (testCase.expected.group_by && semantic.query.group_by.length === 0) silentSemanticLoss += 1;
 
     const decision = negotiateFootballCapability(semantic);
     if (decision.supported === testCase.expected.supported) capabilityCorrect += 1;
-    else failures.push(`${testCase.id}: capability expected ${testCase.expected.supported} got ${decision.supported}`);
+    else
+      failures.push(
+        `${testCase.id}: capability expected ${testCase.expected.supported} got ${decision.supported}`,
+      );
     if (!testCase.expected.supported) {
       unsupportedExpected += 1;
       if (!decision.supported) unsupportedCorrect += 1;
     }
   }
 
-  const percent = (value: number, total: number) => (total ? Math.round((value / total) * 10000) / 100 : 100);
+  const percent = (value: number, total: number) =>
+    total ? Math.round((value / total) * 10000) / 100 : 100;
   return {
     total: corpus.length,
     semantic_correct: semanticCorrect,
