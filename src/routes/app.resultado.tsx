@@ -57,17 +57,18 @@ export const Route = createFileRoute("/app/resultado")({
         ? search.competition.trim()
         : undefined;
     const venue = parseVenue(search.venue);
+    const invalidMatchCount =
+      rawMatchCount !== undefined &&
+      rawMatchCount !== null &&
+      rawMatchCount !== "" &&
+      !match_count;
 
     return {
       q: String(search.q ?? ""),
-      match_count,
-      competition,
-      venue,
-      invalid_match_count:
-        rawMatchCount !== undefined &&
-        rawMatchCount !== null &&
-        rawMatchCount !== "" &&
-        !match_count,
+      ...(match_count !== undefined ? { match_count } : {}),
+      ...(competition !== undefined ? { competition } : {}),
+      ...(venue !== undefined ? { venue } : {}),
+      ...(invalidMatchCount ? { invalid_match_count: true as const } : {}),
     };
   },
   head: () => ({
