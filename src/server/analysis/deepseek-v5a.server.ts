@@ -7,11 +7,7 @@ import {
   FOOTBALL_GROUP_BY_FIELDS,
   FOOTBALL_QUERY_KINDS,
 } from "./query-plan";
-import {
-  createSemanticPlan,
-  semanticPlanResponseSchema,
-  type SemanticPlan,
-} from "./semantic-plan";
+import { createSemanticPlan, semanticPlanResponseSchema, type SemanticPlan } from "./semantic-plan";
 import { normalizeTruthfulSemanticCandidate } from "./query-plan-v5a-normalizer";
 import { FOOTBALL_METRIC_KEYS } from "../sports/metric-catalog";
 
@@ -62,7 +58,9 @@ ${FOOTBALL_METRIC_KEYS.join(", ")}.
 Se não conseguir identificar com segurança a estrutura central da pergunta, retorne exatamente {"error":"question_not_understood"}.
 Retorne somente JSON válido.`;
 
-type DeepSeekResponse = { choices?: Array<{ finish_reason?: string; message?: { content?: string | null } }> };
+type DeepSeekResponse = {
+  choices?: Array<{ finish_reason?: string; message?: { content?: string | null } }>;
+};
 
 async function requestJson(question: string, apiKey: string): Promise<unknown> {
   const controller = new AbortController();
@@ -85,38 +83,58 @@ async function requestJson(question: string, apiKey: string): Promise<unknown> {
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new AnalysisPipelineError("DEEPSEEK_ERROR", `O DeepSeek retornou uma falha de serviço (HTTP ${response.status}).`);
+      throw new AnalysisPipelineError(
+        "DEEPSEEK_ERROR",
+        `O DeepSeek retornou uma falha de serviço (HTTP ${response.status}).`,
+      );
     }
     const payload = (await response.json()) as DeepSeekResponse;
     const choice = payload.choices?.[0];
     const content = choice?.message?.content;
     if (!content || choice?.finish_reason === "length") {
-      throw new AnalysisPipelineError("INVALID_DEEPSEEK_OUTPUT", "O DeepSeek retornou um SemanticPlan vazio ou incompleto.");
+      throw new AnalysisPipelineError(
+        "INVALID_DEEPSEEK_OUTPUT",
+        "O DeepSeek retornou um SemanticPlan vazio ou incompleto.",
+      );
     }
     try {
       return JSON.parse(content) as unknown;
     } catch {
-      throw new AnalysisPipelineError("INVALID_DEEPSEEK_OUTPUT", "O DeepSeek retornou JSON inválido.");
+      throw new AnalysisPipelineError(
+        "INVALID_DEEPSEEK_OUTPUT",
+        "O DeepSeek retornou JSON inválido.",
+      );
     }
   } catch (error) {
     if (error instanceof AnalysisPipelineError) throw error;
-    throw new AnalysisPipelineError("DEEPSEEK_ERROR", "O DeepSeek não respondeu à interpretação semântica.");
+    throw new AnalysisPipelineError(
+      "DEEPSEEK_ERROR",
+      "O DeepSeek não respondeu à interpretação semântica.",
+    );
   } finally {
     clearTimeout(timeout);
   }
 }
 
 /** Phase 5A deliberately has no semantic-repair pass: malformed output fails closed instead of being silently simplified. */
-export async function parseUniversalSemanticPlanWithDeepSeek(question: string): Promise<SemanticPlan> {
+export async function parseUniversalSemanticPlanWithDeepSeek(
+  question: string,
+): Promise<SemanticPlan> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) throw new AnalysisPipelineError("DEEPSEEK_ERROR", "A integração com o DeepSeek não está configurada no servidor.");
+  if (!apiKey)
+    throw new AnalysisPipelineError(
+      "DEEPSEEK_ERROR",
+      "A integração com o DeepSeek não está configurada no servidor.",
+    );
 
   const raw = await requestJson(question, apiKey);
   const normalized = normalizeTruthfulSemanticCandidate(raw);
   const parsed = semanticPlanResponseSchema.safeParse(normalized);
   if (!parsed.success) {
     console.warn("[deepseek-semantic-plan-v5a] validation failed", {
-      issues: parsed.error.issues.slice(0, 12).map((issue) => ({ path: issue.path.join("."), code: issue.code })),
+      issues: parsed.error.issues
+        .slice(0, 12)
+        .map((issue) => ({ path: issue.path.join("."), code: issue.code })),
     });
     throw new AnalysisPipelineError(
       "INVALID_DEEPSEEK_OUTPUT",
