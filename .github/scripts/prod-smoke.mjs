@@ -53,7 +53,8 @@ try {
   }
   console.log(`AUTH_PASS email=${email}`);
 
-  for (const question of questions) {
+  for (let index = 0; index < questions.length; index += 1) {
+    const question = questions[index];
     const target = `${baseUrl}/app/resultado?q=${encodeURIComponent(question)}`;
     await page.goto(target, { waitUntil: "domcontentloaded", timeout: 60_000 });
 
@@ -75,6 +76,11 @@ try {
 
     const compact = body.replace(/\s+/g, " ").slice(0, 600);
     console.log(`QUERY_PASS|${question}|${compact}`);
+
+    if (index < questions.length - 1) {
+      console.log("WAIT_FOR_CONCURRENCY_GUARD=35s");
+      await page.waitForTimeout(35_000);
+    }
   }
 
   console.log(`SMOKE_PASS questions=${questions.length}`);
