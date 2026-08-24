@@ -14,16 +14,7 @@ export type EntityResolution =
   | { status: "ambiguous"; candidates: ScoredEntityCandidate[] }
   | { status: "not_found"; candidates: ScoredEntityCandidate[] };
 
-const CLUB_TERMS = new Set([
-  "fc",
-  "afc",
-  "cf",
-  "sc",
-  "club",
-  "clube",
-  "football",
-  "futebol",
-]);
+const CLUB_TERMS = new Set(["fc", "afc", "cf", "sc", "club", "clube", "football", "futebol"]);
 
 const PARTICLES = new Set(["de", "do", "da", "dos", "das", "del", "di"]);
 
@@ -77,7 +68,10 @@ export function scoreFootballEntityName(query: string, candidate: string): numbe
       ? 0.03
       : 0;
 
-  return Math.min(0.97, 0.52 * coverage + 0.28 * precision + 0.16 * jaccard + sameFirstToken + contained);
+  return Math.min(
+    0.97,
+    0.52 * coverage + 0.28 * precision + 0.16 * jaccard + sameFirstToken + contained,
+  );
 }
 
 function isShortGenericQuery(query: string): boolean {

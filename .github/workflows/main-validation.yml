@@ -1,0 +1,77 @@
+name: Main Truth Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-truth-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Frozen install
+        run: bun install --frozen-lockfile
+
+      - name: All regression suites
+        run: bun run test:all
+
+      - name: Genius Benchmark
+        run: bun run benchmark:genius
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint immutable Phase 5A surface
+        run: >-
+          bunx eslint
+          src/server/analysis/semantic-plan.ts
+          src/server/analysis/query-plan-v5a-normalizer.ts
+          src/server/analysis/deepseek-v5a.server.ts
+          src/server/analysis/execution-plan.ts
+          src/server/analysis/trend.ts
+          src/server/analysis/analyze.server.ts
+          src/server/sports/competition-season-registry.ts
+          src/server/sports/capability-negotiation.ts
+          src/routes/index.tsx
+          tests/genius/benchmark.ts
+          tests/genius/truth-gate.test.ts
+
+      - name: Build
+        env:
+          SUPABASE_SECRET_KEY: phase5a-ci-server-secret-sentinel-do-not-expose
+        run: bun run build
+
+      - name: Prove server secret is absent from client bundle
+        shell: bash
+        run: |
+          test -d .output/public
+          if grep -R -F 'phase5a-ci-server-secret-sentinel-do-not-expose' .output/public; then
+            echo 'Server-only Supabase secret value leaked into client bundle.' >&2
+            exit 1
+          fi
+          if grep -R -F 'SUPABASE_SECRET_KEY' .output/public; then
+            echo 'Server-only Supabase env name found in client bundle.' >&2
+            exit 1
+          fi
+
+      - name: Prove validation did not mutate tracked code
+        run: git diff --exit-code

@@ -1,8 +1,4 @@
-import type {
-  AggregateAnalysisResult,
-  AnalysisStatistics,
-  QueryIntent,
-} from "@/lib/analysis";
+import type { AggregateAnalysisResult, AnalysisStatistics, QueryIntent } from "@/lib/analysis";
 import { buildCacheKey } from "@/lib/analysis";
 import { calculateStatistics, calculateTrend } from "@/lib/statistics";
 import type { MatchRecord } from "@/data/sports";
@@ -17,11 +13,7 @@ const METRIC_META = {
 
 function buildSummary(intent: QueryIntent, statistics: AnalysisStatistics, unit: string): string {
   const venueLabel =
-    intent.venue === "home"
-      ? " como mandante"
-      : intent.venue === "away"
-        ? " fora de casa"
-        : "";
+    intent.venue === "home" ? " como mandante" : intent.venue === "away" ? " fora de casa" : "";
 
   if (intent.aggregation === "total") {
     return `${intent.entity_name} somou ${statistics.total} ${unit}${venueLabel} nos últimos ${statistics.sample_size} jogos analisados.`;

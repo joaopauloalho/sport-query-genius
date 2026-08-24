@@ -1,29 +1,38 @@
 # Football provider capability matrix
 
-Validated against the provider documentation on 2026-08-23. This document records data capabilities; it does not imply that every catalogued field is already executable by the product.
+Validated against the provider documentation on 2026-08-24. This document records data capabilities; it does not imply that every catalogued field is executable by the product.
 
 | Capability | BSD | API-Football | Engine status |
 | --- | --- | --- | --- |
-| Fixture scores / team fixtures | `/events/`, team fixtures | `/fixtures` | Implemented, provider-backed, cached |
-| Fixture statistics | `/events/{event_id}/stats/` | `/fixtures/statistics` | Implemented for the validated raw subset; catalog is broader |
+| Fixture scores / team fixtures | `/events/` | `/fixtures` | Implemented, provider-backed, cached |
+| Fixture statistics | `/events/{event_id}/stats/` | `/fixtures/statistics` | Implemented for validated raw subset; broader catalog remains gated |
 | Incidents / events | `/events/{event_id}/incidents/` | `/fixtures/events` | Implemented for team event list |
-| Player match statistics | player stats + event player stats | player/fixture statistics capabilities documented | BSD path implemented for current player executor |
-| Shotmap / per-shot detail | event stats shotmap, including per-shot xG when supplied | no equivalent required by current fallback | BSD goal enrichment implemented |
-| Standings | league standings by season | `/standings` | Registered; execution still capability-gated |
-| Lineups | event lineups | `/fixtures/lineups` | Registered; execution still capability-gated |
-| Squads | team squad | `/players/squads` | Registered; execution still capability-gated |
-| Head-to-head | provider supports match H2H; current engine can derive from fixtures | H2H/fixtures capability available | Implemented deterministically from reconciled fixture history |
+| Player match statistics | player stats + event player stats | player/fixture statistics documented | BSD path implemented for current player executor |
+| Shotmap / per-shot detail | event stats shotmap | not required by current fallback | BSD goal enrichment implemented |
+| Standings | league standings by real `season_id` | `/standings` | Registered; execution still gated |
+| Lineups | event lineups | `/fixtures/lineups` | Registered; execution still gated |
+| Squads | team squad | `/players/squads` | Registered; execution still gated |
+| Head-to-head | provider H2H available; current engine derives from fixtures | fixtures/H2H available | Implemented deterministically from reconciled fixture history |
+| Competition seasons | `/leagues/{id}/seasons/` and `/leagues/{id}/season/` | `/leagues`, including seasons/current/coverage | Canonical model added in Phase 5A; runtime resolver still pending |
 
-## Phase 4C execution policy
+## Phase 5A truth policy
 
-The universal team executor plans the minimum data family before fetching:
+The runtime path is now:
 
-- `fixture_score`: `goals_for`, `goals_against`, goal difference, W/D/L, points, win/unbeaten rate, clean sheets, failed to score and both teams scored. These are derived deterministically from the fixture score and never require a statistics endpoint.
-- `fixture_stats`: currently validated in the universal adapter for corners, shots, shots on target and cards. Other catalogued metrics remain capability-gated until their provider-field mapping is exercised against real payloads.
-- `incidents`: team event lists remain in the Phase 4B executor.
-- `player_match_stats`: player aggregate/event behavior remains in the Phase 3D path in this subphase.
+`SemanticPlan -> capability negotiation -> ExecutionPlan -> deterministic executor`.
 
-Null is not zero. Aggregate queries require complete metric coverage for the effective sample in Phase 4C; otherwise they return `DATA_INSUFFICIENT` with the known/total coverage rather than estimating missing values.
+Semantic constraints are preserved before executable validation. A recognized but non-executable filter, group, sort, metric, scope or season fails closed with an explicit unsupported error; it is never converted into a simpler query.
+
+For seasons, the previous calendar-window heuristic is no longer trusted by the Phase 5A gate. BSD explicitly exposes real season identifiers plus start/end/current metadata, and its documentation recommends resolving the current season through the API instead of hardcoding season ids. API-Football exposes competition seasons and coverage through `/leagues`. Until the provider-backed `CompetitionSeasonResolver` is wired into runtime, a season without explicit user date bounds is rejected instead of assuming January-December or July-June.
+
+## Phase 4C data-family policy retained
+
+- `fixture_score`: goals for/against, goal difference, W/D/L, points, win/unbeaten rate, clean sheets, failed to score and both teams scored are derived deterministically from scores.
+- `fixture_stats`: validated universal adapter subset is corners, shots, shots on target and cards.
+- `incidents`: team event lists stay provider-backed and deterministic.
+- `player_match_stats`: current player aggregate/event behavior remains on the existing player executor.
+
+Null is not zero. Aggregate queries require complete metric coverage for the effective sample; otherwise they return `DATA_INSUFFICIENT` rather than estimating missing values.
 
 ## Provider references
 

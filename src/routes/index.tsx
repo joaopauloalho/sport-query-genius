@@ -17,16 +17,16 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Scoutly AI — Análise real de equipes de futebol" },
+      { title: "Scoutly AI — Análise real de futebol" },
       {
         name: "description",
         content:
-          "Faça perguntas em linguagem natural sobre equipes de futebol e receba análises com dados reais, filtros, gráficos, partidas e fontes identificadas.",
+          "Faça perguntas em linguagem natural sobre futebol e receba análises com dados reais, filtros, gráficos, partidas e fontes identificadas.",
       },
-      { property: "og:title", content: "Scoutly AI — Análise real de equipes de futebol" },
+      { property: "og:title", content: "Scoutly AI — Análise real de futebol" },
       {
         property: "og:description",
-        content: "Análises de equipes de futebol com dados reais, filtros e fontes identificadas.",
+        content: "Análises de futebol com dados reais, filtros e fontes identificadas.",
       },
     ],
   }),
@@ -37,17 +37,17 @@ const CAPABILITIES = [
   {
     icon: Sparkles,
     title: "Perguntas em linguagem natural",
-    text: "Descreva a equipe e a métrica que quer analisar sem montar consultas técnicas.",
+    text: "Descreva a equipe, jogador, métrica ou evento que quer analisar sem montar consultas técnicas.",
   },
   {
     icon: Filter,
     title: "Filtros reais",
-    text: "Use períodos de 5, 10, 15 ou 20 partidas, competição e mando de campo.",
+    text: "Use de 1 a 100 partidas quando fizer sentido, além de competição, mando e filtros suportados pelo Truth Gate.",
   },
   {
     icon: BarChart3,
     title: "Cálculo determinístico",
-    text: "Médias, totais, medianas e tendências são calculados sobre as partidas qualificadas.",
+    text: "Médias, totais, medianas e tendências são calculados sobre as partidas qualificadas no backend.",
   },
   {
     icon: Table2,
@@ -67,17 +67,17 @@ const CAPABILITIES = [
 ];
 
 const FLOW = [
-  "A pergunta é interpretada no servidor.",
-  "Os filtros explícitos da interface prevalecem sobre a inferência.",
+  "A pergunta vira um SemanticPlan que preserva filtros, agrupamentos, ordenação e escopo.",
+  "O Truth Gate negocia capabilities e recusa explicitamente qualquer parte ainda não executável.",
   "BSD é usado como provider principal quando configurado, com fallback controlado para API-Football.",
-  "O backend calcula o resultado e devolve amostra, gráfico, tabela, fonte e eventuais erros sem preencher lacunas com mock.",
+  "O backend calcula o resultado e devolve amostra, fonte e eventuais erros sem preencher lacunas com mock.",
 ];
 
 const LIMITATIONS = [
-  "O backend real atual cobre análises de equipes de futebol.",
-  "Jogadores, tênis e basquete ainda não estão disponíveis.",
-  "Explorar, perfis navegáveis de equipes e listagem de jogos aguardam integrações reais próprias.",
-  "Cobrança, pagamentos e planos pagos ainda não foram implementados.",
+  "O motor universal real atual está concentrado em futebol.",
+  "Agregados de jogadores e eventos de gol já funcionam; perfis e consultas mais amplas de jogadores ainda estão em expansão.",
+  "Temporadas sem datas explícitas falham fechadas até a resolução provider-backed de CompetitionSeason estar completa.",
+  "Odds, previsões, cobrança, pagamentos e planos pagos continuam fora desta fase.",
 ];
 
 function Landing() {
@@ -110,18 +110,16 @@ function Landing() {
               <ShieldCheck className="size-3.5" /> Dados reais · futebol
             </span>
             <h1 className="animate-rise mt-6 text-4xl leading-[1.08] font-bold text-balance sm:text-6xl">
-              Analise equipes de futebol sem{" "}
-              <span className="text-gradient">horas de pesquisa</span>.
+              Analise futebol sem <span className="text-gradient">horas de pesquisa</span>.
             </h1>
             <p className="animate-rise mx-auto mt-5 max-w-2xl text-base text-pretty text-muted-foreground sm:text-lg">
-              Faça uma pergunta, escolha período, competição e mando e receba números calculados
-              sobre partidas reais, com fonte e amostra identificadas.
+              Faça uma pergunta e receba números calculados sobre partidas reais, com escopo, fonte
+              e amostra identificados.
             </p>
             <div className="animate-rise mt-8 flex flex-wrap justify-center gap-3">
               <Button size="lg" className="gap-2" asChild>
                 <Link to="/app">
-                  Fazer uma análise
-                  <ArrowRight className="size-4" />
+                  Fazer uma análise <ArrowRight className="size-4" />
                 </Link>
               </Button>
               <Button size="lg" variant="outline" asChild>
@@ -140,8 +138,8 @@ function Landing() {
             <div className="text-center">
               <h2 className="text-3xl font-bold">O que funciona hoje</h2>
               <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
-                A superfície do produto mostra somente capacidades conectadas ao motor real de
-                análise.
+                A superfície do produto mostra capacidades conectadas ao motor real e explicita
+                quando algo ainda não pode ser executado.
               </p>
             </div>
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -200,8 +198,7 @@ function Landing() {
               </ul>
               <Button className="mt-7 gap-2" asChild>
                 <Link to="/app">
-                  Abrir o que já funciona
-                  <ArrowRight className="size-4" />
+                  Abrir o que já funciona <ArrowRight className="size-4" />
                 </Link>
               </Button>
             </div>
@@ -212,10 +209,7 @@ function Landing() {
       <footer className="border-t border-border/60 px-4 py-8 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 text-center text-xs text-muted-foreground sm:flex-row sm:justify-between sm:text-left">
           <Logo />
-          <p>
-            Scoutly AI — análises reais de equipes de futebol com fonte, filtros e amostra
-            explícitos.
-          </p>
+          <p>Scoutly AI — análises reais de futebol com fonte, filtros e amostra explícitos.</p>
         </div>
       </footer>
     </div>

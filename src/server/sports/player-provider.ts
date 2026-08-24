@@ -88,10 +88,7 @@ export function playerParticipated(stat: PlayerFixtureStat): boolean {
   return false;
 }
 
-export function playerMetricValue(
-  stat: PlayerFixtureStat,
-  metric: PlayerMetric,
-): number | null {
+export function playerMetricValue(stat: PlayerFixtureStat, metric: PlayerMetric): number | null {
   if (metric === "goals") return stat.goals;
   if (metric === "shots") return stat.shots;
   if (metric === "shots_on_target") return stat.shotsOnTarget;

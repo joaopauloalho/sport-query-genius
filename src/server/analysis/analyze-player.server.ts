@@ -14,10 +14,7 @@ import { BsdPlayerProvider } from "@/server/sports/providers/bsd-player-enriched
 
 import { buildRealAnalysisResult } from "./engine.server";
 import { AnalysisPipelineError } from "./errors";
-import type {
-  PlayerAggregateIntentInput,
-  PlayerEventListIntentInput,
-} from "./intent-schema";
+import type { PlayerAggregateIntentInput, PlayerEventListIntentInput } from "./intent-schema";
 
 const PLAYER_METRIC_LABELS = {
   goals: "Gols marcados",
@@ -61,11 +58,7 @@ function buildMatchRecord(
 }
 
 function createPlayerService(observer?: SportsCacheObserver): PlayerDataService {
-  return new PlayerDataService(
-    new BsdPlayerProvider(),
-    getPhase3dSportsRepository(),
-    observer,
-  );
+  return new PlayerDataService(new BsdPlayerProvider(), getPhase3dSportsRepository(), observer);
 }
 
 export async function analyzePlayerAggregate(params: {
@@ -117,7 +110,9 @@ export async function analyzePlayerAggregate(params: {
     competition: params.competition.intentValue,
     venue: "all",
   };
-  const matches = hydrated.map((stat) => buildMatchRecord(stat, params.intent.metric as PlayerMetric));
+  const matches = hydrated.map((stat) =>
+    buildMatchRecord(stat, params.intent.metric as PlayerMetric),
+  );
   const result = buildRealAnalysisResult({
     question: params.question,
     intent,
