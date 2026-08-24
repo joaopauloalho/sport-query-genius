@@ -1,0 +1,54 @@
+name: Phase 5A Format Diagnostic
+
+on:
+  push:
+    branches:
+      - chore/phase5a-format-closeout
+
+permissions:
+  contents: read
+
+jobs:
+  format-diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Render formatted copies without mutating checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            src/lib/analysis.ts
+            src/server/analysis/analyze-player.server.ts
+            src/server/analysis/engine.server.ts
+            src/server/analysis/analyze-team-universal.server.ts
+            src/server/analysis/deepseek-v4c.server.ts
+            src/server/analysis/query-plan-v4c-normalizer.ts
+            src/server/sports/alias-aware-provider.server.ts
+            src/server/sports/entity-resolver.ts
+            src/server/sports/phase3d-repository.server.ts
+            src/server/sports/player-data-service.server.ts
+            src/server/sports/player-provider.ts
+            src/server/sports/providers/bsd-football-v2.server.ts
+            src/server/sports/providers/bsd-player.server.ts
+            tests/phase3d/entity-player.test.mjs
+            tests/phase4c/engine.test.ts
+          )
+          for file in "${files[@]}"; do
+            mkdir -p "formatted/$(dirname "$file")"
+            bunx prettier "$file" > "formatted/$file"
+          done
+          printf '%s\n' "${files[@]}" > formatted/manifest.txt
+      - name: Prove checkout is unchanged
+        run: git diff --exit-code
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase5a-formatted-copies
+          path: formatted
+          if-no-files-found: error
