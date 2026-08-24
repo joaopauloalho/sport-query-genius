@@ -47,12 +47,23 @@ const COMPETITIONS = new Map<string, string>([
   ["conmebol libertadores", "Copa Libertadores"],
 ]);
 
+const METRICS = new Map<string, string>([
+  ["gols sofridos", "goals_against"],
+  ["gols tomados", "goals_against"],
+  ["gols levados", "goals_against"],
+  ["goals against", "goals_against"],
+  ["goals conceded", "goals_against"],
+]);
+
 function normalizeCompetition(value: unknown): unknown {
   const key = token(value);
   return key ? (COMPETITIONS.get(key) ?? (typeof value === "string" ? value.trim() : value)) : value;
 }
 
 function normalizeSeason(value: unknown): unknown {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 1900 && value <= 2200) {
+    return String(value);
+  }
   const key = token(value);
   if (!key) return value;
   if (["current", "atual", "temporada atual", "nesta temporada"].includes(key)) return "current";
@@ -250,7 +261,10 @@ export function normalizeUniversalQueryPlanCandidate(value: unknown): unknown {
   const baseScope = asRecord(baseRecord.scope) ?? {};
   const queryKind = baseRecord.query_kind;
   const rawMetricToken = token(raw.metric ?? raw.statistic ?? raw.stat);
-  const isPointsEfficiency = ["aproveitamento", "aproveitamento de pontos", "points efficiency"].includes(rawMetricToken);
+  const isPointsEfficiency = ["aproveitamento", "aproveitamento de pontos", "points efficiency"].includes(
+    rawMetricToken ?? "",
+  );
+  const normalizedMetric = rawMetricToken ? METRICS.get(rawMetricToken) : undefined;
 
   const scope = {
     ...baseScope,
@@ -270,6 +284,7 @@ export function normalizeUniversalQueryPlanCandidate(value: unknown): unknown {
   const groupBy = normalizeGroups(raw.group_by ?? raw.groupBy ?? raw.groupby);
   const rawLimit = finiteInt(raw.limit);
   const existingEventLimit = finiteInt(scope.limit);
+  const normalizedSort = normalizeSort(raw.sort);
 
   if (queryKind === "event_list" && existingEventLimit === undefined && rawLimit !== undefined) {
     scope.limit = rawLimit;
@@ -277,11 +292,12 @@ export function normalizeUniversalQueryPlanCandidate(value: unknown): unknown {
 
   return {
     ...baseRecord,
+    ...(normalizedMetric ? { metric: normalizedMetric } : {}),
     ...(isPointsEfficiency ? { metric: "points", aggregation: "percentage" } : {}),
     scope,
     filters,
     group_by: groupBy,
-    ...(normalizeSort(raw.sort) ? { sort: normalizeSort(raw.sort) } : {}),
+    ...(normalizedSort ? { sort: normalizedSort } : {}),
     ...(queryKind !== "event_list" && rawLimit !== undefined ? { limit: rawLimit } : {}),
   };
 }
