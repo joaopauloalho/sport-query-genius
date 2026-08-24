@@ -197,7 +197,10 @@ async function requestJsonPlan(
     try {
       return JSON.parse(content) as unknown;
     } catch {
-      throw new AnalysisPipelineError("INVALID_DEEPSEEK_OUTPUT", "O DeepSeek retornou JSON inválido.");
+      throw new AnalysisPipelineError(
+        "INVALID_DEEPSEEK_OUTPUT",
+        "O DeepSeek retornou JSON inválido.",
+      );
     }
   } catch (error) {
     if (error instanceof AnalysisPipelineError) throw error;

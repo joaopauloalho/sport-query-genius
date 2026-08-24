@@ -29,16 +29,44 @@ export interface CachedPlayerIdentity extends ResolvedPlayer {
 }
 
 export interface Phase3dSportsRepository {
-  getAlias(provider: string, entityType: FootballEntityType, alias: string): Promise<PersistedEntityAlias | null>;
+  getAlias(
+    provider: string,
+    entityType: FootballEntityType,
+    alias: string,
+  ): Promise<PersistedEntityAlias | null>;
   upsertAlias(alias: PersistedEntityAlias): Promise<void>;
   getPlayerById(provider: string, playerId: number): Promise<CachedPlayerIdentity | null>;
-  getPlayerByNormalizedName(provider: string, normalizedName: string): Promise<CachedPlayerIdentity | null>;
+  getPlayerByNormalizedName(
+    provider: string,
+    normalizedName: string,
+  ): Promise<CachedPlayerIdentity | null>;
   upsertPlayer(provider: string, player: ResolvedPlayer): Promise<void>;
-  listRecentPlayerStats(provider: string, playerId: number, limit: number): Promise<PlayerFixtureStat[]>;
-  upsertPlayerStats(provider: string, playerId: number, stats: readonly PlayerFixtureStat[]): Promise<void>;
-  markPlayerStatsFetched(provider: string, playerId: number, requestedCount: number, returnedCount: number): Promise<void>;
-  listPlayerGoalEvents(provider: string, playerId: number, limit: number): Promise<PlayerGoalEvent[]>;
-  upsertPlayerEvents(provider: string, playerId: number, events: readonly PlayerGoalEvent[]): Promise<void>;
+  listRecentPlayerStats(
+    provider: string,
+    playerId: number,
+    limit: number,
+  ): Promise<PlayerFixtureStat[]>;
+  upsertPlayerStats(
+    provider: string,
+    playerId: number,
+    stats: readonly PlayerFixtureStat[],
+  ): Promise<void>;
+  markPlayerStatsFetched(
+    provider: string,
+    playerId: number,
+    requestedCount: number,
+    returnedCount: number,
+  ): Promise<void>;
+  listPlayerGoalEvents(
+    provider: string,
+    playerId: number,
+    limit: number,
+  ): Promise<PlayerGoalEvent[]>;
+  upsertPlayerEvents(
+    provider: string,
+    playerId: number,
+    events: readonly PlayerGoalEvent[],
+  ): Promise<void>;
   markPlayerEventsFetched(provider: string, playerId: number): Promise<void>;
 }
 
@@ -128,11 +156,17 @@ function mapPlayerEvent(row: Record<string, unknown>): PlayerGoalEvent {
 export class SupabasePhase3dSportsRepository implements Phase3dSportsRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async getAlias(provider: string, entityType: FootballEntityType, alias: string): Promise<PersistedEntityAlias | null> {
+  async getAlias(
+    provider: string,
+    entityType: FootballEntityType,
+    alias: string,
+  ): Promise<PersistedEntityAlias | null> {
     const normalizedAlias = normalizeFootballEntityName(alias);
     const { data, error } = await this.client
       .from(ALIASES_TABLE)
-      .select("alias,normalized_alias,provider,entity_type,provider_entity_id,canonical_name,confidence,source")
+      .select(
+        "alias,normalized_alias,provider,entity_type,provider_entity_id,canonical_name,confidence,source",
+      )
       .eq("sport", "football")
       .eq("provider", provider)
       .eq("entity_type", entityType)
@@ -177,7 +211,9 @@ export class SupabasePhase3dSportsRepository implements Phase3dSportsRepository 
   async getPlayerById(provider: string, playerId: number): Promise<CachedPlayerIdentity | null> {
     const { data, error } = await this.client
       .from(PLAYERS_TABLE)
-      .select("provider_player_id,name,current_provider_team_id,current_team_name,position,country,fetched_at,stats_fetched_at,stats_requested_count,stats_returned_count,events_fetched_at")
+      .select(
+        "provider_player_id,name,current_provider_team_id,current_team_name,position,country,fetched_at,stats_fetched_at,stats_requested_count,stats_returned_count,events_fetched_at",
+      )
       .eq("provider", provider)
       .eq("provider_player_id", playerId)
       .limit(1)
@@ -186,10 +222,15 @@ export class SupabasePhase3dSportsRepository implements Phase3dSportsRepository 
     return data ? mapPlayer(data as Record<string, unknown>) : null;
   }
 
-  async getPlayerByNormalizedName(provider: string, normalizedName: string): Promise<CachedPlayerIdentity | null> {
+  async getPlayerByNormalizedName(
+    provider: string,
+    normalizedName: string,
+  ): Promise<CachedPlayerIdentity | null> {
     const { data, error } = await this.client
       .from(PLAYERS_TABLE)
-      .select("provider_player_id,name,current_provider_team_id,current_team_name,position,country,fetched_at,stats_fetched_at,stats_requested_count,stats_returned_count,events_fetched_at")
+      .select(
+        "provider_player_id,name,current_provider_team_id,current_team_name,position,country,fetched_at,stats_fetched_at,stats_requested_count,stats_returned_count,events_fetched_at",
+      )
       .eq("provider", provider)
       .eq("normalized_name", normalizedName)
       .limit(1)
@@ -218,7 +259,11 @@ export class SupabasePhase3dSportsRepository implements Phase3dSportsRepository 
     fail("player upsert", error);
   }
 
-  async listRecentPlayerStats(provider: string, playerId: number, limit: number): Promise<PlayerFixtureStat[]> {
+  async listRecentPlayerStats(
+    provider: string,
+    playerId: number,
+    limit: number,
+  ): Promise<PlayerFixtureStat[]> {
     const { data, error } = await this.client
       .from(PLAYER_STATS_TABLE)
       .select("*")
@@ -230,7 +275,11 @@ export class SupabasePhase3dSportsRepository implements Phase3dSportsRepository 
     return (data ?? []).map((row) => mapPlayerStat(row as Record<string, unknown>)).reverse();
   }
 
-  async upsertPlayerStats(provider: string, playerId: number, stats: readonly PlayerFixtureStat[]): Promise<void> {
+  async upsertPlayerStats(
+    provider: string,
+    playerId: number,
+    stats: readonly PlayerFixtureStat[],
+  ): Promise<void> {
     if (stats.length === 0) return;
     const now = new Date().toISOString();
     const rows = stats.map((stat) => ({
@@ -264,17 +313,31 @@ export class SupabasePhase3dSportsRepository implements Phase3dSportsRepository 
     fail("player stats upsert", error);
   }
 
-  async markPlayerStatsFetched(provider: string, playerId: number, requestedCount: number, returnedCount: number): Promise<void> {
+  async markPlayerStatsFetched(
+    provider: string,
+    playerId: number,
+    requestedCount: number,
+    returnedCount: number,
+  ): Promise<void> {
     const now = new Date().toISOString();
     const { error } = await this.client
       .from(PLAYERS_TABLE)
-      .update({ stats_fetched_at: now, stats_requested_count: requestedCount, stats_returned_count: returnedCount, updated_at: now })
+      .update({
+        stats_fetched_at: now,
+        stats_requested_count: requestedCount,
+        stats_returned_count: returnedCount,
+        updated_at: now,
+      })
       .eq("provider", provider)
       .eq("provider_player_id", playerId);
     fail("player stats marker", error);
   }
 
-  async listPlayerGoalEvents(provider: string, playerId: number, limit: number): Promise<PlayerGoalEvent[]> {
+  async listPlayerGoalEvents(
+    provider: string,
+    playerId: number,
+    limit: number,
+  ): Promise<PlayerGoalEvent[]> {
     const { data, error } = await this.client
       .from(PLAYER_EVENTS_TABLE)
       .select("*")
@@ -288,7 +351,11 @@ export class SupabasePhase3dSportsRepository implements Phase3dSportsRepository 
     return (data ?? []).map((row) => mapPlayerEvent(row as Record<string, unknown>));
   }
 
-  async upsertPlayerEvents(provider: string, playerId: number, events: readonly PlayerGoalEvent[]): Promise<void> {
+  async upsertPlayerEvents(
+    provider: string,
+    playerId: number,
+    events: readonly PlayerGoalEvent[],
+  ): Promise<void> {
     if (events.length === 0) return;
     const now = new Date().toISOString();
     const rows = events.map((event) => ({

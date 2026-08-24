@@ -55,11 +55,7 @@ function readTeam(record: Record<string, unknown>, side: "home" | "away") {
 }
 
 function readScore(record: Record<string, unknown>, side: "home" | "away"): number | null {
-  const direct = readNumber(record, [
-    `${side}_score`,
-    `${side}_goals`,
-    `score_${side}`,
-  ]);
+  const direct = readNumber(record, [`${side}_score`, `${side}_goals`, `score_${side}`]);
   if (direct !== null) return direct;
 
   const score = asRecord(record.score) ?? asRecord(record.scores);
@@ -233,7 +229,11 @@ export class BsdFootballV2Provider implements SportsDataProvider {
     if (resolution.status === "ambiguous") {
       console.warn("[bsd-football-v2] team ambiguous", {
         query: name,
-        candidates: resolution.candidates.map((team) => ({ id: team.id, name: team.name, score: team.score })),
+        candidates: resolution.candidates.map((team) => ({
+          id: team.id,
+          name: team.name,
+          score: team.score,
+        })),
       });
       throw new AnalysisPipelineError(
         "ENTITY_AMBIGUOUS",
@@ -250,7 +250,11 @@ export class BsdFootballV2Provider implements SportsDataProvider {
     if (resolution.status !== "resolved") {
       console.warn("[bsd-football-v2] team not found", {
         query: name,
-        candidates: resolution.candidates.map((team) => ({ id: team.id, name: team.name, score: team.score })),
+        candidates: resolution.candidates.map((team) => ({
+          id: team.id,
+          name: team.name,
+          score: team.score,
+        })),
       });
       throw new AnalysisPipelineError(
         "TEAM_NOT_FOUND",
@@ -260,7 +264,10 @@ export class BsdFootballV2Provider implements SportsDataProvider {
 
     const chosen = candidates.find((team) => team.id === resolution.candidate.id);
     if (!chosen) {
-      throw new AnalysisPipelineError("TEAM_NOT_FOUND", `Não encontramos o time "${name}" na BSD Football API.`);
+      throw new AnalysisPipelineError(
+        "TEAM_NOT_FOUND",
+        `Não encontramos o time "${name}" na BSD Football API.`,
+      );
     }
 
     console.info("[bsd-football-v2] resolved team", {

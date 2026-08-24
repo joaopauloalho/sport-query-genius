@@ -71,7 +71,9 @@ export class AliasAwareTeamProvider implements SportsDataProvider {
         country: "",
       };
       if (this.teamCache) {
-        await bestEffort("team identity from alias", () => this.teamCache!.upsertTeam(this.name, team));
+        await bestEffort("team identity from alias", () =>
+          this.teamCache!.upsertTeam(this.name, team),
+        );
       }
       console.info("[entity-alias] team alias resolved", {
         provider: this.name,

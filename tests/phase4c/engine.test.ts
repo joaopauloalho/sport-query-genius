@@ -177,23 +177,37 @@ describe("Phase 4C deterministic team engine", () => {
   test("goals_against is derived from the opposite side of the real score for home and away", async () => {
     const all = await analyzePhase4cUniversalTeamPlanWithSources({
       question: "gols sofridos",
-      plan: aggregatePlan({ aggregation: "total", scope: { last_matches: 4, venue: "all", half: "full" } }),
+      plan: aggregatePlan({
+        aggregation: "total",
+        scope: { last_matches: 4, venue: "all", half: "full" },
+      }),
       sources: [new FakeSource()],
     });
     const home = await analyzePhase4cUniversalTeamPlanWithSources({
       question: "gols sofridos em casa",
-      plan: aggregatePlan({ aggregation: "total", scope: { venue: "home", half: "full", season: "2026" } }),
+      plan: aggregatePlan({
+        aggregation: "total",
+        scope: { venue: "home", half: "full", season: "2026" },
+      }),
       sources: [new FakeSource()],
     });
     const away = await analyzePhase4cUniversalTeamPlanWithSources({
       question: "gols sofridos fora",
-      plan: aggregatePlan({ aggregation: "total", scope: { venue: "away", half: "full", season: "2026" } }),
+      plan: aggregatePlan({
+        aggregation: "total",
+        scope: { venue: "away", half: "full", season: "2026" },
+      }),
       sources: [new FakeSource()],
     });
     expect(all.result_type).toBe("aggregate");
     expect(home.result_type).toBe("aggregate");
     expect(away.result_type).toBe("aggregate");
-    if (all.result_type !== "aggregate" || home.result_type !== "aggregate" || away.result_type !== "aggregate") return;
+    if (
+      all.result_type !== "aggregate" ||
+      home.result_type !== "aggregate" ||
+      away.result_type !== "aggregate"
+    )
+      return;
     expect(all.answer.value).toBe(4);
     expect(home.answer.value).toBe(1);
     expect(away.answer.value).toBe(3);
@@ -210,7 +224,11 @@ describe("Phase 4C deterministic team engine", () => {
     ] as const) {
       const result = await analyzePhase4cUniversalTeamPlanWithSources({
         question: `${metric}`,
-        plan: aggregatePlan({ metric, aggregation, scope: { last_matches: 4, venue: "all", half: "full" } }),
+        plan: aggregatePlan({
+          metric,
+          aggregation,
+          scope: { last_matches: 4, venue: "all", half: "full" },
+        }),
         sources: [source],
       });
       expect(result.result_type).toBe("aggregate");
@@ -242,7 +260,8 @@ describe("Phase 4C deterministic team engine", () => {
     expect(btts.result_type).toBe("aggregate");
     expect(points.result_type).toBe("aggregate");
     if (btts.result_type === "aggregate") expect(btts.answer.value).toBe(50);
-    if (points.result_type === "aggregate") expect(points.answer.value).toBeCloseTo((7 / 12) * 100, 2);
+    if (points.result_type === "aggregate")
+      expect(points.answer.value).toBeCloseTo((7 / 12) * 100, 2);
   });
 
   test("generic outcome and numeric filters are applied before aggregation", async () => {

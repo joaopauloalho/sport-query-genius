@@ -6,10 +6,7 @@ import {
   resolveFootballEntityCandidates,
 } from "../../src/server/sports/entity-resolver.ts";
 import { PlayerDataService } from "../../src/server/sports/player-data-service.server.ts";
-import {
-  playerMetricValue,
-  playerParticipated,
-} from "../../src/server/sports/player-provider.ts";
+import { playerMetricValue, playerParticipated } from "../../src/server/sports/player-provider.ts";
 import { getVerifiedEntityAlias } from "../../src/server/sports/verified-aliases.ts";
 
 const clone = (value) => structuredClone(value);
@@ -168,9 +165,7 @@ class MemoryRepository {
 
   async upsertPlayerEvents(provider, playerId, rows) {
     const key = this.playerKey(provider, playerId);
-    const byKey = new Map(
-      (this.events.get(key) ?? []).map((row) => [row.eventKey, clone(row)]),
-    );
+    const byKey = new Map((this.events.get(key) ?? []).map((row) => [row.eventKey, clone(row)]));
     for (const row of rows) byKey.set(row.eventKey, clone(row));
     this.events.set(key, [...byKey.values()]);
   }
@@ -304,8 +299,14 @@ test("H. últimos jogos do jogador usam participação real e a segunda leitura 
   const first = await service.getRecentParticipatedStats(player, 5);
   const second = await service.getRecentParticipatedStats(player, 5);
 
-  assert.deepEqual(first.map((row) => row.fixtureId), [2, 3, 4, 5, 6]);
-  assert.deepEqual(second.map((row) => row.fixtureId), [2, 3, 4, 5, 6]);
+  assert.deepEqual(
+    first.map((row) => row.fixtureId),
+    [2, 3, 4, 5, 6],
+  );
+  assert.deepEqual(
+    second.map((row) => row.fixtureId),
+    [2, 3, 4, 5, 6],
+  );
   assert.equal(provider.calls.stats, 1);
 });
 
@@ -361,6 +362,9 @@ test("J. últimos 5 gols contam eventos individuais, inclusive dois na mesma par
       [21, 20],
     ],
   );
-  assert.deepEqual(second.map((event) => event.eventKey), first.map((event) => event.eventKey));
+  assert.deepEqual(
+    second.map((event) => event.eventKey),
+    first.map((event) => event.eventKey),
+  );
   assert.equal(provider.calls.events, callsAfterFirst);
 });

@@ -57,7 +57,9 @@ const METRICS = new Map<string, string>([
 
 function normalizeCompetition(value: unknown): unknown {
   const key = token(value);
-  return key ? (COMPETITIONS.get(key) ?? (typeof value === "string" ? value.trim() : value)) : value;
+  return key
+    ? (COMPETITIONS.get(key) ?? (typeof value === "string" ? value.trim() : value))
+    : value;
 }
 
 function normalizeSeason(value: unknown): unknown {
@@ -261,9 +263,11 @@ export function normalizeUniversalQueryPlanCandidate(value: unknown): unknown {
   const baseScope = asRecord(baseRecord.scope) ?? {};
   const queryKind = baseRecord.query_kind;
   const rawMetricToken = token(raw.metric ?? raw.statistic ?? raw.stat);
-  const isPointsEfficiency = ["aproveitamento", "aproveitamento de pontos", "points efficiency"].includes(
-    rawMetricToken ?? "",
-  );
+  const isPointsEfficiency = [
+    "aproveitamento",
+    "aproveitamento de pontos",
+    "points efficiency",
+  ].includes(rawMetricToken ?? "");
   const normalizedMetric = rawMetricToken ? METRICS.get(rawMetricToken) : undefined;
 
   const scope = {
