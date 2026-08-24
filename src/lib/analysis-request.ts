@@ -11,11 +11,7 @@ export const SUPPORTED_MATCH_COUNTS: readonly number[] = Array.from(
 /** Compact UI presets; natural-language and URL overrides still accept any integer from 1 to 100. */
 export const MATCH_COUNT_PRESETS = [1, 3, 5, 7, 10, 12, 15, 20, 25, 30, 38, 50, 100] as const;
 
-export const supportedMatchCountSchema = z
-  .number()
-  .int()
-  .min(1)
-  .max(MAX_ANALYSIS_MATCH_COUNT);
+export const supportedMatchCountSchema = z.number().int().min(1).max(MAX_ANALYSIS_MATCH_COUNT);
 
 export const analysisVenueSchema = z.enum(["all", "home", "away"]);
 
