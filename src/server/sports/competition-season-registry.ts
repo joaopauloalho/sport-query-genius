@@ -28,7 +28,10 @@ export interface CompetitionSeason {
 
 export interface CompetitionSeasonResolver {
   resolveCompetition(name: string): Promise<CompetitionDefinition | null>;
-  resolveSeason(competition: CompetitionDefinition, season: string): Promise<CompetitionSeason | null>;
+  resolveSeason(
+    competition: CompetitionDefinition,
+    season: string,
+  ): Promise<CompetitionSeason | null>;
 }
 
 const DEFINITIONS: CompetitionDefinition[] = [
