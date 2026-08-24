@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { normalizeTruthfulSemanticCandidate } from "../../src/server/analysis/query-plan-v5a-normalizer";
-import { createSemanticPlan, semanticPlanResponseSchema } from "../../src/server/analysis/semantic-plan";
+import {
+  createSemanticPlan,
+  semanticPlanResponseSchema,
+} from "../../src/server/analysis/semantic-plan";
 import { negotiateFootballCapability } from "../../src/server/sports/capability-negotiation";
 import { runGeniusBenchmark } from "./benchmark";
 
@@ -35,14 +38,25 @@ describe("Phase 5A truth gate", () => {
   });
 
   test("preserves outcome=win filter", () => {
-    const plan = semantic({ ...base, metric: "corners", filters: [{ field: "resultado", operator: "eq", value: "venceu" }] });
+    const plan = semantic({
+      ...base,
+      metric: "corners",
+      filters: [{ field: "resultado", operator: "eq", value: "venceu" }],
+    });
     expect(plan.query.filters).toEqual([{ field: "outcome", operator: "eq", value: "win" }]);
     expect(negotiateFootballCapability(plan).supported).toBe(true);
   });
 
   test("preserves possession > 60 and rejects it explicitly", () => {
-    const plan = semantic({ ...base, filters: [{ field: "posse", operator: "maior que", value: 60 }] });
-    expect(plan.query.filters[0]).toMatchObject({ field: "possession", operator: "gt", value: 60 });
+    const plan = semantic({
+      ...base,
+      filters: [{ field: "posse", operator: "maior que", value: 60 }],
+    });
+    expect(plan.query.filters[0]).toMatchObject({
+      field: "possession",
+      operator: "gt",
+      value: 60,
+    });
     const decision = negotiateFootballCapability(plan);
     expect(decision.supported).toBe(false);
     expect(decision.error_code).toBe("UNSUPPORTED_FILTER");
@@ -55,14 +69,41 @@ describe("Phase 5A truth gate", () => {
   });
 
   test("preserves opponent group, desc sort and limit 5", () => {
-    const plan = semantic({ ...base, group_by: ["adversario"], sort: { field: "value", direction: "desc" }, limit: 5 });
+    const plan = semantic({
+      ...base,
+      group_by: ["adversario"],
+      sort: { field: "value", direction: "desc" },
+      limit: 5,
+    });
     expect(plan.query.group_by).toEqual(["opponent"]);
     expect(plan.query.sort).toEqual({ field: "value", direction: "desc" });
     expect(plan.query.limit).toBe(5);
   });
 
   test("current season fails closed instead of assuming calendar year", () => {
-    const plan = semantic({ ...base, entity: { type: "team", name: "Benfica" }, scope: { season: "current", venue: "all", half: "full", status: "finished" } });
+    const plan = semantic({
+      ...base,
+      entity: { type: "team", name: "Benfica" },
+      scope: { season: "current", venue: "all", half: "full", status: "finished" },
+    });
+    const decision = negotiateFootballCapability(plan);
+    expect(decision.supported).toBe(false);
+    expect(decision.reason).toContain("CompetitionSeason");
+  });
+
+  test("season remains fail-closed even when legacy-compatible dates are present", () => {
+    const plan = semantic({
+      ...base,
+      entity: { type: "team", name: "Benfica" },
+      scope: {
+        season: "2025/26",
+        date_from: "2025-08-01",
+        date_to: "2026-05-31",
+        venue: "all",
+        half: "full",
+        status: "finished",
+      },
+    });
     const decision = negotiateFootballCapability(plan);
     expect(decision.supported).toBe(false);
     expect(decision.reason).toContain("CompetitionSeason");
@@ -76,7 +117,10 @@ describe("Phase 5A truth gate", () => {
   });
 
   test("unknown filter is preserved instead of becoming filters=[]", () => {
-    const plan = semantic({ ...base, filters: [{ field: "pressao alta", operator: "gt", value: 7 }] });
+    const plan = semantic({
+      ...base,
+      filters: [{ field: "pressao alta", operator: "gt", value: 7 }],
+    });
     expect(plan.query.filters).toHaveLength(1);
     expect(plan.query.filters[0]?.field).toBe("pressao_alta");
     expect(negotiateFootballCapability(plan).supported).toBe(false);
