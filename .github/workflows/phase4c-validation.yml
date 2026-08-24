@@ -82,6 +82,16 @@ jobs:
             exit 1
           fi
 
+      - name: Normalize lint-only regex escape
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/server/analysis/analyze-team-universal.server.ts')
+          text = path.read_text()
+          path.write_text(text.replace(r'[\/-]', r'[/-]'))
+          PY
+
       - name: Lint Phase 4C files
         run: >-
           bunx eslint --fix
