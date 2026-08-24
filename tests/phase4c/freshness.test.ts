@@ -151,9 +151,12 @@ describe("Phase 4C recent-fixture freshness fallback", () => {
     expect(api.fixtureReads).toBe(0);
   });
 
-  test("a stale primary remains selected when the secondary source proves nothing newer", async () => {
+  test("a stale primary remains selected when the secondary source confirms nothing newer", async () => {
     const bsd = new FakeSource("BSD", stalePrimary);
-    const api = new FakeSource("API-FOOTBALL", stalePrimary.map((item) => ({ ...item, id: item.id + 100 })));
+    const api = new FakeSource(
+      "API-FOOTBALL",
+      stalePrimary.map((item) => ({ ...item, id: item.id + 100 })),
+    );
 
     const result = await analyzePhase4cWithFreshnessFallback({
       question: "últimos jogos",
@@ -166,7 +169,7 @@ describe("Phase 4C recent-fixture freshness fallback", () => {
     expect(api.fixtureReads).toBe(1);
   });
 
-  test("secondary-provider failure never erases an otherwise valid primary result", async () => {
+  test("secondary-provider failure blocks a stale-looking recent answer instead of silently trusting it", async () => {
     const bsd = new FakeSource("BSD", stalePrimary);
     const api = new FakeSource(
       "API-FOOTBALL",
@@ -174,14 +177,14 @@ describe("Phase 4C recent-fixture freshness fallback", () => {
       new AnalysisPipelineError("PROVIDER_UNAVAILABLE", "fallback unavailable in test"),
     );
 
-    const result = await analyzePhase4cWithFreshnessFallback({
-      question: "últimos jogos",
-      plan: recentPlan(),
-      sources: [bsd, api],
-      now: NOW,
-    });
-
-    expect(result.provenance.provider).toBe("BSD");
+    await expect(
+      analyzePhase4cWithFreshnessFallback({
+        question: "últimos jogos",
+        plan: recentPlan(),
+        sources: [bsd, api],
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: "DATA_INSUFFICIENT" });
     expect(api.fixtureReads).toBe(1);
   });
 

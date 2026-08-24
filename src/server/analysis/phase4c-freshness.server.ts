@@ -7,6 +7,7 @@ import {
   analyzePhase4cUniversalTeamPlanWithSources,
   type Phase4cTeamResult,
 } from "./analyze-team-universal.server";
+import { AnalysisPipelineError } from "./errors";
 import type { QueryPlan } from "./query-plan";
 
 const HOUR_MS = 60 * 60 * 1_000;
@@ -76,8 +77,6 @@ export async function analyzePhase4cWithFreshnessFallback(params: {
     sources,
   });
 
-  if (sources.length < 2) return initial;
-
   const nowMs = params.now?.getTime() ?? Date.now();
   if (!shouldVerifyRecentFixtureFreshness(params.plan, initial, params.overrides, nowMs)) {
     return initial;
@@ -85,10 +84,14 @@ export async function analyzePhase4cWithFreshnessFallback(params: {
 
   const initialProvider = initial.provenance.provider;
   const initialSourceIndex = sources.findIndex((source) => source.name === initialProvider);
-  if (initialSourceIndex < 0 || initialSourceIndex >= sources.length - 1) return initial;
+  if (initialSourceIndex < 0) return initial;
+
+  const verificationSources = sources.slice(initialSourceIndex + 1);
+  if (verificationSources.length === 0) return initial;
 
   let best = initial;
   let bestNewest = newestResultFixtureTimestamp(initial);
+  let verificationSucceeded = false;
 
   console.info("[phase4c-query] freshness verification required", {
     provider: initialProvider,
@@ -96,7 +99,7 @@ export async function analyzePhase4cWithFreshnessFallback(params: {
     age_hours: bestNewest === null ? null : Math.round((nowMs - bestNewest) / HOUR_MS),
   });
 
-  for (const source of sources.slice(initialSourceIndex + 1)) {
+  for (const source of verificationSources) {
     try {
       const candidate = await analyzeWithSource({
         question: params.question,
@@ -105,6 +108,7 @@ export async function analyzePhase4cWithFreshnessFallback(params: {
         observer: params.observer,
         source,
       });
+      verificationSucceeded = true;
       const candidateNewest = newestResultFixtureTimestamp(candidate);
 
       console.info("[phase4c-query] freshness candidate", {
@@ -123,13 +127,18 @@ export async function analyzePhase4cWithFreshnessFallback(params: {
         bestNewest = candidateNewest;
       }
     } catch (error) {
-      // Freshness verification is a secondary confidence check. A successful primary result
-      // remains available when the secondary provider is unavailable or lacks the capability.
       console.warn("[phase4c-query] freshness verification failed", {
         provider: source.name,
         error: error instanceof Error ? error.message : "unknown",
       });
     }
+  }
+
+  if (!verificationSucceeded) {
+    throw new AnalysisPipelineError(
+      "DATA_INSUFFICIENT",
+      "A fonte principal respondeu, mas a partida mais recente encontrada já está fora da janela de frescor e nenhuma fonte secundária conseguiu confirmar que a amostra de últimos jogos está atualizada. Para não apresentar uma sequência possivelmente incompleta como atual, a análise foi interrompida.",
+    );
   }
 
   if (best !== initial) {
