@@ -71,7 +71,9 @@ function add(checks: CapabilityCheck[], name: string, ok: boolean, reason: strin
   checks.push({ name, ok, reason: ok ? null : reason });
 }
 
-function unsupportedSemanticField(query: SemanticQuery): { code: AnalysisErrorCode; reason: string } | null {
+function unsupportedSemanticField(
+  query: SemanticQuery,
+): { code: AnalysisErrorCode; reason: string } | null {
   for (const filter of query.filters) {
     if (!TEAM_FILTERS.has(filter.field)) {
       const recognizedMetric = METRICS.has(filter.field);
@@ -91,7 +93,10 @@ function unsupportedSemanticField(query: SemanticQuery): { code: AnalysisErrorCo
       };
     }
   }
-  if (query.sort && (!SORTS.has(query.sort.field) || !["asc", "desc"].includes(query.sort.direction))) {
+  if (
+    query.sort &&
+    (!SORTS.has(query.sort.field) || !["asc", "desc"].includes(query.sort.direction))
+  ) {
     return {
       code: "UNSUPPORTED_CAPABILITY",
       reason: `A ordenação ${query.sort.field}/${query.sort.direction} foi compreendida, mas ainda não é executável.`,
@@ -103,7 +108,12 @@ function unsupportedSemanticField(query: SemanticQuery): { code: AnalysisErrorCo
 function scopeLossRisk(query: SemanticQuery): string | null {
   if (query.scope.season) return null; // handled by CompetitionSeason truth gate.
   if (query.entity.type === "player") {
-    if (query.scope.date_from || query.scope.date_to || query.scope.opponent || query.scope.status) {
+    if (
+      query.scope.date_from ||
+      query.scope.date_to ||
+      query.scope.opponent ||
+      query.scope.status
+    ) {
       return "O adapter atual de jogador não executa date range, opponent ou status; o filtro foi preservado e a consulta foi recusada.";
     }
     if (query.scope.half !== "full") {
@@ -111,7 +121,8 @@ function scopeLossRisk(query: SemanticQuery): string | null {
     }
   }
   if (query.entity.type === "team" && ["aggregate", "match_list"].includes(query.query_kind)) {
-    if (query.scope.half !== "full") return "O executor universal de agregados/listas de time ainda não calcula métricas por primeiro/segundo tempo.";
+    if (query.scope.half !== "full")
+      return "O executor universal de agregados/listas de time ainda não calcula métricas por primeiro/segundo tempo.";
     if (query.scope.status && query.scope.status !== "finished") {
       return "O executor universal de agregados/listas de time executa somente partidas finalizadas.";
     }
@@ -148,7 +159,12 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
   if (lossRisk) return failure(checks, "UNSUPPORTED_FILTER", lossRisk);
 
   const parsed = queryPlanSchema.safeParse(semantic.query);
-  add(checks, "execution_schema", parsed.success, parsed.success ? null : "SemanticPlan is not representable by the strict ExecutionPlan schema.");
+  add(
+    checks,
+    "execution_schema",
+    parsed.success,
+    parsed.success ? null : "SemanticPlan is not representable by the strict ExecutionPlan schema.",
+  );
   if (!parsed.success) {
     return failure(
       checks,
@@ -170,11 +186,21 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
 
   let executor: string | null = null;
   if (queryPlan.entity.type === "team" && queryPlan.query_kind === "aggregate") {
-    if (!queryPlan.metric) return failure(checks, "UNSUPPORTED_METRIC", "Agregado sem métrica.", capability);
+    if (!queryPlan.metric)
+      return failure(checks, "UNSUPPORTED_METRIC", "Agregado sem métrica.", capability);
     const metricPlan = resolveTeamMetricExecution(queryPlan.metric);
-    add(checks, "deterministic_metric_executor", metricPlan.kind !== "unsupported", metricPlan.kind === "unsupported" ? metricPlan.reason : null);
-    if (metricPlan.kind === "unsupported") return failure(checks, "UNSUPPORTED_CAPABILITY", metricPlan.reason, capability);
-    if (["percentage", "rate"].includes(queryPlan.aggregation ?? "") && !RATIO_TEAM_METRICS.has(queryPlan.metric)) {
+    add(
+      checks,
+      "deterministic_metric_executor",
+      metricPlan.kind !== "unsupported",
+      metricPlan.kind === "unsupported" ? metricPlan.reason : null,
+    );
+    if (metricPlan.kind === "unsupported")
+      return failure(checks, "UNSUPPORTED_CAPABILITY", metricPlan.reason, capability);
+    if (
+      ["percentage", "rate"].includes(queryPlan.aggregation ?? "") &&
+      !RATIO_TEAM_METRICS.has(queryPlan.metric)
+    ) {
       return failure(
         checks,
         "UNSUPPORTED_CAPABILITY",
@@ -189,7 +215,12 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
     queryPlan.entity.type === "team" &&
     ["event_list", "schedule", "head_to_head"].includes(queryPlan.query_kind)
   ) {
-    if (queryPlan.filters.length || queryPlan.group_by.length || queryPlan.sort || queryPlan.limit) {
+    if (
+      queryPlan.filters.length ||
+      queryPlan.group_by.length ||
+      queryPlan.sort ||
+      queryPlan.limit
+    ) {
       return failure(
         checks,
         "UNSUPPORTED_CAPABILITY",
@@ -197,22 +228,47 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
         capability,
       );
     }
-    if (capability.stage !== "implemented") return failure(checks, "UNSUPPORTED_CAPABILITY", capability.reason ?? "Executor ainda não implementado.", capability);
+    if (capability.stage !== "implemented") {
+      return failure(
+        checks,
+        "UNSUPPORTED_CAPABILITY",
+        capability.reason ?? "Executor ainda não implementado.",
+        capability,
+      );
+    }
     executor = `team_universal_${queryPlan.query_kind}`;
   } else if (
     queryPlan.entity.type === "player" &&
     ["aggregate", "event_list"].includes(queryPlan.query_kind)
   ) {
-    if (queryPlan.filters.length || queryPlan.group_by.length || queryPlan.sort || queryPlan.limit) {
-      return failure(checks, "UNSUPPORTED_CAPABILITY", "O adapter de jogador ainda não executa filtros/group_by/sort/limit de apresentação.", capability);
+    if (
+      queryPlan.filters.length ||
+      queryPlan.group_by.length ||
+      queryPlan.sort ||
+      queryPlan.limit
+    ) {
+      return failure(
+        checks,
+        "UNSUPPORTED_CAPABILITY",
+        "O adapter de jogador ainda não executa filtros/group_by/sort/limit de apresentação.",
+        capability,
+      );
     }
-    if (capability.stage !== "implemented") return failure(checks, "UNSUPPORTED_CAPABILITY", capability.reason ?? "Executor de jogador ainda não implementado.", capability);
+    if (capability.stage !== "implemented") {
+      return failure(
+        checks,
+        "UNSUPPORTED_CAPABILITY",
+        capability.reason ?? "Executor de jogador ainda não implementado.",
+        capability,
+      );
+    }
     executor = `player_${queryPlan.query_kind}`;
   } else {
     return failure(
       checks,
       "UNSUPPORTED_CAPABILITY",
-      capability.reason ?? `Não existe executor determinístico ativo para ${queryPlan.entity.type}/${queryPlan.query_kind}.`,
+      capability.reason ??
+        `Não existe executor determinístico ativo para ${queryPlan.entity.type}/${queryPlan.query_kind}.`,
       capability,
     );
   }
@@ -220,8 +276,20 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
   add(checks, "deterministic_executor", true);
   const providers = Array.from(new Set(capability.sources.map((source) => source.provider)));
   const families = Array.from(new Set(capability.sources.map((source) => source.dataFamily)));
-  add(checks, "provider_registered", providers.length > 0, providers.length ? null : "Nenhum provider registrado.");
-  if (!providers.length) return failure(checks, "PROVIDER_UNAVAILABLE", "Nenhum provider registrado para a capability.", capability);
+  add(
+    checks,
+    "provider_registered",
+    providers.length > 0,
+    providers.length ? null : "Nenhum provider registrado.",
+  );
+  if (!providers.length) {
+    return failure(
+      checks,
+      "PROVIDER_UNAVAILABLE",
+      "Nenhum provider registrado para a capability.",
+      capability,
+    );
+  }
 
   return {
     supported: true,
@@ -233,6 +301,8 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
     providers,
     data_families: families,
     executor,
-    coverage: capability.sources.some((source) => source.conditionalCoverage) ? "runtime" : "not_required",
+    coverage: capability.sources.some((source) => source.conditionalCoverage)
+      ? "runtime"
+      : "not_required",
   };
 }
