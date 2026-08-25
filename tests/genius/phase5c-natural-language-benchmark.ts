@@ -121,14 +121,16 @@ export const PHASE5C_NATURAL_LANGUAGE_CASES: readonly NaturalLanguageCase[] = [
   },
   {
     id: "filter-shots",
-    question: "Qual foi a média de gols do Yuri Alberto nos jogos em que finalizou pelo menos 4 vezes?",
+    question:
+      "Qual foi a média de gols do Yuri Alberto nos jogos em que finalizou pelo menos 4 vezes?",
     expected: aggregate("Yuri Alberto", "goals", "average", {
       filters: [{ field: "shots", operator: "gte", value: 4 }],
     }),
   },
   {
     id: "filter-rating",
-    question: "Qual foi a média de passes do Yuri Alberto nos jogos em que teve nota maior ou igual a 7?",
+    question:
+      "Qual foi a média de passes do Yuri Alberto nos jogos em que teve nota maior ou igual a 7?",
     expected: aggregate("Yuri Alberto", "passes", "average", {
       filters: [{ field: "rating", operator: "gte", value: 7 }],
     }),

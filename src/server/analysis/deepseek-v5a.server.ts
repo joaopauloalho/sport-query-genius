@@ -151,7 +151,11 @@ function summarizeSemanticCandidate(value: unknown): unknown {
 function summarizeValidationIssues(issues: readonly ValidationIssue[]): unknown[] {
   const output: unknown[] = [];
   for (const issue of issues.slice(0, 12)) {
-    output.push({ path: issue.path.join("."), code: issue.code, message: issue.message.slice(0, 180) });
+    output.push({
+      path: issue.path.join("."),
+      code: issue.code,
+      message: issue.message.slice(0, 180),
+    });
     if (issue.code !== "invalid_union" || !issue.unionErrors) continue;
     issue.unionErrors.slice(0, 4).forEach((unionError, branch) => {
       unionError.issues.slice(0, 8).forEach((nested) => {

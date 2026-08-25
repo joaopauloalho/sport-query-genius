@@ -293,7 +293,9 @@ function parseMatchList(text: string): SemanticQuery | null {
 
   const filters = parseFilters(condition);
   if (!filters) return null;
-  const metric = displayMetricText ? metricFromText(displayMetricText) : metricFromText(filters[0].field);
+  const metric = displayMetricText
+    ? metricFromText(displayMetricText)
+    : metricFromText(filters[0].field);
   if (!metric) return null;
 
   return parseQuery({
