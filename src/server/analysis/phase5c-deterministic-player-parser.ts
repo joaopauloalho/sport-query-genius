@@ -143,6 +143,8 @@ const TAIL_MARKERS = [
   " por competicao",
   " contra ",
   " na ",
+  " no segundo tempo",
+  " no primeiro tempo",
 ] as const;
 
 function splitPlayerAndTail(value: string): { player: string; tail: string } | null {
