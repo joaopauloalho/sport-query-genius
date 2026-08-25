@@ -36,6 +36,9 @@ jobs:
       - name: Phase 5B focused tests
         run: bun run test:phase5b
 
+      - name: Phase 5C focused tests
+        run: bun run test:phase5c
+
       - name: All regression suites
         run: bun run test:all
 
@@ -45,7 +48,7 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Lint immutable Phase 5B truth surface
+      - name: Lint immutable Phase 5C truth surface
         run: >-
           bun x eslint
           src/server/analysis/semantic-plan.ts
@@ -55,32 +58,43 @@ jobs:
           src/server/analysis/execution-plan.ts
           src/server/analysis/trend.ts
           src/server/analysis/analyze.server.ts
+          src/server/analysis/analyze-player-universal.server.ts
           src/server/sports/competition-season-registry.ts
           src/server/sports/capability-negotiation.ts
           src/server/sports/team-query-capability.ts
+          src/server/sports/player-query-capability.ts
           src/server/sports/fixture-stats.ts
+          src/server/sports/player-match-stats.ts
+          src/server/sports/player-identity.ts
           src/server/sports/universal-football.ts
           src/server/sports/universal-provider.server.ts
+          src/server/sports/universal-player.server.ts
           src/server/analysis/analyze-team-universal.server.ts
           src/server/analysis/analyze-universal.server.ts
           src/server/analysis/phase4c-freshness.server.ts
+          src/lib/universal-analysis.ts
+          src/lib/analysis-result.ts
+          src/components/analysis/universal-result-view.tsx
           src/routes/index.tsx
           tests/genius/benchmark.ts
           tests/genius/truth-gate.test.ts
           tests/phase5b/fixture-stats.test.ts
           tests/phase5b/engine.test.ts
           tests/phase5b/helpers.ts
+          tests/phase5c/normalization.test.ts
+          tests/phase5c/engine.test.ts
+          tests/phase5c/helpers.ts
 
       - name: Build
         env:
-          SUPABASE_SECRET_KEY: phase5b-ci-server-secret-sentinel-do-not-expose
+          SUPABASE_SECRET_KEY: phase5c-ci-server-secret-sentinel-do-not-expose
         run: bun run build
 
       - name: Prove server secret is absent from client bundle
         shell: bash
         run: |
           test -d .output/public
-          if grep -R -F 'phase5b-ci-server-secret-sentinel-do-not-expose' .output/public; then
+          if grep -R -F 'phase5c-ci-server-secret-sentinel-do-not-expose' .output/public; then
             echo 'Server-only Supabase secret value leaked into client bundle.' >&2
             exit 1
           fi
