@@ -1,0 +1,42 @@
+name: Phase 5B production smoke
+
+on:
+  push:
+    branches:
+      - smoke/phase5b-production-20260825
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install isolated Playwright
+        shell: bash
+        run: |
+          mkdir -p /tmp/phase5b-prod-smoke
+          cp "$GITHUB_WORKSPACE/.github/scripts/phase5b-prod-smoke.mjs" /tmp/phase5b-prod-smoke/phase5b-prod-smoke.mjs
+          cd /tmp/phase5b-prod-smoke
+          npm init -y >/dev/null 2>&1
+          npm install --no-fund --no-audit playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run six authenticated Phase 5B production questions
+        shell: bash
+        env:
+          BASE_URL: https://sport-query-genius.vercel.app
+          SMOKE_EMAIL: smoke.prod.20260824.0740@example.com
+          SMOKE_PASSWORD: Scoutly-Smoke-2026!
+        run: |
+          cd /tmp/phase5b-prod-smoke
+          node phase5b-prod-smoke.mjs
