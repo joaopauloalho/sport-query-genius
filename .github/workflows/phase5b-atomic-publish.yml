@@ -1,4 +1,4 @@
-name: Phase 5B Atomic Publish
+name: Phase 5B Final Tree Probe
 
 on:
   push:
@@ -6,22 +6,16 @@ on:
       - tmp/phase5b-publish
 
 permissions:
-  contents: write
-
-concurrency:
-  group: phase5b-atomic-publish
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  validate-and-publish:
+  probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout transport commit
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Guard main and stage SHAs
+      - name: Guard refs and calculate exact validated final tree
         shell: bash
         run: |
           set -euo pipefail
@@ -29,77 +23,13 @@ jobs:
           git fetch origin main feat/phase-5b-stage
           test "$(git rev-parse origin/main)" = "$expected"
           test "$(git rev-parse origin/feat/phase-5b-stage)" = "$expected"
-
-      - name: Reassemble verified Phase 5B payload
-        shell: bash
-        run: |
-          set -euo pipefail
           cat .phase5b/chunk{00..09} > /tmp/phase5b-final-files.b64
           base64 -d /tmp/phase5b-final-files.b64 > /tmp/phase5b-final-files.tgz
           echo 'bba7809c76fe3657094d2a491645eb99264e1ff6578d6f55663543bcbcc6a06a  /tmp/phase5b-final-files.tgz' | sha256sum -c -
-
-      - name: Build exact final tree from current main
-        shell: bash
-        run: |
-          set -euo pipefail
           git checkout -B phase5b-final origin/main
           tar -xzf /tmp/phase5b-final-files.tgz
-          test ! -e .github/workflows/phase5b-source-export.yml
-          test ! -e .github/workflows/phase5b-deps-export.yml
-          test ! -e .github/workflows/phase5b-recovery-export.yml
-          test ! -e .github/workflows/phase5b-validation.yml
-          git diff --check
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Setup Bun 1.4.0
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.0
-
-      - name: Frozen install
-        run: bun install --frozen-lockfile
-
-      - name: Phase 5B focused tests
-        run: bun run test:phase5b
-
-      - name: All regressions
-        run: bun run test:all
-
-      - name: Genius benchmark
-        run: bun run benchmark:genius
-
-      - name: Typecheck
-        run: bun run typecheck
-
-      - name: Global lint
-        run: bun run lint
-
-      - name: Build
-        env:
-          SUPABASE_SECRET_KEY: phase5b-ci-server-secret-sentinel-do-not-expose
-        run: bun run build
-
-      - name: Secret leak scan
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -d .output/public
-          ! grep -R -F 'phase5b-ci-server-secret-sentinel-do-not-expose' .output/public
-          ! grep -R -F 'SUPABASE_SECRET_KEY' .output/public
-
-      - name: Commit and publish stage exactly once
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf .phase5b
           git add -A
           git diff --cached --check
-          test -n "$(git diff --cached --name-only)"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'feat: Phase 5B normalized fixture statistics and real seasons'
-          git push origin HEAD:refs/heads/feat/phase-5b-stage
+          echo "FINAL_TREE_SHA=$(git write-tree)"
+          echo "FINAL_CHANGED_FILES=$(git diff --cached --name-only | wc -l)"
+          git diff --cached --stat
