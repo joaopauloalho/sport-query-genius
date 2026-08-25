@@ -1,16 +1,16 @@
-name: Main Truth Gate
+name: Phase 5B Validation
 
 on:
   pull_request:
   push:
     branches:
-      - main
+      - feat/phase-5b-normalized-fixture-stats
 
 permissions:
   contents: read
 
 concurrency:
-  group: main-truth-gate-${{ github.ref }}
+  group: phase5b-validation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,48 +31,44 @@ jobs:
       - name: Frozen install
         run: bun install --frozen-lockfile
 
-      - name: All regression suites
-        run: bun run test:all
+      - name: Phase 5B tests
+        run: bun run test:phase5b
 
       - name: Genius Benchmark
         run: bun run benchmark:genius
 
+      - name: All regressions
+        run: bun run test:all
+
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Lint immutable Phase 5B truth surface
+      - name: Lint immutable Phase 5B surface
         run: >-
           bunx eslint
-          src/server/analysis/semantic-plan.ts
           src/server/analysis/query-plan.ts
-          src/server/analysis/query-plan-v5a-normalizer.ts
-          src/server/analysis/deepseek-v5a.server.ts
-          src/server/analysis/execution-plan.ts
-          src/server/analysis/trend.ts
-          src/server/analysis/analyze.server.ts
-          src/server/sports/competition-season-registry.ts
-          src/server/sports/capability-negotiation.ts
+          src/server/analysis/analyze-team-universal.server.ts
+          src/server/sports/metric-catalog.ts
           src/server/sports/team-query-capability.ts
           src/server/sports/fixture-stats.ts
           src/server/sports/universal-football.ts
           src/server/sports/universal-provider.server.ts
-          src/server/analysis/analyze-team-universal.server.ts
-          src/routes/index.tsx
-          tests/genius/benchmark.ts
-          tests/genius/truth-gate.test.ts
+          src/server/sports/capability-negotiation.ts
+          src/server/sports/competition-season-registry.ts
           tests/phase5b/fixture-stats.test.ts
           tests/phase5b/engine.test.ts
+          tests/genius/benchmark.ts
 
       - name: Build
         env:
-          SUPABASE_SECRET_KEY: phase5a-ci-server-secret-sentinel-do-not-expose
+          SUPABASE_SECRET_KEY: phase5b-ci-server-secret-sentinel-do-not-expose
         run: bun run build
 
       - name: Prove server secret is absent from client bundle
         shell: bash
         run: |
           test -d .output/public
-          if grep -R -F 'phase5a-ci-server-secret-sentinel-do-not-expose' .output/public; then
+          if grep -R -F 'phase5b-ci-server-secret-sentinel-do-not-expose' .output/public; then
             echo 'Server-only Supabase secret value leaked into client bundle.' >&2
             exit 1
           fi

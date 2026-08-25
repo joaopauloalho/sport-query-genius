@@ -1,5 +1,6 @@
 import type { FootballEventType, QueryScope } from "../analysis/query-plan";
 import type { ProviderFixture, ResolvedTeam } from "./provider";
+import type { NormalizedTeamFixtureStats } from "./fixture-stats";
 
 export type UniversalProviderName = "BSD" | "API-FOOTBALL";
 export type UniversalCacheStatus = "hit" | "miss" | "mixed" | "disabled";
@@ -23,10 +24,10 @@ export interface FootballIncident {
   detail: string | null;
   rescinded: boolean;
   situation: string | null;
-  bodyPart: string | null;
+ bodyPart: string | null;
   xg: number | null;
   xgEstimated: boolean | null;
-  source: UniversalProviderName;
+ source: UniversalProviderName;
 }
 
 export interface TeamFootballEvent {
@@ -74,6 +75,11 @@ export interface UniversalIncidentRead {
   meta: ProviderReadMeta;
 }
 
+export interface UniversalFixtureStatsRead {
+  snapshot: NormalizedTeamFixtureStats;
+  meta: ProviderReadMeta;
+}
+
 export interface UniversalFootballSource {
   readonly name: UniversalProviderName;
   resolveTeam(name: string): Promise<ResolvedTeam>;
@@ -83,6 +89,8 @@ export interface UniversalFootballSource {
     fixture: ProviderFixture,
     incidents: readonly FootballIncident[],
   ): Promise<{ incidents: FootballIncident[]; meta: ProviderReadMeta | null }>;
+  getFixtureStats?(fixture: ProviderFixture, teamId: number): Promise<UniversalFixtureStatsRead>;
+  /** Legacy compatibility for pre-5B test doubles. Production sources use getFixtureStats. */
   getFixtureMetric(
     fixture: ProviderFixture,
     teamId: number,
@@ -165,7 +173,7 @@ function normalize(value: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s_-]/g, " ")
+    .replace(/[^a-z0-9\s_]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

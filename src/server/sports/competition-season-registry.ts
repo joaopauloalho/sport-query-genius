@@ -109,7 +109,7 @@ export function competitionAliases(value: string): readonly string[] {
 }
 
 export type SeasonTruthStatus =
-  | { executable: true; status: "not_requested"; reason: null }
+  | { executable: true; status: "not_requested" | "runtime_provider_resolution"; reason: null }
   | { executable: false; status: "provider_resolution_required"; reason: string };
 
 /**
@@ -119,10 +119,13 @@ export type SeasonTruthStatus =
  */
 export function seasonTruthStatus(query: SemanticQuery): SeasonTruthStatus {
   if (!query.scope.season) return { executable: true, status: "not_requested", reason: null };
+  if (query.entity.type === "team" && ["aggregate", "match_list"].includes(query.query_kind)) {
+    return { executable: true, status: "runtime_provider_resolution", reason: null };
+  }
   return {
     executable: false,
     status: "provider_resolution_required",
-    reason: `A temporada "${query.scope.season}" foi compreendida, mas ainda exige resolução real de CompetitionSeason no provider (competition id, season id, início, fim e coverage). Nenhuma janela de calendário será inferida; use um intervalo de datas explícito sem season enquanto o resolver provider-backed não estiver conectado.`,
+    reason: `A temporada "${query.scope.season}" foi preservada, mas esse executor ainda não possui resolução provider-backed de CompetitionSeason. Nenhuma janela de calendário será inferida.`,
   };
 }
 

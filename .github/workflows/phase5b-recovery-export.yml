@@ -1,0 +1,29 @@
+name: Phase 5B Recovery Export
+
+on:
+  push:
+    branches:
+      - tmp/phase5b-recovery
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prove clean checkout
+        run: git diff --exit-code
+      - name: Package exact source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/source-export
+          tar --exclude=.git --exclude=node_modules --exclude=.output -czf /tmp/source-export/source.tgz .
+          git rev-parse HEAD > /tmp/source-export/HEAD.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase5b-recovery-export
+          path: /tmp/source-export
+          if-no-files-found: error
