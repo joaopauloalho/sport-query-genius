@@ -8,10 +8,8 @@ export type UniversalEventType =
   | "var"
   | "penalty";
 
-export interface UniversalAnalysisIntent {
+interface UniversalAnalysisIntentBase {
   sport: "football";
-  query_kind: UniversalResultQueryKind;
-  entity_type: "team" | "player";
   entity_name: string;
   entity_id: string;
   compare_with?: { entity_name: string; entity_id: string } | null;
@@ -23,6 +21,12 @@ export interface UniversalAnalysisIntent {
   venue: "all" | "home" | "away";
   status: "finished" | "live" | "upcoming";
 }
+
+export type UniversalAnalysisIntent = UniversalAnalysisIntentBase &
+  (
+    | { entity_type: "team"; query_kind: UniversalResultQueryKind }
+    | { entity_type: "player"; query_kind: "match_list" }
+  );
 
 export interface AnalysisProvenance {
   provider: string;
@@ -80,7 +84,11 @@ export interface TeamEventListAnalysisResult {
   cache_key: string;
   question: string;
   created_at: string;
-  intent: UniversalAnalysisIntent & { query_kind: "event_list"; entity_type: "team"; event_type: UniversalEventType };
+  intent: UniversalAnalysisIntent & {
+    query_kind: "event_list";
+    entity_type: "team";
+    event_type: UniversalEventType;
+  };
   team: { id: string; name: string };
   events: TeamAnalysisEvent[];
   related: string[];
