@@ -62,6 +62,7 @@ jobs:
           src/server/sports/competition-season-registry.ts
           src/server/sports/capability-negotiation.ts
           src/server/sports/capability-negotiation-core.ts
+          src/server/sports/metric-catalog.ts
           src/server/sports/team-query-capability.ts
           src/server/sports/player-query-capability.ts
           src/server/sports/fixture-stats.ts
