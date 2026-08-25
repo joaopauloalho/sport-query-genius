@@ -5,6 +5,7 @@ import { runPhase5cGeniusBenchmark } from "./phase5c-benchmark";
 describe("Phase 5C player truth gate", () => {
   test("player corpus has 216 deterministic cases with zero silent semantic loss", () => {
     const report = runPhase5cGeniusBenchmark();
+    expect(report.failures).toEqual([]);
     expect(report.total).toBe(216);
     expect(report.semantic_accuracy).toBe(100);
     expect(report.capability_accuracy).toBe(100);
