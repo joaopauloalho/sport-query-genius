@@ -49,14 +49,15 @@ function directProviders(metric: PlayerMetricKey): ("BSD" | "API-FOOTBALL")[] {
     .map(([provider]) => providerName(provider));
 }
 
-function intersection(sets: readonly (readonly ("BSD" | "API-FOOTBALL")[])[]) {
-  if (sets.length === 0) return [] as ("BSD" | "API-FOOTBALL")[];
-  return sets
-    .slice(1)
-    .reduce(
-      (providers, current) => providers.filter((provider) => current.includes(provider)),
-      [...sets[0]],
-    );
+function intersection(
+  sets: readonly (readonly ("BSD" | "API-FOOTBALL")[])[],
+): ("BSD" | "API-FOOTBALL")[] {
+  if (sets.length === 0) return [];
+  let providers: ("BSD" | "API-FOOTBALL")[] = [...sets[0]];
+  for (const current of sets.slice(1)) {
+    providers = providers.filter((provider) => current.includes(provider));
+  }
+  return providers;
 }
 
 export function resolvePlayerMetricExecution(metric: FootballMetric): PlayerMetricExecutionPlan {
@@ -125,10 +126,14 @@ export function resolvePlayerMetricExecution(metric: FootballMetric): PlayerMetr
   };
 }
 
-export function providersForPlayerMetrics(metrics: readonly FootballMetric[]): ("BSD" | "API-FOOTBALL")[] {
+export function providersForPlayerMetrics(
+  metrics: readonly FootballMetric[],
+): ("BSD" | "API-FOOTBALL")[] {
   const plans = metrics.map(resolvePlayerMetricExecution);
   if (plans.some((plan) => plan.kind === "unsupported")) return [];
-  return intersection(plans.map((plan) => plan.providers as readonly ("BSD" | "API-FOOTBALL")[]));
+  return intersection(
+    plans.map((plan) => plan.providers as readonly ("BSD" | "API-FOOTBALL")[]),
+  );
 }
 
 export function playerMetricDependencies(metric: FootballMetric): PlayerMetricKey[] {
