@@ -1,0 +1,43 @@
+name: Phase 5C Metric Catalog Formatter
+
+on:
+  push:
+    branches:
+      - feat/phase-5c-universal-player-stats
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: "${{ github.event.head_commit.message != 'style: format Phase 5C metric catalog' }}"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/phase-5c-universal-player-stats
+
+      - name: Setup Bun 1.4.0
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Frozen install
+        run: bun install --frozen-lockfile
+
+      - name: Format metric catalog
+        run: bun x prettier --write src/server/sports/metric-catalog.ts
+
+      - name: Commit formatter output
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No formatting changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/server/sports/metric-catalog.ts
+          git commit -m 'style: format Phase 5C metric catalog'
+          git push origin HEAD:feat/phase-5c-universal-player-stats
