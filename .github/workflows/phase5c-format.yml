@@ -1,0 +1,66 @@
+name: Phase 5C Formatter
+
+on:
+  push:
+    branches:
+      - feat/phase-5c-universal-player-stats
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.event.head_commit.message != 'style: format Phase 5C truth surface'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/phase-5c-universal-player-stats
+
+      - name: Setup Bun 1.4.0
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Frozen install
+        run: bun install --frozen-lockfile
+
+      - name: Format only Phase 5C lint failures
+        run: >-
+          bun x prettier --write
+          src/server/analysis/analyze-player-universal.server.ts
+          src/server/analysis/analyze.server.ts
+          src/server/analysis/query-plan.ts
+          src/server/sports/capability-negotiation-core.ts
+          src/server/sports/capability-negotiation.ts
+          src/server/sports/player-match-stats.ts
+          src/server/sports/player-query-capability.ts
+          src/server/sports/universal-player.server.ts
+          tests/genius/phase5c-benchmark.ts
+          tests/phase5c/engine.test.ts
+          tests/phase5c/normalization.test.ts
+
+      - name: Commit formatter output
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No formatting changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            src/server/analysis/analyze-player-universal.server.ts \
+            src/server/analysis/analyze.server.ts \
+            src/server/analysis/query-plan.ts \
+            src/server/sports/capability-negotiation-core.ts \
+            src/server/sports/capability-negotiation.ts \
+            src/server/sports/player-match-stats.ts \
+            src/server/sports/player-query-capability.ts \
+            src/server/sports/universal-player.server.ts \
+            tests/genius/phase5c-benchmark.ts \
+            tests/phase5c/engine.test.ts \
+            tests/phase5c/normalization.test.ts
+          git commit -m 'style: format Phase 5C truth surface'
+          git push origin HEAD:feat/phase-5c-universal-player-stats
