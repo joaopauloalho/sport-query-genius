@@ -66,7 +66,7 @@ jobs:
             const browser = await chromium.launch({ headless: true });
             const context = await browser.newContext({ locale: 'pt-BR' });
             const page = await context.newPage();
-            const email = `phase5c-closeout-${Date.now()}@example.com`;
+            const email = `phase5c-closeout-${Date.now()}@mailinator.com`;
             const password = `P5c!${crypto.randomUUID()}Aa9`;
             const results = [];
 
