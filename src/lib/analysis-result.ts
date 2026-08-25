@@ -51,7 +51,7 @@ export function analysisResultSummary(result: AnalysisResult): string {
     return `${result.events.length} gols · ${result.player.name}`;
   }
   if (isMatchListAnalysisResult(result)) {
-    return `${result.matches.length} partida(s) · ${result.team.name}`;
+    return `${result.matches.length} partida(s) · ${result.player?.name ?? result.team.name}`;
   }
   if (isHeadToHeadAnalysisResult(result)) {
     return `${result.summary.meetings} confronto(s) · ${result.teams.primary.name} × ${result.teams.compare.name}`;
@@ -107,7 +107,19 @@ export function toCsv(result: AnalysisResult): string {
 
   if (isMatchListAnalysisResult(result)) {
     return csv([
-      ["data", "mandante", "visitante", "competicao", "status", "placar", "mando", "fonte"],
+      [
+        "data",
+        "mandante",
+        "visitante",
+        "competicao",
+        "status",
+        "placar",
+        "mando",
+        "metrica",
+        "valor",
+        "unidade",
+        "fonte",
+      ],
       ...result.matches.map((match) => [
         new Date(match.date).toLocaleDateString("pt-BR"),
         match.home_team.name,
@@ -116,6 +128,9 @@ export function toCsv(result: AnalysisResult): string {
         match.status,
         match.result,
         match.venue === "home" ? "Casa" : "Fora",
+        match.metric?.key ?? null,
+        match.metric?.value ?? null,
+        match.metric?.unit ?? null,
         match.source,
       ]),
     ]);
