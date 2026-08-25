@@ -56,7 +56,13 @@ const SORTS = new Set<string>(FOOTBALL_SORT_FIELDS);
 const METRICS = new Set<string>(FOOTBALL_METRIC_KEYS);
 const TEAM_METRICS = new Set<string>(TEAM_METRIC_KEYS);
 const PLAYER_METRICS = new Set<string>(PLAYER_METRIC_KEYS);
-const TEAM_STRUCTURAL_FILTERS = new Set(["outcome", "clean_sheet", "venue", "competition", "opponent"]);
+const TEAM_STRUCTURAL_FILTERS = new Set([
+  "outcome",
+  "clean_sheet",
+  "venue",
+  "competition",
+  "opponent",
+]);
 const PLAYER_STRUCTURAL_FILTERS = new Set(["outcome", "venue", "competition", "opponent"]);
 const RATIO_TEAM_METRICS = new Set<FootballMetric>([
   "wins",
@@ -141,7 +147,10 @@ function unsupportedSemanticField(
       };
     }
   }
-  if (query.sort && (!SORTS.has(query.sort.field) || !["asc", "desc"].includes(query.sort.direction))) {
+  if (
+    query.sort &&
+    (!SORTS.has(query.sort.field) || !["asc", "desc"].includes(query.sort.direction))
+  ) {
     return {
       code: "UNSUPPORTED_CAPABILITY",
       reason: `A ordenação ${query.sort.field}/${query.sort.direction} foi compreendida, mas ainda não é executável.`,
@@ -176,7 +185,8 @@ function normalizedProvider(value: string): string {
 function teamMetricPlans(queryPlan: QueryPlan): TeamMetricExecutionPlan[] {
   if (queryPlan.entity.type !== "team") return [];
   const metrics = new Set<TeamMetric>();
-  if (queryPlan.metric && TEAM_METRICS.has(queryPlan.metric)) metrics.add(queryPlan.metric as TeamMetric);
+  if (queryPlan.metric && TEAM_METRICS.has(queryPlan.metric))
+    metrics.add(queryPlan.metric as TeamMetric);
   for (const filter of queryPlan.filters) {
     if (TEAM_METRICS.has(filter.field)) metrics.add(filter.field as TeamMetric);
   }
@@ -186,7 +196,8 @@ function teamMetricPlans(queryPlan: QueryPlan): TeamMetricExecutionPlan[] {
 function playerMetricPlans(queryPlan: QueryPlan): PlayerMetricExecutionPlan[] {
   if (queryPlan.entity.type !== "player") return [];
   const metrics = new Set<PlayerMetricKey>();
-  if (queryPlan.metric && PLAYER_METRICS.has(queryPlan.metric)) metrics.add(queryPlan.metric as PlayerMetricKey);
+  if (queryPlan.metric && PLAYER_METRICS.has(queryPlan.metric))
+    metrics.add(queryPlan.metric as PlayerMetricKey);
   for (const filter of queryPlan.filters) {
     if (PLAYER_METRICS.has(filter.field)) metrics.add(filter.field as PlayerMetricKey);
   }
@@ -285,7 +296,8 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
   }
   const queryPlan = parsed.data;
   const capability =
-    queryPlan.entity.type === "player" && ["aggregate", "match_list", "event_list"].includes(queryPlan.query_kind)
+    queryPlan.entity.type === "player" &&
+    ["aggregate", "match_list", "event_list"].includes(queryPlan.query_kind)
       ? phase5cPlayerCapability(queryPlan)
       : resolveFootballCapability(queryPlan);
   add(checks, "registered_capability", capability.supported, capability.reason);
@@ -308,7 +320,12 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
           capability,
         );
       }
-      if (queryPlan.filters.length || queryPlan.group_by.length || queryPlan.sort || queryPlan.limit) {
+      if (
+        queryPlan.filters.length ||
+        queryPlan.group_by.length ||
+        queryPlan.sort ||
+        queryPlan.limit
+      ) {
         return failure(
           checks,
           "UNSUPPORTED_CAPABILITY",
@@ -339,7 +356,10 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
       );
     }
 
-    if (queryPlan.query_kind === "aggregate" && !PLAYER_SUPPORTED_AGGREGATIONS.has(queryPlan.aggregation ?? "")) {
+    if (
+      queryPlan.query_kind === "aggregate" &&
+      !PLAYER_SUPPORTED_AGGREGATIONS.has(queryPlan.aggregation ?? "")
+    ) {
       return failure(
         checks,
         "UNSUPPORTED_CAPABILITY",
@@ -447,53 +467,116 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
 
   let executor: string | null = null;
   if (queryPlan.entity.type === "team" && queryPlan.query_kind === "aggregate") {
-    if (!queryPlan.metric) return failure(checks, "UNSUPPORTED_METRIC", "Agregado sem métrica.", capability);
+    if (!queryPlan.metric)
+      return failure(checks, "UNSUPPORTED_METRIC", "Agregado sem métrica.", capability);
     const metricPlan = resolveTeamMetricExecution(queryPlan.metric);
-    add(checks, "deterministic_metric_executor", metricPlan.kind !== "unsupported", metricPlan.kind === "unsupported" ? metricPlan.reason : null);
-    if (metricPlan.kind === "unsupported") return failure(checks, "UNSUPPORTED_CAPABILITY", metricPlan.reason, capability);
-    if (["percentage", "rate"].includes(queryPlan.aggregation ?? "") && !RATIO_TEAM_METRICS.has(queryPlan.metric)) {
-      return failure(checks, "UNSUPPORTED_CAPABILITY", `${queryPlan.aggregation} exige denominador semântico explícito e ${queryPlan.metric} ainda não o define.`, capability);
+    add(
+      checks,
+      "deterministic_metric_executor",
+      metricPlan.kind !== "unsupported",
+      metricPlan.kind === "unsupported" ? metricPlan.reason : null,
+    );
+    if (metricPlan.kind === "unsupported")
+      return failure(checks, "UNSUPPORTED_CAPABILITY", metricPlan.reason, capability);
+    if (
+      ["percentage", "rate"].includes(queryPlan.aggregation ?? "") &&
+      !RATIO_TEAM_METRICS.has(queryPlan.metric)
+    ) {
+      return failure(
+        checks,
+        "UNSUPPORTED_CAPABILITY",
+        `${queryPlan.aggregation} exige denominador semântico explícito e ${queryPlan.metric} ainda não o define.`,
+        capability,
+      );
     }
     executor = "team_universal_aggregate";
   } else if (queryPlan.entity.type === "team" && queryPlan.query_kind === "match_list") {
     if (queryPlan.sort) {
-      return failure(checks, "UNSUPPORTED_CAPABILITY", "sort em match_list foi compreendido, mas ainda não possui executor determinístico; a consulta foi recusada para evitar semantic loss.", capability);
+      return failure(
+        checks,
+        "UNSUPPORTED_CAPABILITY",
+        "sort em match_list foi compreendido, mas ainda não possui executor determinístico; a consulta foi recusada para evitar semantic loss.",
+        capability,
+      );
     }
     if (queryPlan.metric) {
       const metricPlan = resolveTeamMetricExecution(queryPlan.metric);
-      add(checks, "match_list_metric_output", metricPlan.kind !== "unsupported", metricPlan.kind === "unsupported" ? metricPlan.reason : null);
-      if (metricPlan.kind === "unsupported") return failure(checks, "UNSUPPORTED_CAPABILITY", metricPlan.reason, capability);
+      add(
+        checks,
+        "match_list_metric_output",
+        metricPlan.kind !== "unsupported",
+        metricPlan.kind === "unsupported" ? metricPlan.reason : null,
+      );
+      if (metricPlan.kind === "unsupported")
+        return failure(checks, "UNSUPPORTED_CAPABILITY", metricPlan.reason, capability);
     }
     executor = "team_universal_match_list";
-  } else if (queryPlan.entity.type === "team" && ["event_list", "schedule", "head_to_head"].includes(queryPlan.query_kind)) {
-    if (queryPlan.filters.length || queryPlan.group_by.length || queryPlan.sort || queryPlan.limit) {
-      return failure(checks, "UNSUPPORTED_CAPABILITY", `Filtros/group_by/sort/limit foram compreendidos, mas ${queryPlan.query_kind} ainda não executa essas operações.`, capability);
+  } else if (
+    queryPlan.entity.type === "team" &&
+    ["event_list", "schedule", "head_to_head"].includes(queryPlan.query_kind)
+  ) {
+    if (
+      queryPlan.filters.length ||
+      queryPlan.group_by.length ||
+      queryPlan.sort ||
+      queryPlan.limit
+    ) {
+      return failure(
+        checks,
+        "UNSUPPORTED_CAPABILITY",
+        `Filtros/group_by/sort/limit foram compreendidos, mas ${queryPlan.query_kind} ainda não executa essas operações.`,
+        capability,
+      );
     }
-    if (capability.stage !== "implemented") return failure(checks, "UNSUPPORTED_CAPABILITY", capability.reason ?? "Executor ainda não implementado.", capability);
+    if (capability.stage !== "implemented")
+      return failure(
+        checks,
+        "UNSUPPORTED_CAPABILITY",
+        capability.reason ?? "Executor ainda não implementado.",
+        capability,
+      );
     executor = `team_universal_${queryPlan.query_kind}`;
   } else {
     return failure(
       checks,
       "UNSUPPORTED_CAPABILITY",
-      capability.reason ?? `Não existe executor determinístico ativo para ${queryPlan.entity.type}/${queryPlan.query_kind}.`,
+      capability.reason ??
+        `Não existe executor determinístico ativo para ${queryPlan.entity.type}/${queryPlan.query_kind}.`,
       capability,
     );
   }
 
   add(checks, "deterministic_executor", true);
-  const capabilityProviders = Array.from(new Set(capability.sources.map((source) => normalizedProvider(source.provider))));
-  const providers = rawMetricPlans.length > 0 ? metricProviders.filter((provider) => capabilityProviders.includes(provider)) : capabilityProviders;
+  const capabilityProviders = Array.from(
+    new Set(capability.sources.map((source) => normalizedProvider(source.provider))),
+  );
+  const providers =
+    rawMetricPlans.length > 0
+      ? metricProviders.filter((provider) => capabilityProviders.includes(provider))
+      : capabilityProviders;
   const families = new Set<string>(["fixtures"]);
   const structuralScoreFilters = queryPlan.filters.some((filter) => {
     if (["outcome", "clean_sheet"].includes(filter.field)) return true;
     if (!TEAM_METRICS.has(filter.field)) return false;
     return resolveTeamMetricExecution(filter.field as TeamMetric).kind === "derived";
   });
-  if (metricPlans.some((plan) => plan.kind === "derived") || structuralScoreFilters) families.add("fixture_score");
+  if (metricPlans.some((plan) => plan.kind === "derived") || structuralScoreFilters)
+    families.add("fixture_score");
   if (rawMetricPlans.length > 0) families.add("fixture_stats");
   if (queryPlan.scope.season) families.add("league_season");
-  add(checks, "provider_registered", providers.length > 0, providers.length ? null : "Nenhum provider registrado para todas as métricas necessárias.");
-  if (!providers.length) return failure(checks, "PROVIDER_UNAVAILABLE", "Nenhum provider registrado consegue executar integralmente a consulta.", capability);
+  add(
+    checks,
+    "provider_registered",
+    providers.length > 0,
+    providers.length ? null : "Nenhum provider registrado para todas as métricas necessárias.",
+  );
+  if (!providers.length)
+    return failure(
+      checks,
+      "PROVIDER_UNAVAILABLE",
+      "Nenhum provider registrado consegue executar integralmente a consulta.",
+      capability,
+    );
   add(checks, "data_family_dedupe", true);
 
   return {

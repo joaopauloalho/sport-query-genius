@@ -101,7 +101,9 @@ function structuralScope(
   plan: QueryPlan,
   season: CompetitionSeason | null,
 ): NormalizedPlayerMatchStats[] {
-  const competition = plan.scope.competition ? normalizeCompetitionText(plan.scope.competition) : null;
+  const competition = plan.scope.competition
+    ? normalizeCompetitionText(plan.scope.competition)
+    : null;
   const opponent = plan.scope.opponent ? normalize(plan.scope.opponent) : null;
   const from = plan.scope.date_from ? Date.parse(`${plan.scope.date_from}T00:00:00Z`) / 1000 : null;
   const to = plan.scope.date_to ? Date.parse(`${plan.scope.date_to}T23:59:59Z`) / 1000 : null;
@@ -109,10 +111,7 @@ function structuralScope(
   return snapshots
     .filter((row) => row.participated)
     .filter((row) => plan.scope.venue === "all" || row.venue === plan.scope.venue)
-    .filter(
-      (row) =>
-        !competition || normalizeCompetitionText(row.competitionName) === competition,
-    )
+    .filter((row) => !competition || normalizeCompetitionText(row.competitionName) === competition)
     .filter((row) => !opponent || normalize(row.opponentName) === opponent)
     .filter((row) => from === null || row.timestamp >= from)
     .filter((row) => to === null || row.timestamp <= to)
@@ -146,7 +145,9 @@ function compareString(value: string, filter: QueryFilter): boolean {
   if (filter.operator === "in") {
     return (
       Array.isArray(filter.value) &&
-      filter.value.some((candidate) => typeof candidate === "string" && normalize(candidate) === actual)
+      filter.value.some(
+        (candidate) => typeof candidate === "string" && normalize(candidate) === actual,
+      )
     );
   }
   if (typeof filter.value !== "string") return false;
@@ -247,7 +248,13 @@ export function groupPlayerRows(
   metric: PlayerMetricKey,
 ): PlayerGroupedAggregateRow[] {
   if (plan.group_by.length === 0) return [];
-  const buckets = new Map<string, { rows: NormalizedPlayerMatchStats[]; dimensions: Partial<Record<FootballGroupByField, string>> }>();
+  const buckets = new Map<
+    string,
+    {
+      rows: NormalizedPlayerMatchStats[];
+      dimensions: Partial<Record<FootballGroupByField, string>>;
+    }
+  >();
   for (const row of rows) {
     const dimensions: Partial<Record<FootballGroupByField, string>> = {};
     for (const field of plan.group_by) {
@@ -428,10 +435,16 @@ export async function executePlayerAggregate(
 ): Promise<Phase5cPlayerAggregateResult> {
   const plan = applyOverrides(inputPlan, overrides);
   if (plan.entity.type !== "player" || plan.query_kind !== "aggregate" || !plan.metric) {
-    throw new AnalysisPipelineError("UNSUPPORTED_CAPABILITY", "ExecutionPlan não é um aggregate de jogador.");
+    throw new AnalysisPipelineError(
+      "UNSUPPORTED_CAPABILITY",
+      "ExecutionPlan não é um aggregate de jogador.",
+    );
   }
   if (!PLAYER_METRICS.has(plan.metric)) {
-    throw new AnalysisPipelineError("UNSUPPORTED_METRIC", `${plan.metric} não é métrica de jogador.`);
+    throw new AnalysisPipelineError(
+      "UNSUPPORTED_METRIC",
+      `${plan.metric} não é métrica de jogador.`,
+    );
   }
   const metric = plan.metric as PlayerMetricKey;
   const player = await source.resolvePlayer(plan.entity.name);
@@ -446,8 +459,18 @@ export async function executePlayerAggregate(
   const stats = statistics(values);
   const queryPlan = queryPlanSchema.parse(plan);
   const required = requiredMetrics(plan);
-  const resultProvenance = provenance(player, filtered, read.meta, plan, seasonRead.season, required);
-  if (seasonRead.meta) resultProvenance.data_families = [...new Set([...(resultProvenance.data_families ?? []), seasonRead.meta.dataFamily])];
+  const resultProvenance = provenance(
+    player,
+    filtered,
+    read.meta,
+    plan,
+    seasonRead.season,
+    required,
+  );
+  if (seasonRead.meta)
+    resultProvenance.data_families = [
+      ...new Set([...(resultProvenance.data_families ?? []), seasonRead.meta.dataFamily]),
+    ];
 
   const matchRows = filtered.map((row, index) => matchRecord(row, values[index]));
   const chartData = groups.length
@@ -525,7 +548,14 @@ function fixtureSummary(
     opponent: row.opponentName,
     venue: row.venue,
     result: row.result,
-    outcome: row.outcome === "win" ? "V" : row.outcome === "draw" ? "E" : row.outcome === "loss" ? "D" : null,
+    outcome:
+      row.outcome === "win"
+        ? "V"
+        : row.outcome === "draw"
+          ? "E"
+          : row.outcome === "loss"
+            ? "D"
+            : null,
     source: row.provenance.provider,
     metric:
       metric && output
@@ -547,9 +577,13 @@ export async function executePlayerMatchList(
 ): Promise<MatchListAnalysisResult> {
   const plan = applyOverrides(inputPlan, overrides);
   if (plan.entity.type !== "player" || plan.query_kind !== "match_list") {
-    throw new AnalysisPipelineError("UNSUPPORTED_CAPABILITY", "ExecutionPlan não é match_list de jogador.");
+    throw new AnalysisPipelineError(
+      "UNSUPPORTED_CAPABILITY",
+      "ExecutionPlan não é match_list de jogador.",
+    );
   }
-  const metric = plan.metric && PLAYER_METRICS.has(plan.metric) ? (plan.metric as PlayerMetricKey) : null;
+  const metric =
+    plan.metric && PLAYER_METRICS.has(plan.metric) ? (plan.metric as PlayerMetricKey) : null;
   const player = await source.resolvePlayer(plan.entity.name);
   const read = await source.listPlayerSnapshots(player);
   const seasonRead = await resolveSeason(source, plan);

@@ -44,9 +44,15 @@ describe("Phase 5C BSD player contract normalization", () => {
     });
     expect(playerMatchStatValue(snapshot, "goals")).toMatchObject({ value: 0, observed: true });
     expect(playerMatchStatValue(snapshot, "passes")).toMatchObject({ value: 43, observed: true });
-    expect(playerMatchStatValue(snapshot, "pass_accuracy")).toMatchObject({ value: 85, observed: true });
+    expect(playerMatchStatValue(snapshot, "pass_accuracy")).toMatchObject({
+      value: 85,
+      observed: true,
+    });
     expect(playerMatchStatValue(snapshot, "rating")).toMatchObject({ value: 7.4, observed: true });
-    expect(playerMatchStatValue(snapshot, "goal_contributions")).toMatchObject({ value: 1, observed: true });
+    expect(playerMatchStatValue(snapshot, "goal_contributions")).toMatchObject({
+      value: 1,
+      observed: true,
+    });
   });
 
   test("null, absent, empty and malformed fields remain UNKNOWN", () => {
@@ -85,7 +91,10 @@ describe("Phase 5C BSD player contract normalization", () => {
         },
       ],
     });
-    expect(playerMatchStatValue(snapshot, "yellow_cards")).toMatchObject({ value: 1, observed: true });
+    expect(playerMatchStatValue(snapshot, "yellow_cards")).toMatchObject({
+      value: 1,
+      observed: true,
+    });
     expect(playerMatchStatValue(snapshot, "red_cards").observed).toBe(false);
     expect(playerMatchStatValue(snapshot, "cards").observed).toBe(false);
   });
@@ -179,11 +188,21 @@ describe("Phase 5C API-Football /fixtures/players contract normalization", () =>
             players: [
               {
                 player: { id: 1001 },
-                statistics: [{ games: { minutes: 90, rating: "bad", substitute: false }, goals: { total: 0, assists: 0 } }],
+                statistics: [
+                  {
+                    games: { minutes: 90, rating: "bad", substitute: false },
+                    goals: { total: 0, assists: 0 },
+                  },
+                ],
               },
               {
                 player: { id: 1001 },
-                statistics: [{ games: { minutes: 1, rating: "7", substitute: true }, goals: { total: 0, assists: 0 } }],
+                statistics: [
+                  {
+                    games: { minutes: 1, rating: "7", substitute: true },
+                    goals: { total: 0, assists: 0 },
+                  },
+                ],
               },
             ],
           },

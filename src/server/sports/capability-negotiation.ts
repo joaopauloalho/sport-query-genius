@@ -1,8 +1,5 @@
 import type { SemanticPlan } from "../analysis/semantic-plan";
-import {
-  metricIsSupportedForEntity,
-  type FootballMetric,
-} from "./metric-catalog";
+import { metricIsSupportedForEntity, type FootballMetric } from "./metric-catalog";
 import {
   negotiateFootballCapability as negotiateFootballCapabilityCore,
   type CapabilityNegotiation,

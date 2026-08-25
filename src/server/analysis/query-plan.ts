@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-import {
-  FOOTBALL_METRIC_KEYS,
-  type FootballMetric,
-} from "../sports/metric-catalog";
+import { FOOTBALL_METRIC_KEYS, type FootballMetric } from "../sports/metric-catalog";
 
 export const MAX_QUERY_MATCHES = 100;
 export const MAX_RESULT_ROWS = 100;
@@ -186,8 +183,14 @@ export const queryScopeSchema = z
   .object({
     last_matches: z.number().int().min(1).max(MAX_QUERY_MATCHES).optional(),
     limit: z.number().int().min(1).max(50).optional(),
-    date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    date_from: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    date_to: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
     season: z.string().trim().min(1).max(40).optional(),
     competition: z.string().trim().min(1).max(120).optional(),
     venue: z.enum(["home", "away", "all"]).default("all"),
@@ -216,35 +219,77 @@ export const queryPlanSchema = z
   .superRefine((plan, context) => {
     if (plan.query_kind === "aggregate") {
       if (!plan.metric) {
-        context.addIssue({ code: z.ZodIssueCode.custom, path: ["metric"], message: "aggregate requires metric" });
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["metric"],
+          message: "aggregate requires metric",
+        });
       }
       if (!plan.aggregation) {
-        context.addIssue({ code: z.ZodIssueCode.custom, path: ["aggregation"], message: "aggregate requires aggregation" });
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["aggregation"],
+          message: "aggregate requires aggregation",
+        });
       }
     }
 
     if (plan.query_kind === "event_list" && !plan.event_type) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["event_type"], message: "event_list requires event_type" });
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["event_type"],
+        message: "event_list requires event_type",
+      });
     }
 
-    if ((plan.query_kind === "comparison" || plan.query_kind === "head_to_head") && !plan.compare_with) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["compare_with"], message: `${plan.query_kind} requires compare_with` });
+    if (
+      (plan.query_kind === "comparison" || plan.query_kind === "head_to_head") &&
+      !plan.compare_with
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["compare_with"],
+        message: `${plan.query_kind} requires compare_with`,
+      });
     }
 
-    if (plan.query_kind === "head_to_head" && (plan.entity.type !== "team" || plan.compare_with?.type !== "team")) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["entity"], message: "head_to_head currently models team versus team" });
+    if (
+      plan.query_kind === "head_to_head" &&
+      (plan.entity.type !== "team" || plan.compare_with?.type !== "team")
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["entity"],
+        message: "head_to_head currently models team versus team",
+      });
     }
 
     if (plan.scope.date_from && plan.scope.date_to && plan.scope.date_from > plan.scope.date_to) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["scope", "date_to"], message: "date_to must not be earlier than date_from" });
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["scope", "date_to"],
+        message: "date_to must not be earlier than date_from",
+      });
     }
 
     if (plan.group_by.length > 0 && plan.query_kind !== "aggregate") {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["group_by"], message: "group_by is currently executable only for aggregate" });
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["group_by"],
+        message: "group_by is currently executable only for aggregate",
+      });
     }
 
-    if ((plan.sort || plan.limit) && plan.group_by.length === 0 && plan.query_kind === "aggregate") {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["sort"], message: "aggregate sort/limit requires group_by; it never truncates the input sample" });
+    if (
+      (plan.sort || plan.limit) &&
+      plan.group_by.length === 0 &&
+      plan.query_kind === "aggregate"
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sort"],
+        message: "aggregate sort/limit requires group_by; it never truncates the input sample",
+      });
     }
   });
 

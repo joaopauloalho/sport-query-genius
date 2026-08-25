@@ -6,23 +6,28 @@ import {
 } from "../../src/server/analysis/analyze-player-universal.server";
 import { AnalysisPipelineError } from "../../src/server/analysis/errors";
 import { queryPlanSchema } from "../../src/server/analysis/query-plan";
-import { createSemanticPlan, semanticPlanResponseSchema } from "../../src/server/analysis/semantic-plan";
+import {
+  createSemanticPlan,
+  semanticPlanResponseSchema,
+} from "../../src/server/analysis/semantic-plan";
 import { normalizeTruthfulSemanticCandidate } from "../../src/server/analysis/query-plan-v5a-normalizer";
 import { negotiateFootballCapability } from "../../src/server/sports/capability-negotiation";
 import { reconcilePlayerIdentity } from "../../src/server/sports/player-identity";
 import type { PlayerMetricKey } from "../../src/server/sports/metric-catalog";
 import { controlledPlayerSnapshots, Phase5cFakeSource, playerSnapshot } from "./helpers";
 
-function plan(params: {
-  kind?: "aggregate" | "match_list";
-  metric?: PlayerMetricKey;
-  aggregation?: string;
-  filters?: Array<{ field: string; operator: string; value: unknown }>;
-  scope?: Record<string, unknown>;
-  group_by?: string[];
-  sort?: { field: string; direction: string };
-  limit?: number;
-} = {}) {
+function plan(
+  params: {
+    kind?: "aggregate" | "match_list";
+    metric?: PlayerMetricKey;
+    aggregation?: string;
+    filters?: Array<{ field: string; operator: string; value: unknown }>;
+    scope?: Record<string, unknown>;
+    group_by?: string[];
+    sort?: { field: string; direction: string };
+    limit?: number;
+  } = {},
+) {
   return queryPlanSchema.parse({
     sport: "football",
     entity: { type: "player", name: "Yuri Alberto" },
@@ -61,7 +66,12 @@ async function expectPipelineError(promise: Promise<unknown>, code: string) {
 
 describe("Phase 5C universal player aggregate", () => {
   test("legacy goals aggregate continues through the universal engine", async () => {
-    const result = await executePlayerAggregate("goals", plan(), undefined, new Phase5cFakeSource());
+    const result = await executePlayerAggregate(
+      "goals",
+      plan(),
+      undefined,
+      new Phase5cFakeSource(),
+    );
     expect(result.statistics.sample_size).toBe(4);
     expect(result.answer.value).toBe(0.75);
   });
@@ -127,7 +137,10 @@ describe("Phase 5C universal player aggregate", () => {
   test("venue scope combines with a player metric", async () => {
     const result = await executePlayerAggregate(
       "passes away",
-      plan({ metric: "passes", scope: { last_matches: 10, venue: "away", half: "full", status: "finished" } }),
+      plan({
+        metric: "passes",
+        scope: { last_matches: 10, venue: "away", half: "full", status: "finished" },
+      }),
       undefined,
       new Phase5cFakeSource(),
     );
@@ -137,8 +150,20 @@ describe("Phase 5C universal player aggregate", () => {
 
   test("competition and real season are applied before last N", async () => {
     const snapshots = [
-      playerSnapshot({ id: 301, date: "2025-09-01", competition: "Premier League", seasonId: "2025", values: { passes: 30 } }),
-      playerSnapshot({ id: 302, date: "2026-02-01", competition: "Premier League", seasonId: "2025", values: { passes: 50 } }),
+      playerSnapshot({
+        id: 301,
+        date: "2025-09-01",
+        competition: "Premier League",
+        seasonId: "2025",
+        values: { passes: 30 },
+      }),
+      playerSnapshot({
+        id: 302,
+        date: "2026-02-01",
+        competition: "Premier League",
+        seasonId: "2025",
+        values: { passes: 50 },
+      }),
       ...controlledPlayerSnapshots,
     ];
     const source = new Phase5cFakeSource(snapshots);
@@ -188,7 +213,10 @@ describe("Phase 5C universal player aggregate", () => {
   test("last N means real appearances, not team fixtures or unused bench rows", async () => {
     const result = await executePlayerAggregate(
       "last two appearances",
-      plan({ metric: "passes", scope: { last_matches: 2, venue: "all", half: "full", status: "finished" } }),
+      plan({
+        metric: "passes",
+        scope: { last_matches: 2, venue: "all", half: "full", status: "finished" },
+      }),
       undefined,
       new Phase5cFakeSource(),
     );
@@ -199,7 +227,10 @@ describe("Phase 5C universal player aggregate", () => {
   test("explicit zero remains a real value", async () => {
     const result = await executePlayerAggregate(
       "zero goals",
-      plan({ metric: "goals", scope: { last_matches: 1, venue: "away", half: "full", status: "finished" } }),
+      plan({
+        metric: "goals",
+        scope: { last_matches: 1, venue: "away", half: "full", status: "finished" },
+      }),
       undefined,
       new Phase5cFakeSource(),
     );
@@ -211,14 +242,23 @@ describe("Phase 5C universal player aggregate", () => {
     const snapshots = [...controlledPlayerSnapshots];
     snapshots[4] = playerSnapshot({ id: 205, date: "2026-08-20", values: { passes: null } });
     await expectPipelineError(
-      executePlayerAggregate("unknown passes", plan({ metric: "passes" }), undefined, new Phase5cFakeSource(snapshots)),
+      executePlayerAggregate(
+        "unknown passes",
+        plan({ metric: "passes" }),
+        undefined,
+        new Phase5cFakeSource(snapshots),
+      ),
       "DATA_INSUFFICIENT",
     );
   });
 
   test("UNKNOWN required filter never shrinks the sample silently", async () => {
     const snapshots = [...controlledPlayerSnapshots];
-    snapshots[4] = playerSnapshot({ id: 205, date: "2026-08-20", values: { passes: 60, rating: null } });
+    snapshots[4] = playerSnapshot({
+      id: 205,
+      date: "2026-08-20",
+      values: { passes: 60, rating: null },
+    });
     await expectPipelineError(
       executePlayerAggregate(
         "passes rating",
@@ -252,11 +292,21 @@ describe("Phase 5C universal player aggregate", () => {
   test("group_by competition keeps deterministic dimension values", async () => {
     const snapshots = [
       ...controlledPlayerSnapshots,
-      playerSnapshot({ id: 260, date: "2026-08-22", competition: "Premier League", seasonId: "2025", values: { passes: 80 } }),
+      playerSnapshot({
+        id: 260,
+        date: "2026-08-22",
+        competition: "Premier League",
+        seasonId: "2025",
+        values: { passes: 80 },
+      }),
     ];
     const result = await executePlayerAggregate(
       "group competition",
-      plan({ metric: "passes", scope: { last_matches: 10, venue: "all", half: "full", status: "finished" }, group_by: ["competition"] }),
+      plan({
+        metric: "passes",
+        scope: { last_matches: 10, venue: "all", half: "full", status: "finished" },
+        group_by: ["competition"],
+      }),
       undefined,
       new Phase5cFakeSource(snapshots),
     );
@@ -278,7 +328,11 @@ describe("Phase 5C universal player aggregate", () => {
 
   test("goal_contributions becomes UNKNOWN when one component is missing", async () => {
     const snapshots = [...controlledPlayerSnapshots];
-    snapshots[4] = playerSnapshot({ id: 205, date: "2026-08-20", values: { goals: 2, assists: null } });
+    snapshots[4] = playerSnapshot({
+      id: 205,
+      date: "2026-08-20",
+      values: { goals: 2, assists: null },
+    });
     await expectPipelineError(
       executePlayerAggregate(
         "goal contributions unknown",
@@ -409,8 +463,18 @@ describe("Phase 5C capability and identity gates", () => {
         nationality: "Brazil",
       },
       [
-        { provider: "API-FOOTBALL", providerPlayerId: "88", canonicalName: "Joao Silva", nationality: "Brazil" },
-        { provider: "API-FOOTBALL", providerPlayerId: "99", canonicalName: "Joao Silva", nationality: "Brazil" },
+        {
+          provider: "API-FOOTBALL",
+          providerPlayerId: "88",
+          canonicalName: "Joao Silva",
+          nationality: "Brazil",
+        },
+        {
+          provider: "API-FOOTBALL",
+          providerPlayerId: "99",
+          canonicalName: "Joao Silva",
+          nationality: "Brazil",
+        },
       ],
     );
     expect(result.status).toBe("ambiguous");

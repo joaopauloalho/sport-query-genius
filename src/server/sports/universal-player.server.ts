@@ -97,7 +97,10 @@ async function fetchJson(
       // handled below
     }
     if (response.status === 429) {
-      throw new AnalysisPipelineError("API_LIMIT_REACHED", "O limite do provider de futebol foi atingido.");
+      throw new AnalysisPipelineError(
+        "API_LIMIT_REACHED",
+        "O limite do provider de futebol foi atingido.",
+      );
     }
     if (!response.ok) {
       throw new AnalysisPipelineError(
@@ -121,7 +124,9 @@ export class BsdUniversalPlayerSource {
   private readonly cache = getProviderPayloadCacheRepository();
 
   constructor(observer?: SportsCacheObserver) {
-    const source = createUniversalFootballSources(observer, ["BSD"]).find((item) => item.name === "BSD");
+    const source = createUniversalFootballSources(observer, ["BSD"]).find(
+      (item) => item.name === "BSD",
+    );
     if (!source) {
       throw new AnalysisPipelineError(
         "PROVIDER_UNAVAILABLE",
@@ -148,7 +153,9 @@ export class BsdUniversalPlayerSource {
     return this.footballSource.resolveCompetitionSeason(competition, season);
   }
 
-  private async loadBsdStats(playerId: number): Promise<{ payload: unknown; fetchedAt: string; endpoint: string }> {
+  private async loadBsdStats(
+    playerId: number,
+  ): Promise<{ payload: unknown; fetchedAt: string; endpoint: string }> {
     const key = `player:${playerId}:raw-v2`;
     const cached = await this.cache?.get<unknown>("BSD", "player_match_stats", key);
     if (cached) {
@@ -197,7 +204,11 @@ export class BsdUniversalPlayerSource {
 
   async listPlayerSnapshots(player: ResolvedPlayer): Promise<PlayerSnapshotRead> {
     const normalizedKey = `player:${player.id}:normalized-v1`;
-    const cached = await this.cache?.get<CachedSnapshots>("BSD", "player_match_stats", normalizedKey);
+    const cached = await this.cache?.get<CachedSnapshots>(
+      "BSD",
+      "player_match_stats",
+      normalizedKey,
+    );
     if (cached) {
       return {
         player: cached.payload.player,
@@ -214,7 +225,10 @@ export class BsdUniversalPlayerSource {
 
     const statsRead = await this.loadBsdStats(player.id);
     const rawRows = extractBsdPlayerStatRows(statsRead.payload);
-    const teamIds = bsdPlayerStatTeamIds(statsRead.payload, player.teamId).slice(0, MAX_PLAYER_TEAMS);
+    const teamIds = bsdPlayerStatTeamIds(statsRead.payload, player.teamId).slice(
+      0,
+      MAX_PLAYER_TEAMS,
+    );
     const teamNames = new Map<number, string>();
     for (const teamId of teamIds) {
       const rowName = rawRows.map((row) => bsdRowTeamName(row, teamId)).find(Boolean) ?? null;
@@ -280,7 +294,9 @@ export class ApiFootballPlayerMatchStatsAdapter {
   readonly name: UniversalProviderName = "API-FOOTBALL";
   private readonly cache = getProviderPayloadCacheRepository();
 
-  private async requestFixturePlayers(fixtureId: number): Promise<{ payload: unknown; fetchedAt: string }> {
+  private async requestFixturePlayers(
+    fixtureId: number,
+  ): Promise<{ payload: unknown; fetchedAt: string }> {
     const key = `fixture:${fixtureId}`;
     const cached = await this.cache?.get<unknown>("API-FOOTBALL", "player_match_stats", key);
     if (cached) return { payload: cached.payload, fetchedAt: cached.fetchedAt };

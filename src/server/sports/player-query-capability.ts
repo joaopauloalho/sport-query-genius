@@ -104,9 +104,7 @@ export function resolvePlayerMetricExecution(metric: FootballMetric): PlayerMetr
     return {
       kind: "unsupported",
       metric,
-      dataFamily: definition
-        ? (Object.values(definition.providers)[0]?.dataFamily ?? null)
-        : null,
+      dataFamily: definition ? (Object.values(definition.providers)[0]?.dataFamily ?? null) : null,
       providers,
       conditionalCoverage: true,
       components: [],
@@ -131,9 +129,7 @@ export function providersForPlayerMetrics(
 ): ("BSD" | "API-FOOTBALL")[] {
   const plans = metrics.map(resolvePlayerMetricExecution);
   if (plans.some((plan) => plan.kind === "unsupported")) return [];
-  return intersection(
-    plans.map((plan) => plan.providers as readonly ("BSD" | "API-FOOTBALL")[]),
-  );
+  return intersection(plans.map((plan) => plan.providers as readonly ("BSD" | "API-FOOTBALL")[]));
 }
 
 export function playerMetricDependencies(metric: FootballMetric): PlayerMetricKey[] {

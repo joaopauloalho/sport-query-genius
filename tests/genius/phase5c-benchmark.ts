@@ -292,12 +292,19 @@ function buildCases(): BenchmarkCase[] {
         filters: [],
         group_by: ["opponent"],
       },
-      expected: { supported: false, query_kind: "match_list", metric: "passes", group_by: ["opponent"] },
+      expected: {
+        supported: false,
+        query_kind: "match_list",
+        metric: "passes",
+        group_by: ["opponent"],
+      },
     },
   );
 
   if (cases.length !== 216) {
-    throw new Error(`Phase 5C benchmark corpus must contain exactly 216 cases, got ${cases.length}`);
+    throw new Error(
+      `Phase 5C benchmark corpus must contain exactly 216 cases, got ${cases.length}`,
+    );
   }
   return cases;
 }
@@ -310,7 +317,13 @@ function checkExpected(query: SemanticQuery, expected: Expected): boolean {
   if (expected.query_kind && query.query_kind !== expected.query_kind) return false;
   if (expected.metric && query.metric !== expected.metric) return false;
   if (expected.aggregation && query.aggregation !== expected.aggregation) return false;
-  if (expected.filter_fields && !sameSet(query.filters.map((filter) => filter.field), expected.filter_fields)) {
+  if (
+    expected.filter_fields &&
+    !sameSet(
+      query.filters.map((filter) => filter.field),
+      expected.filter_fields,
+    )
+  ) {
     return false;
   }
   if (expected.group_by && !sameSet(query.group_by, expected.group_by)) return false;
@@ -340,7 +353,8 @@ export function runPhase5cGeniusBenchmark() {
     if (semanticsOk) semanticCorrect += 1;
     else failures.push(`${testCase.id}: semantic mismatch`);
 
-    if (testCase.expected.filter_fields && semantic.query.filters.length === 0) silentSemanticLoss += 1;
+    if (testCase.expected.filter_fields && semantic.query.filters.length === 0)
+      silentSemanticLoss += 1;
     if (testCase.expected.group_by && semantic.query.group_by.length === 0) silentSemanticLoss += 1;
     if (testCase.expected.sort_direction && !semantic.query.sort) silentSemanticLoss += 1;
 

@@ -165,7 +165,10 @@ function providerName(provider: MetricProvider): "BSD" | "API-FOOTBALL" {
   return provider === "API_FOOTBALL" ? "API-FOOTBALL" : "BSD";
 }
 
-function unknown(provider: MetricProvider, metric: PlayerMetricKey): NormalizedPlayerMatchStatValue {
+function unknown(
+  provider: MetricProvider,
+  metric: PlayerMetricKey,
+): NormalizedPlayerMatchStatValue {
   return {
     value: null,
     observed: false,
@@ -180,7 +183,7 @@ function rawValue(
   metric: PlayerMetricKey,
   record: JsonRecord,
 ): NormalizedPlayerMatchStatValue {
-  const paths = provider === "BSD" ? BSD_PATHS[metric] ?? [] : API_PATHS[metric] ?? [];
+  const paths = provider === "BSD" ? (BSD_PATHS[metric] ?? []) : (API_PATHS[metric] ?? []);
   const read = firstNumber(record, paths);
   return {
     value: read.value,
@@ -195,27 +198,33 @@ export function playerMatchStatValue(
   snapshot: NormalizedPlayerMatchStats,
   metric: PlayerMetricKey,
 ): NormalizedPlayerMatchStatValue {
-  return snapshot.metrics[metric] ??
-    unknown(snapshot.provenance.provider === "BSD" ? "BSD" : "API_FOOTBALL", metric);
+  return (
+    snapshot.metrics[metric] ??
+    unknown(snapshot.provenance.provider === "BSD" ? "BSD" : "API_FOOTBALL", metric)
+  );
 }
 
-function participated(metrics: Partial<Record<PlayerMetricKey, NormalizedPlayerMatchStatValue>>): boolean {
+function participated(
+  metrics: Partial<Record<PlayerMetricKey, NormalizedPlayerMatchStatValue>>,
+): boolean {
   const minutes = metrics.minutes;
   if (minutes?.observed && minutes.value !== null && minutes.value > 0) return true;
-  return ([
-    "goals",
-    "assists",
-    "shots",
-    "shots_on_target",
-    "rating",
-    "passes",
-    "tackles",
-    "interceptions",
-    "yellow_cards",
-    "red_cards",
-    "saves",
-    "xg",
-  ] as const).some((metric) => {
+  return (
+    [
+      "goals",
+      "assists",
+      "shots",
+      "shots_on_target",
+      "rating",
+      "passes",
+      "tackles",
+      "interceptions",
+      "yellow_cards",
+      "red_cards",
+      "saves",
+      "xg",
+    ] as const
+  ).some((metric) => {
     const value = metrics[metric];
     return value?.observed === true && value.value !== null && value.value > 0;
   });
@@ -318,7 +327,14 @@ function buildSnapshot(params: {
 }
 
 function fixtureId(row: JsonRecord): number | null {
-  return firstNumber(row, ["event_id", "fixture_id", "match_id", "event.id", "fixture.id", "match.id"]).value;
+  return firstNumber(row, [
+    "event_id",
+    "fixture_id",
+    "match_id",
+    "event.id",
+    "fixture.id",
+    "match.id",
+  ]).value;
 }
 
 function teamId(row: JsonRecord): number | null {
@@ -326,12 +342,15 @@ function teamId(row: JsonRecord): number | null {
 }
 
 export function extractBsdPlayerStatRows(payload: unknown): JsonRecord[] {
-  if (Array.isArray(payload)) return payload.map(asRecord).filter((row): row is JsonRecord => row !== null);
+  if (Array.isArray(payload))
+    return payload.map(asRecord).filter((row): row is JsonRecord => row !== null);
   const root = asRecord(payload);
   if (!root) return [];
   for (const key of ["results", "stats", "items", "matches", "player_stats"]) {
     if (Array.isArray(root[key])) {
-      return (root[key] as unknown[]).map(asRecord).filter((row): row is JsonRecord => row !== null);
+      return (root[key] as unknown[])
+        .map(asRecord)
+        .filter((row): row is JsonRecord => row !== null);
     }
   }
   return [];
@@ -391,7 +410,8 @@ export function normalizeApiFootballFixturePlayers(params: {
       const playerBlock = asRecord(rawPlayer);
       const player = playerBlock ? asRecord(playerBlock.player) : null;
       const playerId = player ? firstNumber(player, ["id"]).value : null;
-      const statistics = playerBlock && Array.isArray(playerBlock.statistics) ? playerBlock.statistics : [];
+      const statistics =
+        playerBlock && Array.isArray(playerBlock.statistics) ? playerBlock.statistics : [];
       const stat = asRecord(statistics[0]);
       if (playerId === null || !stat) continue;
       const substitute = firstBoolean(stat, ["games.substitute"]);

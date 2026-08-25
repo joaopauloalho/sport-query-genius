@@ -124,20 +124,12 @@ export async function analyzeQuestionServer(
     }
 
     if (executionPlan.negotiation.executor === "player_universal_aggregate") {
-      const result = await executePlayerAggregate(
-        request.question,
-        queryPlan,
-        request.overrides,
-      );
+      const result = await executePlayerAggregate(request.question, queryPlan, request.overrides);
       return { ok: true, result };
     }
 
     if (executionPlan.negotiation.executor === "player_universal_match_list") {
-      const result = await executePlayerMatchList(
-        request.question,
-        queryPlan,
-        request.overrides,
-      );
+      const result = await executePlayerMatchList(request.question, queryPlan, request.overrides);
       return { ok: true, result };
     }
 
