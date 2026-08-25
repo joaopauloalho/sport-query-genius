@@ -19,10 +19,11 @@
     "test:phase4b": "bun test tests/phase4b",
     "test:phase4c": "bun test tests/phase4c",
     "test:phase5a": "bun test tests/genius",
+    "test:phase5b": "bun test tests/phase5b",
+    "test:phase5c": "bun test tests/phase5c",
     "benchmark:genius": "bun run tests/genius/benchmark.ts",
-    "test:all": "bun run test:phase2b && bun run test:phase3a && bun run test:phase3b && bun run test:phase3c && bun run test:phase3d && bun run test:phase4a && bun run test:phase4b && bun run test:phase4c && bun run test:phase5a && bun run test:phase5b",
-    "format": "prettier --write .",
-    "test:phase5b": "bun test tests/phase5b"
+    "test:all": "bun run test:phase2b && bun run test:phase3a && bun run test:phase3b && bun run test:phase3c && bun run test:phase3d && bun run test:phase4a && bun run test:phase4b && bun run test:phase4c && bun run test:phase5a && bun run test:phase5b && bun run test:phase5c",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -63,7 +64,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
-    "input-otp": "^1.4.2",
+    "input-otp": "^1.1.2",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",
