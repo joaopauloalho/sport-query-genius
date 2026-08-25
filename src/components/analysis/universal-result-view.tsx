@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { SmartSearch } from "@/components/scoutly/smart-search";
 import { MethodologyNote, RealDataBadge, SourceBadge } from "@/components/scoutly/source-badge";
 import { Button } from "@/components/ui/button";
+import { formatMatchMetric } from "@/lib/match-metric-display";
 import type {
   HeadToHeadAnalysisResult,
   MatchListAnalysisResult,
@@ -141,6 +142,11 @@ function MatchList({ result }: { result: MatchListAnalysisResult }) {
               </div>
               <p className="text-sm font-medium">{match.away_team.name}</p>
             </div>
+            {formatMatchMetric(match.metric) && (
+              <p className="mt-3 text-center text-sm font-semibold text-primary">
+                {formatMatchMetric(match.metric)}
+              </p>
+            )}
             <p className="mt-4 text-center text-xs text-muted-foreground">
               {match.venue === "home" ? "Casa" : "Fora"}
               {match.outcome ? ` · ${match.outcome}` : ""} · {match.source}
