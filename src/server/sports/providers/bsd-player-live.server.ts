@@ -1,8 +1,5 @@
 import { AnalysisPipelineError } from "@/server/analysis/errors";
-import type {
-  PlayerFixtureStat,
-  ResolvedPlayer,
-} from "@/server/sports/player-provider";
+import type { PlayerFixtureStat, ResolvedPlayer } from "@/server/sports/player-provider";
 
 import { BsdPlayerProvider as BaseBsdPlayerProvider } from "./bsd-player.server";
 
@@ -15,7 +12,10 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
     ? (value as Record<string, unknown>)
     : null;
 
-function readString(record: Record<string, unknown> | null, keys: readonly string[]): string | null {
+function readString(
+  record: Record<string, unknown> | null,
+  keys: readonly string[],
+): string | null {
   if (!record) return null;
   for (const key of keys) {
     const value = record[key];
@@ -24,7 +24,10 @@ function readString(record: Record<string, unknown> | null, keys: readonly strin
   return null;
 }
 
-function readNumber(record: Record<string, unknown> | null, keys: readonly string[]): number | null {
+function readNumber(
+  record: Record<string, unknown> | null,
+  keys: readonly string[],
+): number | null {
   if (!record) return null;
   for (const key of keys) {
     const value = record[key];
@@ -37,7 +40,10 @@ function readNumber(record: Record<string, unknown> | null, keys: readonly strin
   return null;
 }
 
-function nested(record: Record<string, unknown> | null, keys: readonly string[]): Record<string, unknown> | null {
+function nested(
+  record: Record<string, unknown> | null,
+  keys: readonly string[],
+): Record<string, unknown> | null {
   if (!record) return null;
   for (const key of keys) {
     const value = asRecord(record[key]);
@@ -46,7 +52,10 @@ function nested(record: Record<string, unknown> | null, keys: readonly string[])
   return null;
 }
 
-function scalarNumber(record: Record<string, unknown> | null, keys: readonly string[]): number | null {
+function scalarNumber(
+  record: Record<string, unknown> | null,
+  keys: readonly string[],
+): number | null {
   if (!record) return null;
   for (const key of keys) {
     const value = record[key];
@@ -120,8 +129,7 @@ function readDate(raw: Record<string, unknown>): { date: string; timestamp: numb
 function readTeam(record: Record<string, unknown>, side: "home" | "away") {
   const team = nested(record, [`${side}_team`, side]);
   const id =
-    readNumber(team, ["id", "team_id"]) ??
-    readNumber(record, [`${side}_team_id`, `${side}_id`]);
+    readNumber(team, ["id", "team_id"]) ?? readNumber(record, [`${side}_team_id`, `${side}_id`]);
   const name =
     readString(team, ["name", "team_name", "short_name"]) ??
     readString(record, [`${side}_team_name`, `${side}_name`]);
@@ -174,7 +182,8 @@ function readMetric(
   groups: readonly { group: string; keys: readonly string[] }[] = [],
 ): number | null {
   const metrics = metricRecord(raw);
-  const direct = readNumber(metrics, directKeys) ?? (metrics !== raw ? readNumber(raw, directKeys) : null);
+  const direct =
+    readNumber(metrics, directKeys) ?? (metrics !== raw ? readNumber(raw, directKeys) : null);
   if (direct !== null) return direct;
   for (const { group, keys } of groups) {
     const grouped = nested(metrics, [group]) ?? (metrics !== raw ? nested(raw, [group]) : null);
@@ -245,33 +254,54 @@ function parseRow(raw: Record<string, unknown>, player: ResolvedPlayer): PlayerF
   const result =
     homeGoals !== null && awayGoals !== null
       ? `${homeGoals}-${awayGoals}`
-      : readString(raw, ["result", "scoreline", "final_score"]) ?? "";
+      : (readString(raw, ["result", "scoreline", "final_score"]) ?? "");
 
-  const minutes = readMetric(raw, ["minutes", "minutes_played", "mins", "min"], [
-    { group: "games", keys: ["minutes", "minutes_played"] },
-  ]);
-  const goals = readMetric(raw, ["goals", "goals_total"], [
-    { group: "goals", keys: ["total", "goals"] },
-  ]);
-  const assists = readMetric(raw, ["assists", "goal_assists"], [
-    { group: "goals", keys: ["assists"] },
-  ]);
-  const shots = readMetric(raw, ["shots", "total_shots", "shots_total"], [
-    { group: "shots", keys: ["total", "shots", "attempts"] },
-  ]);
-  const shotsOnTarget = readMetric(raw, ["shots_on_target", "shots_target", "shots_on"], [
-    { group: "shots", keys: ["on", "on_target", "target", "shots_on_target"] },
-  ]);
-  const yellow = readMetric(raw, ["yellow_cards", "yellow_card", "cards_yellow"], [
-    { group: "cards", keys: ["yellow", "yellow_cards"] },
-  ]);
-  const red = readMetric(raw, ["red_cards", "red_card", "cards_red"], [
-    { group: "cards", keys: ["red", "red_cards"] },
-  ]);
+  const minutes = readMetric(
+    raw,
+    ["minutes", "minutes_played", "mins", "min"],
+    [{ group: "games", keys: ["minutes", "minutes_played"] }],
+  );
+  const goals = readMetric(
+    raw,
+    ["goals", "goals_total"],
+    [{ group: "goals", keys: ["total", "goals"] }],
+  );
+  const assists = readMetric(
+    raw,
+    ["assists", "goal_assists"],
+    [{ group: "goals", keys: ["assists"] }],
+  );
+  const shots = readMetric(
+    raw,
+    ["shots", "total_shots", "shots_total"],
+    [{ group: "shots", keys: ["total", "shots", "attempts"] }],
+  );
+  const shotsOnTarget = readMetric(
+    raw,
+    ["shots_on_target", "shots_target", "shots_on"],
+    [{ group: "shots", keys: ["on", "on_target", "target", "shots_on_target"] }],
+  );
+  const yellow = readMetric(
+    raw,
+    ["yellow_cards", "yellow_card", "cards_yellow"],
+    [{ group: "cards", keys: ["yellow", "yellow_cards"] }],
+  );
+  const red = readMetric(
+    raw,
+    ["red_cards", "red_card", "cards_red"],
+    [{ group: "cards", keys: ["red", "red_cards"] }],
+  );
   const directCards = readMetric(raw, ["cards", "total_cards"]);
-  const cards = directCards ?? (yellow !== null || red !== null ? (yellow ?? 0) + (red ?? 0) : null);
+  const cards =
+    directCards ?? (yellow !== null || red !== null ? (yellow ?? 0) + (red ?? 0) : null);
 
-  if (minutes === null && goals === null && assists === null && shots === null && shotsOnTarget === null) {
+  if (
+    minutes === null &&
+    goals === null &&
+    assists === null &&
+    shots === null &&
+    shotsOnTarget === null
+  ) {
     return null;
   }
 
@@ -392,11 +422,10 @@ export class BsdPlayerProvider extends BaseBsdPlayerProvider {
     count: number,
     competitionNames?: readonly string[] | null,
   ): Promise<PlayerFixtureStat[]> {
-    const v2Payload = await this.requestJson(
-      BSD_V2_BASE_URL,
-      `/players/${player.id}/stats/`,
-      { limit: Math.min(200, Math.max(30, count * 4)), offset: 0 },
-    );
+    const v2Payload = await this.requestJson(BSD_V2_BASE_URL, `/players/${player.id}/stats/`, {
+      limit: Math.min(200, Math.max(30, count * 4)),
+      offset: 0,
+    });
     let stats = this.parseStats(v2Payload, player, competitionNames);
     let source = "v2";
 

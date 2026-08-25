@@ -22,9 +22,7 @@ export function calculateStatistics(values: number[]): DeterministicStatistics {
   const total = values.reduce((sum, value) => sum + value, 0);
   const middle = Math.floor(ordered.length / 2);
   const median =
-    ordered.length % 2 === 1
-      ? ordered[middle]
-      : (ordered[middle - 1] + ordered[middle]) / 2;
+    ordered.length % 2 === 1 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
 
   return {
     average: round(total / values.length),

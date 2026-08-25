@@ -107,5 +107,8 @@ test("competition filtering is applied after fixture enrichment", () => {
     ],
   });
 
-  assert.deepEqual(rows.map((row) => row.fixtureId), [7001]);
+  assert.deepEqual(
+    rows.map((row) => row.fixtureId),
+    [7001],
+  );
 });

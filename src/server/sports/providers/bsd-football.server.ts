@@ -63,7 +63,10 @@ function readBoolean(record: Record<string, unknown>, key: string): boolean | nu
   return typeof value === "boolean" ? value : null;
 }
 
-function readTeam(record: Record<string, unknown>, key: "home_team" | "away_team" | "home" | "away") {
+function readTeam(
+  record: Record<string, unknown>,
+  key: "home_team" | "away_team" | "home" | "away",
+) {
   const team = asRecord(record[key]);
   if (!team) return null;
 
@@ -83,11 +86,7 @@ function readCompetition(record: Record<string, unknown>): string {
 }
 
 function readScore(record: Record<string, unknown>, side: "home" | "away"): number | null {
-  const direct = readNumber(record, [
-    `${side}_score`,
-    `${side}_goals`,
-    `score_${side}`,
-  ]);
+  const direct = readNumber(record, [`${side}_score`, `${side}_goals`, `score_${side}`]);
   if (direct !== null) return direct;
 
   const score = asRecord(record.score) ?? asRecord(record.scores);
@@ -133,7 +132,7 @@ function readCountry(raw: Record<string, unknown>): string {
 
   if (typeof raw.country === "string") return raw.country;
   const country = asRecord(raw.country);
-  return country ? readString(country, ["name", "code"]) ?? "" : "";
+  return country ? (readString(country, ["name", "code"]) ?? "") : "";
 }
 
 function safeErrorBody(value: unknown): string {
@@ -236,17 +235,13 @@ export class BsdFootballProvider implements SportsDataProvider {
   }
 
   async resolveTeam(name: string): Promise<ResolvedTeam> {
-    const payload = paginatedSchema.parse(
-      await this.request("/teams/", { name, limit: 20 }),
-    );
+    const payload = paginatedSchema.parse(await this.request("/teams/", { name, limit: 20 }));
 
     const candidates = payload.results
       .map((raw) => {
         const id = readNumber(raw, ["id", "team_id"]);
         const teamName = readString(raw, ["name", "team_name"]);
-        return id !== null && teamName
-          ? { id, name: teamName, country: readCountry(raw) }
-          : null;
+        return id !== null && teamName ? { id, name: teamName, country: readCountry(raw) } : null;
       })
       .filter((team): team is ResolvedTeam => team !== null);
 
@@ -301,9 +296,7 @@ export class BsdFootballProvider implements SportsDataProvider {
     if (metric === "goals") {
       value = goalsFor;
     } else {
-      const payload = statsSchema.parse(
-        await this.request(`/events/${fixture.id}/stats/`),
-      );
+      const payload = statsSchema.parse(await this.request(`/events/${fixture.id}/stats/`));
       const sideStats = isHome ? payload.stats.home : payload.stats.away;
 
       if (metric === "corners") {

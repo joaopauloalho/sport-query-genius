@@ -3,8 +3,21 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { MatchRecord } from "@/data/sports";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +42,8 @@ export function MatchesTable({
     const filtered = matches.filter(
       (m) =>
         (venue === "all" || m.venue === venue) &&
-        (query === "" || `${m.opponent} ${m.competition}`.toLowerCase().includes(query.toLowerCase())),
+        (query === "" ||
+          `${m.opponent} ${m.competition}`.toLowerCase().includes(query.toLowerCase())),
     );
     return [...filtered].sort((a, b) => {
       const av = sortKey === "date" ? new Date(a.date).getTime() : a.value;
@@ -97,7 +111,10 @@ export function MatchesTable({
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>
-                <button className="inline-flex items-center gap-1" onClick={() => toggleSort("date")}>
+                <button
+                  className="inline-flex items-center gap-1"
+                  onClick={() => toggleSort("date")}
+                >
                   Data <ArrowUpDown className="size-3" />
                 </button>
               </TableHead>
@@ -106,7 +123,10 @@ export function MatchesTable({
               <TableHead>Mando</TableHead>
               <TableHead className="hidden sm:table-cell">Resultado</TableHead>
               <TableHead className="text-right">
-                <button className="inline-flex items-center gap-1" onClick={() => toggleSort("value")}>
+                <button
+                  className="inline-flex items-center gap-1"
+                  onClick={() => toggleSort("value")}
+                >
                   {metricLabel} <ArrowUpDown className="size-3" />
                 </button>
               </TableHead>
@@ -120,12 +140,16 @@ export function MatchesTable({
                   {new Date(m.date).toLocaleDateString("pt-BR")}
                 </TableCell>
                 <TableCell className="font-medium">{m.opponent}</TableCell>
-                <TableCell className="hidden md:table-cell text-muted-foreground">{m.competition}</TableCell>
+                <TableCell className="hidden md:table-cell text-muted-foreground">
+                  {m.competition}
+                </TableCell>
                 <TableCell>
                   <span
                     className={cn(
                       "rounded-full px-2 py-0.5 text-[0.7rem] font-medium",
-                      m.venue === "home" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
+                      m.venue === "home"
+                        ? "bg-primary/15 text-primary"
+                        : "bg-muted text-muted-foreground",
                     )}
                   >
                     {m.venue === "home" ? "Casa" : "Fora"}
@@ -136,14 +160,22 @@ export function MatchesTable({
                   <span
                     className={cn(
                       "ml-2 font-semibold",
-                      m.outcome === "V" ? "text-success" : m.outcome === "D" ? "text-destructive" : "text-warning",
+                      m.outcome === "V"
+                        ? "text-success"
+                        : m.outcome === "D"
+                          ? "text-destructive"
+                          : "text-warning",
                     )}
                   >
                     {m.outcome}
                   </span>
                 </TableCell>
-                <TableCell className="text-right font-display font-semibold tabular-nums">{m.value}</TableCell>
-                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">{m.source}</TableCell>
+                <TableCell className="text-right font-display font-semibold tabular-nums">
+                  {m.value}
+                </TableCell>
+                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                  {m.source}
+                </TableCell>
               </TableRow>
             ))}
             {visible.length === 0 && (
@@ -162,10 +194,20 @@ export function MatchesTable({
           {rows.length} partidas · página {current + 1} de {pages}
         </span>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled={current === 0} onClick={() => setPage(current - 1)}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={current === 0}
+            onClick={() => setPage(current - 1)}
+          >
             Anterior
           </Button>
-          <Button variant="outline" size="sm" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={current >= pages - 1}
+            onClick={() => setPage(current + 1)}
+          >
             Próxima
           </Button>
         </div>

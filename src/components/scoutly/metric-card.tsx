@@ -17,7 +17,8 @@ export function MetricCard({
   trend?: number;
   emphasis?: boolean;
 }) {
-  const TrendIcon = trend === undefined ? null : trend > 0 ? TrendingUp : trend < 0 ? TrendingDown : Minus;
+  const TrendIcon =
+    trend === undefined ? null : trend > 0 ? TrendingUp : trend < 0 ? TrendingDown : Minus;
 
   return (
     <div
@@ -35,7 +36,10 @@ export function MetricCard({
         <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
           {TrendIcon && (
             <TrendIcon
-              className={cn("size-3.5", trend! > 0 ? "text-success" : trend! < 0 ? "text-destructive" : "")}
+              className={cn(
+                "size-3.5",
+                trend! > 0 ? "text-success" : trend! < 0 ? "text-destructive" : "",
+              )}
             />
           )}
           <span>{hint}</span>

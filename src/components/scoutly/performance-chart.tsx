@@ -32,9 +32,23 @@ const KINDS: { id: ChartKind; label: string }[] = [
   { id: "area", label: "Distribuição" },
 ];
 
-function ChartTooltip({ active, payload, label, unit }: any) {
+interface ChartTooltipEntry {
+  dataKey?: string | number;
+  value?: string | number;
+  payload?: ChartPoint;
+}
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: ChartTooltipEntry[];
+  label?: string | number;
+  unit: string;
+}
+
+function ChartTooltip({ active, payload, label, unit }: ChartTooltipProps) {
   if (!active || !payload?.length) return null;
-  const point = payload[0].payload as ChartPoint;
+  const point = payload[0].payload;
+  if (!point) return null;
   return (
     <div className="surface-card px-3 py-2 text-xs">
       <p className="font-semibold">{label}</p>
@@ -43,9 +57,11 @@ function ChartTooltip({ active, payload, label, unit }: any) {
           {point.venue} · vs {point.opponent}
         </p>
       )}
-      {payload.map((p: any) => (
-        <p key={p.dataKey} className="mt-1 tabular-nums">
-          <span className="text-muted-foreground">{p.dataKey === "compare" ? "Comparação" : "Valor"}: </span>
+      {payload.map((p) => (
+        <p key={String(p.dataKey)} className="mt-1 tabular-nums">
+          <span className="text-muted-foreground">
+            {p.dataKey === "compare" ? "Comparação" : "Valor"}:{" "}
+          </span>
           {p.value} {unit}
         </p>
       ))}
@@ -69,7 +85,12 @@ export function PerformanceChart({
   height?: number;
 }) {
   const [kind, setKind] = useState<ChartKind>("line");
-  const axis = { stroke: "var(--color-muted-foreground)", fontSize: 11, tickLine: false, axisLine: false };
+  const axis = {
+    stroke: "var(--color-muted-foreground)",
+    fontSize: 11,
+    tickLine: false,
+    axisLine: false,
+  };
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -101,9 +122,14 @@ export function PerformanceChart({
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
               <XAxis dataKey="label" {...axis} />
               <YAxis {...axis} />
-              <Tooltip cursor={{ fill: "var(--color-muted)", opacity: 0.4 }} content={<ChartTooltip unit={unit} />} />
+              <Tooltip
+                cursor={{ fill: "var(--color-muted)", opacity: 0.4 }}
+                content={<ChartTooltip unit={unit} />}
+              />
               <Bar dataKey="value" fill="var(--color-chart-1)" radius={[6, 6, 0, 0]} />
-              {hasCompare && <Bar dataKey="compare" fill="var(--color-chart-2)" radius={[6, 6, 0, 0]} />}
+              {hasCompare && (
+                <Bar dataKey="compare" fill="var(--color-chart-2)" radius={[6, 6, 0, 0]} />
+              )}
             </BarChart>
           ) : kind === "area" ? (
             <AreaChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
@@ -117,9 +143,19 @@ export function PerformanceChart({
               <XAxis dataKey="label" {...axis} />
               <YAxis {...axis} />
               <Tooltip content={<ChartTooltip unit={unit} />} />
-              <Area dataKey="value" stroke="var(--color-chart-1)" strokeWidth={2} fill="url(#fillValue)" />
+              <Area
+                dataKey="value"
+                stroke="var(--color-chart-1)"
+                strokeWidth={2}
+                fill="url(#fillValue)"
+              />
               {hasCompare && (
-                <Area dataKey="compare" stroke="var(--color-chart-2)" strokeWidth={2} fill="transparent" />
+                <Area
+                  dataKey="compare"
+                  stroke="var(--color-chart-2)"
+                  strokeWidth={2}
+                  fill="transparent"
+                />
               )}
             </AreaChart>
           ) : (
