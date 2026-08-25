@@ -48,31 +48,17 @@ jobs:
           ];
 
           const errorTitles = [
-            'Resposta inválida do DeepSeek',
-            'Dados insuficientes',
-            'Jogador não encontrado',
-            'Entidade ambígua',
-            'Pergunta não compreendida',
-            'Métrica não suportada',
-            'Filtro não suportado',
-            'Consulta ainda não suportada',
-            'Limite do provider atingido',
-            'Provider indisponível',
-            'DeepSeek indisponível',
-            'Sessão expirada',
-            'Muitas solicitações',
-            'Limite de uso atingido',
-            'Proteção de uso indisponível',
+            'Resposta inválida do DeepSeek', 'Dados insuficientes', 'Jogador não encontrado',
+            'Entidade ambígua', 'Pergunta não compreendida', 'Métrica não suportada',
+            'Filtro não suportado', 'Consulta ainda não suportada', 'Limite do provider atingido',
+            'Provider indisponível', 'DeepSeek indisponível', 'Sessão expirada',
+            'Muitas solicitações', 'Limite de uso atingido', 'Proteção de uso indisponível',
             'Não foi possível analisar',
           ];
 
           function classify(body) {
-            for (const title of errorTitles) {
-              if (body.includes(title)) return title;
-            }
-            if (body.includes('Dados reais') || body.includes('Fonte') || body.includes('Amostra')) {
-              return 'SUCCESS_RESULT';
-            }
+            for (const title of errorTitles) if (body.includes(title)) return title;
+            if (body.includes('Dados reais') || body.includes('Fonte') || body.includes('Amostra')) return 'SUCCESS_RESULT';
             return 'RESULT_RENDERED';
           }
 
@@ -91,13 +77,14 @@ jobs:
               await page.getByLabel('E-mail').fill(email);
               await page.getByLabel('Senha').fill(password);
               await page.locator('form button[type="submit"]').click();
+              await page.waitForTimeout(3500);
 
-              await Promise.race([
-                page.waitForURL(/\/app(?:\/|$)/, { timeout: 30000 }),
-                page.getByText(/Confirme seu e-mail/i).waitFor({ state: 'visible', timeout: 30000 }).then(() => {
-                  throw new Error('SIGNUP_REQUIRES_EMAIL_CONFIRMATION');
-                }),
-              ]);
+              if (!/\/app(?:\/|$)/.test(new URL(page.url()).pathname)) {
+                const signupBody = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 1200);
+                console.log(`PHASE5C_SIGNUP_URL=${page.url()}`);
+                console.log(`PHASE5C_SIGNUP_BODY=${signupBody}`);
+                throw new Error('SIGNUP_DID_NOT_CREATE_SESSION');
+              }
 
               console.log(`PHASE5C_SMOKE_EMAIL=${email}`);
 
@@ -112,9 +99,7 @@ jobs:
                 await page.waitForURL(/\/app\/resultado/, { timeout: 30000 });
 
                 const processing = page.getByText('Processando sua análise');
-                if (await processing.count()) {
-                  await processing.waitFor({ state: 'hidden', timeout: 90000 });
-                }
+                if (await processing.count()) await processing.waitFor({ state: 'hidden', timeout: 90000 });
                 await page.waitForTimeout(800);
 
                 if (page.url().includes('/login')) throw new Error(`AUTH_LOST_DURING_CASE_${i + 1}`);
