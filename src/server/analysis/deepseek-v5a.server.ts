@@ -11,6 +11,7 @@ import { createSemanticPlan, semanticPlanResponseSchema, type SemanticPlan } fro
 import { normalizeTruthfulSemanticCandidate } from "./query-plan-v5a-normalizer";
 import { FOOTBALL_METRIC_KEYS } from "../sports/metric-catalog";
 import { parseDeterministicPhase5bTeamQuestion } from "./phase5b-deterministic-parser";
+import { parseDeterministicPhase5cPlayerQuestion } from "./phase5c-deterministic-player-parser";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const DEFAULT_MODEL = "deepseek-v4-flash";
@@ -62,6 +63,109 @@ Retorne somente JSON válido.`;
 type DeepSeekResponse = {
   choices?: Array<{ finish_reason?: string; message?: { content?: string | null } }>;
 };
+
+type JsonRecord = Record<string, unknown>;
+type ValidationIssue = {
+  path: Array<string | number>;
+  code: string;
+  message: string;
+  unionErrors?: Array<{ issues: ValidationIssue[] }>;
+};
+
+const asRecord = (value: unknown): JsonRecord | null =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as JsonRecord)
+    : null;
+
+function valueType(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+}
+
+function structuralString(value: unknown): string | null {
+  return typeof value === "string" ? value.slice(0, 80) : null;
+}
+
+function summarizeSemanticCandidate(value: unknown): unknown {
+  const record = asRecord(value);
+  if (!record) return { type: valueType(value) };
+
+  const entity = asRecord(record.entity);
+  const scope = asRecord(record.scope);
+  const sort = asRecord(record.sort);
+  const filters = Array.isArray(record.filters) ? record.filters : [];
+  const groupBy = Array.isArray(record.group_by) ? record.group_by : [];
+
+  return {
+    keys: Object.keys(record).slice(0, 24),
+    sport: structuralString(record.sport),
+    query_kind: structuralString(record.query_kind),
+    metric: structuralString(record.metric),
+    event_type: structuralString(record.event_type),
+    aggregation: structuralString(record.aggregation),
+    entity: entity
+      ? {
+          keys: Object.keys(entity).slice(0, 8),
+          type: structuralString(entity.type),
+          has_name: typeof entity.name === "string" && entity.name.trim().length > 0,
+        }
+      : { type: valueType(record.entity) },
+    scope: scope
+      ? {
+          keys: Object.keys(scope).slice(0, 16),
+          last_matches: typeof scope.last_matches === "number" ? scope.last_matches : null,
+          venue: structuralString(scope.venue),
+          half: structuralString(scope.half),
+          status: structuralString(scope.status),
+          has_competition: typeof scope.competition === "string",
+          has_season: typeof scope.season === "string",
+          has_opponent: typeof scope.opponent === "string",
+        }
+      : { type: valueType(record.scope) },
+    filters: {
+      count: filters.length,
+      items: filters.slice(0, 6).map((item) => {
+        const filter = asRecord(item);
+        return filter
+          ? {
+              keys: Object.keys(filter).slice(0, 8),
+              field: structuralString(filter.field ?? filter.metric),
+              operator: structuralString(filter.operator ?? filter.op),
+              value_type: valueType(filter.value),
+            }
+          : { type: valueType(item) };
+      }),
+    },
+    group_by: groupBy.slice(0, 3).map(structuralString),
+    sort: sort
+      ? {
+          keys: Object.keys(sort).slice(0, 6),
+          field: structuralString(sort.field ?? sort.by),
+          direction: structuralString(sort.direction ?? sort.order),
+        }
+      : { type: valueType(record.sort) },
+  };
+}
+
+function summarizeValidationIssues(issues: readonly ValidationIssue[]): unknown[] {
+  const output: unknown[] = [];
+  for (const issue of issues.slice(0, 12)) {
+    output.push({ path: issue.path.join("."), code: issue.code, message: issue.message.slice(0, 180) });
+    if (issue.code !== "invalid_union" || !issue.unionErrors) continue;
+    issue.unionErrors.slice(0, 4).forEach((unionError, branch) => {
+      unionError.issues.slice(0, 8).forEach((nested) => {
+        output.push({
+          union_branch: branch,
+          path: nested.path.join("."),
+          code: nested.code,
+          message: nested.message.slice(0, 180),
+        });
+      });
+    });
+  }
+  return output.slice(0, 24);
+}
 
 async function requestJson(question: string, apiKey: string): Promise<unknown> {
   const controller = new AbortController();
@@ -121,8 +225,23 @@ async function requestJson(question: string, apiKey: string): Promise<unknown> {
 export async function parseUniversalSemanticPlanWithDeepSeek(
   question: string,
 ): Promise<SemanticPlan> {
-  const deterministic = parseDeterministicPhase5bTeamQuestion(question);
-  if (deterministic) return createSemanticPlan(deterministic);
+  const deterministicTeam = parseDeterministicPhase5bTeamQuestion(question);
+  if (deterministicTeam) return createSemanticPlan(deterministicTeam);
+
+  const deterministicPlayer = parseDeterministicPhase5cPlayerQuestion(question);
+  if (deterministicPlayer) {
+    console.info("[semantic-parser] deterministic match", {
+      parser: "phase5c_player",
+      query_kind: deterministicPlayer.query_kind,
+      metric: deterministicPlayer.metric ?? null,
+      aggregation: deterministicPlayer.aggregation ?? null,
+      last_matches: deterministicPlayer.scope.last_matches ?? null,
+      venue: deterministicPlayer.scope.venue,
+      filter_fields: deterministicPlayer.filters.map((filter) => filter.field),
+      group_by: deterministicPlayer.group_by,
+    });
+    return createSemanticPlan(deterministicPlayer);
+  }
 
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey)
@@ -131,14 +250,15 @@ export async function parseUniversalSemanticPlanWithDeepSeek(
       "A integração com o DeepSeek não está configurada no servidor.",
     );
 
+  console.info("[semantic-parser] fallback", { parser: "deepseek" });
   const raw = await requestJson(question, apiKey);
   const normalized = normalizeTruthfulSemanticCandidate(raw);
   const parsed = semanticPlanResponseSchema.safeParse(normalized);
   if (!parsed.success) {
     console.warn("[deepseek-semantic-plan-v5a] validation failed", {
-      issues: parsed.error.issues
-        .slice(0, 12)
-        .map((issue) => ({ path: issue.path.join("."), code: issue.code })),
+      issues: summarizeValidationIssues(parsed.error.issues as ValidationIssue[]),
+      raw_candidate_shape: summarizeSemanticCandidate(raw),
+      normalized_candidate_shape: summarizeSemanticCandidate(normalized),
     });
     throw new AnalysisPipelineError(
       "INVALID_DEEPSEEK_OUTPUT",
