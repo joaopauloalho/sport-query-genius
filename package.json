@@ -21,7 +21,7 @@
     "test:phase5a": "bun test tests/genius",
     "test:phase5b": "bun test tests/phase5b",
     "test:phase5c": "bun test tests/phase5c",
-    "benchmark:genius": "bun run tests/genius/benchmark.ts",
+    "benchmark:genius": "bun run tests/genius/benchmark.ts && bun run tests/genius/phase5c-benchmark.ts",
     "test:all": "bun run test:phase2b && bun run test:phase3a && bun run test:phase3b && bun run test:phase3c && bun run test:phase3d && bun run test:phase4a && bun run test:phase4b && bun run test:phase4c && bun run test:phase5a && bun run test:phase5b && bun run test:phase5c",
     "format": "prettier --write ."
   },
