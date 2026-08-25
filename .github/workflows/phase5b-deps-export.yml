@@ -1,0 +1,33 @@
+name: Phase 5B Dependency Export
+
+on:
+  push:
+    branches:
+      - tmp/phase5b-recovery
+
+permissions:
+  contents: read
+
+jobs:
+  export-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Frozen install
+        run: bun install --frozen-lockfile
+      - name: Prove tracked source unchanged
+        run: git diff --exit-code
+      - name: Package Bun and dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/phase5b-deps/bin
+          cp "$HOME/.bun/bin/bun" /tmp/phase5b-deps/bin/bun
+          tar -czf /tmp/phase5b-deps/node_modules.tgz node_modules
+          git rev-parse HEAD > /tmp/phase5b-deps/HEAD.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase5b-deps-export
+          path: /tmp/phase5b-deps
+          if-no-files-found: error
