@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-import {
-  FOOTBALL_METRIC_KEYS,
-  TEAM_METRIC_KEYS,
-  type FootballMetric,
-} from "../sports/metric-catalog";
+import { FOOTBALL_METRIC_KEYS, type FootballMetric } from "../sports/metric-catalog";
 
 export const MAX_QUERY_MATCHES = 100;
 export const MAX_RESULT_ROWS = 100;
@@ -72,7 +68,7 @@ const STRUCTURAL_FOOTBALL_FILTER_FIELDS = [
 ] as const;
 export const FOOTBALL_FILTER_FIELDS = [
   ...STRUCTURAL_FOOTBALL_FILTER_FIELDS,
-  ...TEAM_METRIC_KEYS,
+  ...FOOTBALL_METRIC_KEYS,
 ] as const;
 export const FOOTBALL_GROUP_BY_FIELDS = [
   "venue",
@@ -122,7 +118,7 @@ export const queryFilterSchema = z
     const booleanFields = new Set(["clean_sheet", "failed_to_score", "both_teams_scored"]);
     const stringFields = new Set(["outcome", "venue", "competition", "opponent"]);
     const numericFields = new Set<string>(
-      TEAM_METRIC_KEYS.filter((field) => !booleanFields.has(field)),
+      FOOTBALL_METRIC_KEYS.filter((field) => !booleanFields.has(field)),
     );
 
     if (filter.operator === "in") {
@@ -186,7 +182,6 @@ export const querySortSchema = z
 export const queryScopeSchema = z
   .object({
     last_matches: z.number().int().min(1).max(MAX_QUERY_MATCHES).optional(),
-    // Legacy event-count field. Canonical presentation limiting is QueryPlan.limit.
     limit: z.number().int().min(1).max(50).optional(),
     date_from: z
       .string()
@@ -258,14 +253,15 @@ export const queryPlanSchema = z
       });
     }
 
-    if (plan.query_kind === "head_to_head") {
-      if (plan.entity.type !== "team" || plan.compare_with?.type !== "team") {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["entity"],
-          message: "head_to_head currently models team versus team",
-        });
-      }
+    if (
+      plan.query_kind === "head_to_head" &&
+      (plan.entity.type !== "team" || plan.compare_with?.type !== "team")
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["entity"],
+        message: "head_to_head currently models team versus team",
+      });
     }
 
     if (plan.scope.date_from && plan.scope.date_to && plan.scope.date_from > plan.scope.date_to) {

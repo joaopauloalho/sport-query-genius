@@ -23,6 +23,7 @@ import {
   analyzePlayerEventList,
   type ResolvedCompetitionFilter,
 } from "./analyze-player.server";
+import { executePlayerAggregate, executePlayerMatchList } from "./analyze-player-universal.server";
 import { isPhase4cUniversalTeamPlan } from "./analyze-team-universal.server";
 import { analyzeUniversalQueryPlan, isPhase4bUniversalPlan } from "./analyze-universal.server";
 import { parseUniversalSemanticPlanWithDeepSeek } from "./deepseek-v5a.server";
@@ -122,6 +123,16 @@ export async function analyzeQuestionServer(
       );
     }
 
+    if (executionPlan.negotiation.executor === "player_universal_aggregate") {
+      const result = await executePlayerAggregate(request.question, queryPlan, request.overrides);
+      return { ok: true, result };
+    }
+
+    if (executionPlan.negotiation.executor === "player_universal_match_list") {
+      const result = await executePlayerMatchList(request.question, queryPlan, request.overrides);
+      return { ok: true, result };
+    }
+
     // Phase 5A truth-gates the entire semantic request before any executor is selected.
     if (isPhase4cUniversalTeamPlan(queryPlan)) {
       const result = await analyzePhase4cWithFreshnessFallback({
@@ -140,7 +151,6 @@ export async function analyzeQuestionServer(
     }
 
     if (isPhase4bUniversalPlan(queryPlan)) {
-      // Defensive checks remain even though capability negotiation already fail-closes them.
       if (
         queryPlan.filters.length ||
         queryPlan.group_by.length ||
@@ -169,21 +179,13 @@ export async function analyzeQuestionServer(
       return { ok: true, result };
     }
 
-    if (
-      queryPlan.entity.type === "player" &&
-      (queryPlan.filters.length || queryPlan.group_by.length || queryPlan.sort || queryPlan.limit)
-    ) {
-      throw new AnalysisPipelineError(
-        "UNSUPPORTED_CAPABILITY",
-        "Filtros, agrupamento, ordenação e limit de apresentação para jogador foram compreendidos, mas ainda não são executados pelo adapter atual.",
-      );
-    }
-
     const parsedIntent = queryPlanToLegacyIntent(queryPlan);
     const effectiveIntent = applyOverrides(parsedIntent, request.overrides);
     const competition = resolveCompetition(effectiveIntent.competition);
 
     if (effectiveIntent.entity_type === "player") {
+      // Goal event_list stays on the proven Phase 3D timeline path. The legacy aggregate branch is
+      // retained only as a defensive compatibility fallback; Phase 5C aggregate normally routes above.
       const result =
         effectiveIntent.query_kind === "event_list"
           ? await analyzePlayerEventList({
@@ -201,7 +203,6 @@ export async function analyzeQuestionServer(
       return { ok: true, result };
     }
 
-    // Compatibility fallback for old team intents not yet routed through the universal executor.
     const orchestrator = createFootballOrchestrator(observer);
     const selection = await orchestrator.selectTeamFixtures(
       effectiveIntent.entity_name,

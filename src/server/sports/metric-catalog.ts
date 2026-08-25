@@ -61,6 +61,7 @@ export const PLAYER_METRIC_KEYS = [
   "minutes",
   "goals",
   "assists",
+  "goal_contributions",
   "shots",
   "shots_on_target",
   "shots_off_target",
@@ -123,7 +124,6 @@ export type MetricDataFamily =
   | "shotmap"
   | "player_match_stats"
   | "incidents";
-
 export type MetricProvider = "BSD" | "API_FOOTBALL";
 
 export interface MetricProviderMapping {
@@ -153,7 +153,6 @@ const bsdStats = (
   fields,
   coverage,
 });
-
 const apiStats = (
   fields: readonly string[],
   coverage: "core" | "conditional" = "conditional",
@@ -163,21 +162,24 @@ const apiStats = (
   fields,
   coverage,
 });
-
 const scoreMapping = (provider: MetricProvider): MetricProviderMapping => ({
   dataFamily: "fixture_score",
   endpoint: provider === "BSD" ? "/events/" : "/fixtures",
   fields: ["home_score", "away_score"],
   coverage: "core",
 });
-
-const playerStats = (fields: readonly string[]): MetricProviderMapping => ({
+const bsdPlayerStats = (fields: readonly string[]): MetricProviderMapping => ({
   dataFamily: "player_match_stats",
-  endpoint: "/events/{event_id}/player-stats/",
+  endpoint: "/players/{player_id}/stats/",
   fields,
   coverage: "conditional",
 });
-
+const apiPlayerStats = (fields: readonly string[]): MetricProviderMapping => ({
+  dataFamily: "player_match_stats",
+  endpoint: "/fixtures/players",
+  fields,
+  coverage: "conditional",
+});
 const definition = (
   key: FootballMetric,
   entities: readonly MetricEntityType[],
@@ -194,7 +196,6 @@ const definition = (
   nullable: options.nullable ?? true,
   providers: options.providers ?? {},
 });
-
 const scoreDerived = (
   key: TeamMetric,
   label: string,
@@ -205,10 +206,7 @@ const scoreDerived = (
     unit,
     kind: "derived",
     nullable: false,
-    providers: {
-      BSD: scoreMapping("BSD"),
-      API_FOOTBALL: scoreMapping("API_FOOTBALL"),
-    },
+    providers: { BSD: scoreMapping("BSD"), API_FOOTBALL: scoreMapping("API_FOOTBALL") },
   });
 
 const TEAM_DEFINITIONS: FootballMetricDefinition[] = [
@@ -274,7 +272,7 @@ const TEAM_DEFINITIONS: FootballMetricDefinition[] = [
     ["chutes para fora", "finalizacoes para fora"],
     {
       providers: {
-        BSD: bsdStats(["shots_off_target"], "conditional"),
+        BSD: bsdStats(["shots_off_target"]),
         API_FOOTBALL: apiStats(["Shots off Goal"], "core"),
       },
     },
@@ -470,179 +468,240 @@ const TEAM_DEFINITIONS: FootballMetricDefinition[] = [
   definition("goals_prevented", ["team"], "Gols evitados", ["gols evitados", "goals prevented"]),
 ];
 
+const playerProviders = (
+  bsdFields: readonly string[],
+  apiFields?: readonly string[],
+): Partial<Record<MetricProvider, MetricProviderMapping>> => ({
+  BSD: bsdPlayerStats(bsdFields),
+  ...(apiFields ? { API_FOOTBALL: apiPlayerStats(apiFields) } : {}),
+});
+
 const PLAYER_DEFINITIONS: FootballMetricDefinition[] = [
   definition("minutes", ["player"], "Minutos", ["minutos", "tempo jogado"], {
     unit: "minutes",
-    providers: { BSD: playerStats(["minutes", "minutes_played"]) },
+    providers: playerProviders(["minutes", "minutes_played"], ["games.minutes"]),
   }),
   definition("goals", ["player"], "Gols", ["gols", "marcou", "fez gol"], {
     unit: "goals",
-    providers: { BSD: playerStats(["goals"]) },
+    providers: playerProviders(["goals"], ["goals.total"]),
   }),
   definition(
     "assists",
     ["player"],
     "Assistências",
     ["assistencias", "assistências", "passes para gol"],
-    { providers: { BSD: playerStats(["assists"]) } },
+    { providers: playerProviders(["assists", "goal_assist", "goal_assists"], ["goals.assists"]) },
+  ),
+  definition(
+    "goal_contributions",
+    ["player"],
+    "Participações em gols",
+    [
+      "participacoes em gols",
+      "participações em gols",
+      "participacao em gols",
+      "participações diretas em gols",
+      "gols + assistencias",
+      "gols + assistências",
+      "goals + assists",
+      "goal contributions",
+    ],
+    {
+      kind: "derived",
+      providers: {
+        BSD: bsdPlayerStats(["goals", "assists"]),
+        API_FOOTBALL: apiPlayerStats(["goals.total", "goals.assists"]),
+      },
+    },
   ),
   definition(
     "shots",
     ["player"],
     "Finalizações",
     ["chutes", "finalizacoes", "finalizações", "arremates"],
-    { providers: { BSD: playerStats(["shots", "total_shots"]) } },
+    { providers: playerProviders(["shots", "total_shots"], ["shots.total"]) },
   ),
   definition(
     "shots_on_target",
     ["player"],
     "Finalizações no alvo",
-    ["chutes certos", "chutes no gol", "finalizacoes no alvo"],
-    { providers: { BSD: playerStats(["shots_on_target", "shots_on_goal"]) } },
+    ["chutes certos", "chutes no gol", "finalizacoes no alvo", "finalizações no alvo"],
+    { providers: playerProviders(["shots_on_target", "shots_on_goal"], ["shots.on"]) },
   ),
   definition(
     "shots_off_target",
     ["player"],
     "Finalizações para fora",
     ["chutes para fora", "finalizacoes para fora"],
-    { providers: { BSD: playerStats(["shots_off_target"]) } },
+    { providers: playerProviders(["shots_off_target"]) },
   ),
-  definition("blocked_shots", ["player"], "Finalizações bloqueadas", ["chutes bloqueados"], {
-    providers: { BSD: playerStats(["blocked_shots"]) },
-  }),
-  definition("rating", ["player"], "Nota", ["nota", "rating", "avaliacao"], {
+  definition(
+    "blocked_shots",
+    ["player"],
+    "Finalizações bloqueadas",
+    ["chutes bloqueados", "finalizacoes bloqueadas"],
+    { providers: playerProviders(["blocked_shots"]) },
+  ),
+  definition("rating", ["player"], "Nota", ["nota", "rating", "avaliacao", "avaliação"], {
     unit: "rating",
-    providers: { BSD: playerStats(["rating"]) },
+    providers: playerProviders(["rating"], ["games.rating"]),
   }),
-  definition("passes", ["player"], "Passes", ["passes"], {
-    providers: { BSD: playerStats(["passes", "total_passes"]) },
+  definition("passes", ["player"], "Passes", ["passes", "passes tentados"], {
+    providers: playerProviders(["passes", "total_passes"], ["passes.total"]),
   }),
   definition(
     "accurate_passes",
     ["player"],
     "Passes certos",
-    ["passes certos", "passes completos"],
-    { providers: { BSD: playerStats(["accurate_passes"]) } },
+    ["passes certos", "passes completos", "passes precisos"],
+    { providers: playerProviders(["accurate_passes"]) },
   ),
   definition(
     "pass_accuracy",
     ["player"],
     "Precisão de passe",
-    ["precisao de passe", "pass accuracy"],
-    { unit: "percentage", providers: { BSD: playerStats(["pass_accuracy"]) } },
+    ["precisao de passe", "precisão de passe", "acerto de passe", "pass accuracy"],
+    { unit: "percentage", providers: playerProviders(["pass_accuracy"], ["passes.accuracy"]) },
   ),
   definition("key_passes", ["player"], "Passes decisivos", ["passes decisivos", "key passes"], {
-    providers: { BSD: playerStats(["key_passes"]) },
+    providers: playerProviders(["key_passes"], ["passes.key"]),
   }),
   definition("crosses", ["player"], "Cruzamentos", ["cruzamentos"], {
-    providers: { BSD: playerStats(["crosses"]) },
+    providers: playerProviders(["crosses"]),
   }),
   definition("accurate_crosses", ["player"], "Cruzamentos certos", ["cruzamentos certos"], {
-    providers: { BSD: playerStats(["accurate_crosses"]) },
+    providers: playerProviders(["accurate_crosses"]),
   }),
-  definition("long_balls", ["player"], "Bolas longas", ["bolas longas"], {
-    providers: { BSD: playerStats(["long_balls"]) },
+  definition("long_balls", ["player"], "Bolas longas", ["bolas longas", "lancamentos longos"], {
+    providers: playerProviders(["long_balls"]),
   }),
-  definition("accurate_long_balls", ["player"], "Bolas longas certas", ["bolas longas certas"], {
-    providers: { BSD: playerStats(["accurate_long_balls"]) },
-  }),
+  definition(
+    "accurate_long_balls",
+    ["player"],
+    "Bolas longas certas",
+    ["bolas longas certas", "lancamentos longos certos"],
+    { providers: playerProviders(["accurate_long_balls"]) },
+  ),
   definition("duels", ["player"], "Duelos", ["duelos"], {
-    providers: { BSD: playerStats(["duels"]) },
+    providers: playerProviders(["duels"], ["duels.total"]),
   }),
   definition("duels_won", ["player"], "Duelos ganhos", ["duelos ganhos", "duelos vencidos"], {
-    providers: { BSD: playerStats(["duels_won"]) },
+    providers: playerProviders(["duels_won"], ["duels.won"]),
   }),
-  definition("ground_duels", ["player"], "Duelos no chão", ["duelos no chao"], {
-    providers: { BSD: playerStats(["ground_duels"]) },
+  definition("ground_duels", ["player"], "Duelos no chão", ["duelos no chao", "duelos no chão"], {
+    providers: playerProviders(["ground_duels"]),
   }),
-  definition("ground_duels_won", ["player"], "Duelos no chão ganhos", ["duelos no chao ganhos"], {
-    providers: { BSD: playerStats(["ground_duels_won"]) },
+  definition(
+    "ground_duels_won",
+    ["player"],
+    "Duelos no chão ganhos",
+    ["duelos no chao ganhos", "duelos no chão ganhos"],
+    { providers: playerProviders(["ground_duels_won"]) },
+  ),
+  definition("aerial_duels", ["player"], "Duelos aéreos", ["duelos aereos", "duelos aéreos"], {
+    providers: playerProviders(["aerial_duels"]),
   }),
-  definition("aerial_duels", ["player"], "Duelos aéreos", ["duelos aereos"], {
-    providers: { BSD: playerStats(["aerial_duels"]) },
+  definition(
+    "aerial_duels_won",
+    ["player"],
+    "Duelos aéreos ganhos",
+    ["duelos aereos ganhos", "duelos aéreos ganhos"],
+    { providers: playerProviders(["aerial_duels_won"]) },
+  ),
+  definition("dribbles", ["player"], "Dribles", ["dribles", "tentativas de drible"], {
+    providers: playerProviders(["dribbles"], ["dribbles.attempts"]),
   }),
-  definition("aerial_duels_won", ["player"], "Duelos aéreos ganhos", ["duelos aereos ganhos"], {
-    providers: { BSD: playerStats(["aerial_duels_won"]) },
-  }),
-  definition("dribbles", ["player"], "Dribles", ["dribles"], {
-    providers: { BSD: playerStats(["dribbles"]) },
-  }),
-  definition("successful_dribbles", ["player"], "Dribles certos", ["dribles certos"], {
-    providers: { BSD: playerStats(["successful_dribbles"]) },
-  }),
+  definition(
+    "successful_dribbles",
+    ["player"],
+    "Dribles certos",
+    ["dribles certos", "dribles completos"],
+    { providers: playerProviders(["successful_dribbles"], ["dribbles.success"]) },
+  ),
   definition("dispossessed", ["player"], "Perdas de posse", ["perdas de posse", "desarmado"], {
-    providers: { BSD: playerStats(["dispossessed"]) },
+    providers: playerProviders(["dispossessed"]),
   }),
   definition("tackles", ["player"], "Desarmes", ["desarmes", "tackles"], {
-    providers: { BSD: playerStats(["tackles"]) },
+    providers: playerProviders(["tackles"], ["tackles.total"]),
   }),
-  definition("tackles_won", ["player"], "Desarmes ganhos", ["desarmes certos"], {
-    providers: { BSD: playerStats(["tackles_won"]) },
+  definition("tackles_won", ["player"], "Desarmes ganhos", ["desarmes certos", "tackles won"], {
+    providers: playerProviders(["tackles_won"]),
   }),
   definition("interceptions", ["player"], "Interceptações", ["interceptacoes", "interceptações"], {
-    providers: { BSD: playerStats(["interceptions"]) },
+    providers: playerProviders(["interceptions"], ["tackles.interceptions"]),
   }),
-  definition("clearances", ["player"], "Cortes", ["cortes", "afastamentos"], {
-    providers: { BSD: playerStats(["clearances"]) },
+  definition("clearances", ["player"], "Cortes", ["cortes", "afastamentos", "clearances"], {
+    providers: playerProviders(["clearances"]),
   }),
-  definition("recoveries", ["player"], "Recuperações", ["recuperacoes", "recuperações"], {
-    providers: { BSD: playerStats(["recoveries"]) },
-  }),
+  definition(
+    "recoveries",
+    ["player"],
+    "Recuperações",
+    ["recuperacoes", "recuperações", "recuperações de bola"],
+    { providers: playerProviders(["recoveries"]) },
+  ),
   definition("fouls", ["player"], "Faltas cometidas", ["faltas cometidas", "faltas"], {
-    providers: { BSD: playerStats(["fouls", "fouls_committed"]) },
+    providers: playerProviders(["fouls", "fouls_committed"], ["fouls.committed"]),
   }),
   definition(
     "fouls_drawn",
     ["player"],
     "Faltas sofridas",
     ["faltas sofridas", "faltas recebidas"],
-    { providers: { BSD: playerStats(["fouls_drawn", "was_fouled"]) } },
+    { providers: playerProviders(["fouls_drawn", "was_fouled"], ["fouls.drawn"]) },
   ),
-  definition("yellow_cards", ["player"], "Cartões amarelos", ["amarelos", "cartoes amarelos"], {
-    providers: { BSD: playerStats(["yellow_cards"]) },
-  }),
+  definition(
+    "yellow_cards",
+    ["player"],
+    "Cartões amarelos",
+    ["amarelos", "cartoes amarelos", "cartões amarelos"],
+    { providers: playerProviders(["yellow_cards", "yellow_card"], ["cards.yellow"]) },
+  ),
   definition(
     "red_cards",
     ["player"],
     "Cartões vermelhos",
-    ["vermelhos", "cartoes vermelhos", "expulsoes"],
-    { providers: { BSD: playerStats(["red_cards"]) } },
+    ["vermelhos", "cartoes vermelhos", "cartões vermelhos", "expulsoes"],
+    { providers: playerProviders(["red_cards", "red_card"], ["cards.red"]) },
   ),
   definition("cards", ["player"], "Cartões", ["cartoes", "cartões"], {
-    kind: "transitional",
-    providers: { BSD: playerStats(["yellow_cards", "red_cards", "cards"]) },
+    kind: "derived",
+    providers: {
+      BSD: bsdPlayerStats(["cards", "yellow_cards", "red_cards"]),
+      API_FOOTBALL: apiPlayerStats(["cards.yellow", "cards.red"]),
+    },
   }),
-  definition("xg", ["player"], "xG", ["xg", "gols esperados"], {
-    providers: { BSD: playerStats(["xg", "expected_goals"]) },
+  definition("xg", ["player"], "xG", ["xg", "gols esperados", "expected goals"], {
+    providers: playerProviders(["xg", "expected_goals"]),
   }),
   definition("xgot", ["player"], "xGOT", ["xgot", "expected goals on target"], {
-    providers: { BSD: playerStats(["xgot"]) },
+    providers: playerProviders(["xgot"]),
   }),
   definition("big_chances", ["player"], "Grandes chances", ["grandes chances"], {
-    providers: { BSD: playerStats(["big_chances"]) },
+    providers: playerProviders(["big_chances"]),
   }),
   definition(
     "big_chances_scored",
     ["player"],
     "Grandes chances convertidas",
     ["grandes chances convertidas"],
-    { providers: { BSD: playerStats(["big_chances_scored"]) } },
+    { providers: playerProviders(["big_chances_scored"]) },
   ),
   definition(
     "big_chances_missed",
     ["player"],
     "Grandes chances perdidas",
     ["grandes chances perdidas"],
-    { providers: { BSD: playerStats(["big_chances_missed"]) } },
+    { providers: playerProviders(["big_chances_missed"]) },
   ),
   definition("saves", ["player"], "Defesas", ["defesas", "saves"], {
-    providers: { BSD: playerStats(["saves", "goalkeeper_saves"]) },
+    providers: playerProviders(["saves", "goalkeeper_saves"], ["goals.saves"]),
   }),
   definition("big_saves", ["player"], "Grandes defesas", ["grandes defesas"], {
-    providers: { BSD: playerStats(["big_saves"]) },
+    providers: playerProviders(["big_saves"]),
   }),
-  definition("goals_prevented", ["player"], "Gols evitados", ["gols evitados"], {
-    providers: { BSD: playerStats(["goals_prevented"]) },
+  definition("goals_prevented", ["player"], "Gols evitados", ["gols evitados", "goals prevented"], {
+    providers: playerProviders(["goals_prevented"]),
   }),
 ];
 

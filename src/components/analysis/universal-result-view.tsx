@@ -116,15 +116,16 @@ function EventList({ result }: { result: TeamEventListAnalysisResult }) {
 
 function MatchList({ result }: { result: MatchListAnalysisResult }) {
   const upcoming = result.intent.status === "upcoming";
+  const entityName = result.player?.name ?? result.team.name;
   return (
     <>
       <section className="surface-card border-primary/30 bg-primary/5 p-6">
         <p className="font-display text-xl leading-snug font-semibold text-balance sm:text-2xl">
-          {upcoming ? "Próximas partidas" : "Partidas recentes"} de {result.team.name}
+          {upcoming ? "Próximas partidas" : "Partidas recentes"} de {entityName}
         </p>
         <p className="mt-3 text-sm text-muted-foreground">
           {result.matches.length} partida{result.matches.length === 1 ? "" : "s"} na janela
-          solicitada.
+          solicitada. Zero observado é exibido como zero; valor ausente não é inventado.
         </p>
       </section>
 
@@ -239,7 +240,9 @@ export function UniversalResultView({
   const titleEntity =
     result.result_type === "head_to_head"
       ? `${result.teams.primary.name} × ${result.teams.compare.name}`
-      : result.team.name;
+      : result.result_type === "match_list" && result.player
+        ? result.player.name
+        : result.team.name;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-8 sm:px-6 sm:py-10">
