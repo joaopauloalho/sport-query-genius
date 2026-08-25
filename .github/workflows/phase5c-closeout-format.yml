@@ -1,0 +1,46 @@
+name: Phase 5C Closeout Formatter
+
+on:
+  push:
+    branches:
+      - fix/phase5c-production-player-semantic-parser
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/phase5c-production-player-semantic-parser
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Frozen install
+        run: bun install --frozen-lockfile
+
+      - name: Format closeout files
+        run: >-
+          bun x prettier --write
+          src/server/analysis/deepseek-v5a.server.ts
+          src/server/analysis/phase5c-deterministic-player-parser.ts
+          tests/genius/phase5c-natural-language-benchmark.ts
+
+      - name: Commit formatting only when needed
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/server/analysis/deepseek-v5a.server.ts src/server/analysis/phase5c-deterministic-player-parser.ts tests/genius/phase5c-natural-language-benchmark.ts
+          git commit -m "style: format Phase 5C production closeout"
+          git push origin HEAD:fix/phase5c-production-player-semantic-parser
