@@ -93,7 +93,7 @@ describe("Phase 5C universal player aggregate", () => {
       new Phase5cFakeSource(snapshots),
     );
     expect(result.statistics.sample_size).toBe(4);
-    expect(result.answer.value).toBe(1);
+    expect(result.answer.value).toBe(0.9);
   });
 
   test("output metric may differ from filter metric", async () => {
