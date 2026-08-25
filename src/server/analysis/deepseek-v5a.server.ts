@@ -10,6 +10,7 @@ import {
 import { createSemanticPlan, semanticPlanResponseSchema, type SemanticPlan } from "./semantic-plan";
 import { normalizeTruthfulSemanticCandidate } from "./query-plan-v5a-normalizer";
 import { FOOTBALL_METRIC_KEYS } from "../sports/metric-catalog";
+import { parseDeterministicPhase5bTeamQuestion } from "./phase5b-deterministic-parser";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const DEFAULT_MODEL = "deepseek-v4-flash";
@@ -120,6 +121,9 @@ async function requestJson(question: string, apiKey: string): Promise<unknown> {
 export async function parseUniversalSemanticPlanWithDeepSeek(
   question: string,
 ): Promise<SemanticPlan> {
+  const deterministic = parseDeterministicPhase5bTeamQuestion(question);
+  if (deterministic) return createSemanticPlan(deterministic);
+
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey)
     throw new AnalysisPipelineError(
