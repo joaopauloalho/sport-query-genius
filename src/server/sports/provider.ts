@@ -33,6 +33,9 @@ export interface ProviderFixture {
   timestamp: number;
   status: string;
   competition: string;
+  competitionId?: string | null;
+  seasonId?: string | null;
+  country?: string | null;
   home: { id: number; name: string };
   away: { id: number; name: string };
   goals: { home: number | null; away: number | null };

@@ -35,6 +35,18 @@ export interface AnalysisProvenance {
   resolved_entity_ids: string[];
   competition: string | null;
   season: string | null;
+  providers_attempted?: string[];
+  fallback_occurred?: boolean;
+  data_families?: string[];
+  coverage?: {
+    fixtures: number;
+    supported: string[];
+    observed: Record<string, number>;
+    missing: Record<string, number>;
+  } | null;
+  resolved_competition_id?: string | null;
+  resolved_season_id?: string | null;
+  resolved_season_label?: string | null;
 }
 
 export interface TeamAnalysisEvent {
@@ -91,6 +103,7 @@ export interface AnalysisFixtureSummary {
   result: string;
   outcome: "V" | "E" | "D" | null;
   source: string;
+  metric?: { key: string; value: number; unit: string; observed: true } | null;
 }
 
 export interface MatchListAnalysisResult {

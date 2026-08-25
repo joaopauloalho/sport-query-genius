@@ -1,10 +1,7 @@
 import type { PlayerFixtureStat, ResolvedPlayer } from "../player-provider.ts";
 import type { ProviderFixture } from "../provider.ts";
 
-function readNumber(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-): number | null {
+function readNumber(record: Record<string, unknown>, keys: readonly string[]): number | null {
   for (const key of keys) {
     const value = record[key];
     if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -26,10 +23,7 @@ function normalizeCompetition(value: string): string {
     .trim();
 }
 
-function competitionAllowed(
-  value: string,
-  names?: readonly string[] | null,
-): boolean {
+function competitionAllowed(value: string, names?: readonly string[] | null): boolean {
   if (!names || names.length === 0) return true;
   const normalized = normalizeCompetition(value);
   return names.some((name) => normalizeCompetition(name) === normalized);
@@ -60,17 +54,12 @@ function hydratePlayerStat(
   const goals = readNumber(row, ["goals", "goals_total"]);
   const assists = readNumber(row, ["goal_assist", "goal_assists", "assists"]);
   const shots = readNumber(row, ["total_shots", "shots_total", "shots"]);
-  const shotsOnTarget = readNumber(row, [
-    "shots_on_target",
-    "shots_target",
-    "shots_on",
-  ]);
+  const shotsOnTarget = readNumber(row, ["shots_on_target", "shots_target", "shots_on"]);
   const yellow = readNumber(row, ["yellow_card", "yellow_cards", "cards_yellow"]);
   const red = readNumber(row, ["red_card", "red_cards", "cards_red"]);
   const directCards = readNumber(row, ["cards", "total_cards"]);
   const cards =
-    directCards ??
-    (yellow !== null || red !== null ? (yellow ?? 0) + (red ?? 0) : null);
+    directCards ?? (yellow !== null || red !== null ? (yellow ?? 0) + (red ?? 0) : null);
 
   if (
     minutes === null &&

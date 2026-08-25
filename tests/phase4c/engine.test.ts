@@ -28,6 +28,9 @@ function fixture(
     timestamp: Math.floor(Date.parse(`${date}T20:00:00.000Z`) / 1000),
     status: "finished",
     competition,
+    competitionId: "71",
+    seasonId: "2026",
+    country: "Brazil",
     home,
     away,
     goals: { home: homeGoals, away: awayGoals },
@@ -53,6 +56,7 @@ class FakeSource implements UniversalFootballSource {
   readonly name = "BSD" as const;
   metricValues = new Map<string, number | null>();
   metricCalls: string[] = [];
+  legacyMetricCalls = 0;
   fixtureReads = 0;
 
   constructor(private readonly fixtures: ProviderFixture[] = controlled) {}
@@ -95,14 +99,112 @@ class FakeSource implements UniversalFootballSource {
     return { incidents: [...incidents], meta: null };
   }
 
-  async getFixtureMetric(
-    item: ProviderFixture,
-    _teamId: number,
-    metric: "goals" | "corners" | "shots" | "shots_on_target" | "cards",
-  ) {
-    const key = `${item.id}:${metric}`;
-    this.metricCalls.push(key);
-    return this.metricValues.get(key) ?? null;
+  async resolveCompetitionSeason(competition: string, season: string) {
+    return {
+      season: {
+        provider: this.name,
+        competitionId: "71",
+        seasonId: "2026",
+        label: "2026",
+        startDate: "2026-01-01",
+        endDate: "2026-12-31",
+        current: season === "current" || season === "2026",
+        country: "Brazil",
+        coverage: { statistics_fixtures: true },
+        competition,
+      },
+      meta: {
+        provider: this.name,
+        endpoint: "/fake/leagues/71/seasons",
+        dataFamily: "league_season",
+        fetchedAt: "2026-08-23T03:00:00.000Z",
+        cacheStatus: "hit" as const,
+      },
+    };
+  }
+
+  async getFixtureStats(item: ProviderFixture, teamId: number) {
+    this.metricCalls.push(String(item.id));
+    const supported = [
+      "shots",
+      "shots_on_target",
+      "shots_off_target",
+      "blocked_shots",
+      "hit_woodwork",
+      "big_chances",
+      "big_chances_scored",
+      "big_chances_missed",
+      "xg",
+      "offsides",
+      "corners",
+      "passes",
+      "accurate_passes",
+      "pass_accuracy",
+      "crosses",
+      "possession",
+      "duels",
+      "duels_won",
+      "dribbles",
+      "tackles",
+      "interceptions",
+      "clearances",
+      "fouls",
+      "yellow_cards",
+      "red_cards",
+      "cards",
+    ] as const;
+    const values: Record<
+      string,
+      {
+        value: number | null;
+        observed: boolean;
+        source: "BSD";
+        unit: string;
+        rawLabel: string | null;
+      }
+    > = {};
+    for (const metric of supported) {
+      const key = `${item.id}:${metric}`;
+      const has = this.metricValues.has(key);
+      const value = has ? (this.metricValues.get(key) ?? null) : null;
+      values[metric] = {
+        value,
+        observed: value !== null,
+        source: "BSD",
+        unit: "count",
+        rawLabel: has ? metric : null,
+      };
+    }
+    const observed = supported.filter((metric) => values[metric].observed);
+    return {
+      snapshot: {
+        fixtureId: item.id,
+        teamId,
+        opponentId: item.home.id === teamId ? item.away.id : item.home.id,
+        provider: this.name,
+        competitionId: item.competitionId ?? null,
+        seasonId: item.seasonId ?? null,
+        values,
+        coverage: {
+          supported,
+          observed,
+          missing: supported.filter((metric) => !observed.includes(metric)),
+        },
+        fetchedAt: "2026-08-23T03:00:00.000Z",
+      },
+      meta: {
+        provider: this.name,
+        endpoint: `/fake/fixtures/${item.id}/stats`,
+        dataFamily: "fixture_stats",
+        fetchedAt: "2026-08-23T03:00:00.000Z",
+        cacheStatus: "hit" as const,
+      },
+    };
+  }
+
+  async getFixtureMetric() {
+    this.legacyMetricCalls += 1;
+    return null;
   }
 }
 
@@ -187,7 +289,7 @@ describe("Phase 4C deterministic team engine", () => {
       question: "gols sofridos em casa",
       plan: aggregatePlan({
         aggregation: "total",
-        scope: { venue: "home", half: "full", season: "2026" },
+        scope: { venue: "home", half: "full", season: "2026", competition: "Brasileirão Série A" },
       }),
       sources: [new FakeSource()],
     });
@@ -195,7 +297,7 @@ describe("Phase 4C deterministic team engine", () => {
       question: "gols sofridos fora",
       plan: aggregatePlan({
         aggregation: "total",
-        scope: { venue: "away", half: "full", season: "2026" },
+        scope: { venue: "away", half: "full", season: "2026", competition: "Brasileirão Série A" },
       }),
       sources: [new FakeSource()],
     });
@@ -244,7 +346,7 @@ describe("Phase 4C deterministic team engine", () => {
       plan: aggregatePlan({
         metric: "both_teams_scored",
         aggregation: "percentage",
-        scope: { season: "2026", venue: "all", half: "full" },
+        scope: { season: "2026", competition: "Brasileirão Série A", venue: "all", half: "full" },
       }),
       sources: [new FakeSource()],
     });
@@ -253,7 +355,7 @@ describe("Phase 4C deterministic team engine", () => {
       plan: aggregatePlan({
         metric: "points",
         aggregation: "percentage",
-        scope: { season: "2026", venue: "all", half: "full" },
+        scope: { season: "2026", competition: "Brasileirão Série A", venue: "all", half: "full" },
       }),
       sources: [new FakeSource()],
     });
@@ -269,7 +371,7 @@ describe("Phase 4C deterministic team engine", () => {
       question: "média nos jogos que perdeu",
       plan: aggregatePlan({
         filters: [{ field: "outcome", operator: "eq", value: "loss" }],
-        scope: { season: "2026", venue: "all", half: "full" },
+        scope: { season: "2026", competition: "Brasileirão Série A", venue: "all", half: "full" },
       }),
       sources: [new FakeSource()],
     });
@@ -279,7 +381,7 @@ describe("Phase 4C deterministic team engine", () => {
         metric: "goals_for",
         aggregation: "count",
         filters: [{ field: "goals_against", operator: "gte", value: 2 }],
-        scope: { season: "2026", venue: "all", half: "full" },
+        scope: { season: "2026", competition: "Brasileirão Série A", venue: "all", half: "full" },
       }),
       sources: [new FakeSource()],
     });
@@ -300,7 +402,7 @@ describe("Phase 4C deterministic team engine", () => {
       metric: "corners",
       aggregation: "average",
       filters: [{ field: "outcome", operator: "eq", value: "win" }],
-      scope: { season: "2026", venue: "all", half: "full" },
+      scope: { season: "2026", competition: "Brasileirão Série A", venue: "all", half: "full" },
     });
     const result = await analyzePhase4cUniversalTeamPlanWithSources({
       question: "média de escanteios nos jogos que venceu",
@@ -310,7 +412,8 @@ describe("Phase 4C deterministic team engine", () => {
     expect(result.result_type).toBe("aggregate");
     if (result.result_type !== "aggregate") return;
     expect(result.answer.value).toBe(6);
-    expect(source.metricCalls.sort()).toEqual(["101:corners", "102:corners"]);
+    expect(source.metricCalls.sort()).toEqual(["101", "102"]);
+    expect(source.legacyMetricCalls).toBe(0);
   });
 
   test("raw metric null remains null and fails strict complete-sample policy", async () => {
@@ -323,7 +426,7 @@ describe("Phase 4C deterministic team engine", () => {
         plan: aggregatePlan({
           metric: "corners",
           aggregation: "average",
-          scope: { season: "2026", venue: "all", half: "full" },
+          scope: { season: "2026", competition: "Brasileirão Série A", venue: "all", half: "full" },
         }),
         sources: [source],
       }),

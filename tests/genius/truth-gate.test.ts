@@ -26,10 +26,10 @@ const base = {
   group_by: [],
 };
 
-describe("Phase 5A truth gate", () => {
-  test("benchmark has at least 300 deterministic cases and zero silent semantic loss", () => {
+describe("Phase 5B truth gate", () => {
+  test("benchmark has at least 650 deterministic cases and zero silent semantic loss", () => {
     const report = runGeniusBenchmark();
-    expect(report.total).toBeGreaterThanOrEqual(300);
+    expect(report.total).toBeGreaterThanOrEqual(650);
     expect(report.silent_semantic_loss).toBe(0);
     expect(report.semantic_accuracy).toBe(100);
     expect(report.capability_accuracy).toBe(100);
@@ -47,7 +47,7 @@ describe("Phase 5A truth gate", () => {
     expect(negotiateFootballCapability(plan).supported).toBe(true);
   });
 
-  test("preserves possession > 60 and rejects it explicitly", () => {
+  test("preserves and executes generic possession > 60 filter", () => {
     const plan = semantic({
       ...base,
       filters: [{ field: "posse", operator: "maior que", value: 60 }],
@@ -58,8 +58,9 @@ describe("Phase 5A truth gate", () => {
       value: 60,
     });
     const decision = negotiateFootballCapability(plan);
-    expect(decision.supported).toBe(false);
-    expect(decision.error_code).toBe("UNSUPPORTED_FILTER");
+    expect(decision.supported).toBe(true);
+    expect(decision.data_families).toContain("fixture_stats");
+    expect(decision.data_families).toContain("fixture_score");
   });
 
   test("preserves group_by venue for home-away comparison", () => {
@@ -109,11 +110,12 @@ describe("Phase 5A truth gate", () => {
     expect(decision.reason).toContain("CompetitionSeason");
   });
 
-  test("recognized metric without deterministic executor is rejected", () => {
+  test("recognized fixture_stats metric has deterministic universal executor", () => {
     const plan = semantic({ ...base, metric: "possession" });
     const decision = negotiateFootballCapability(plan);
-    expect(decision.supported).toBe(false);
-    expect(decision.reason).toContain("adapter universal");
+    expect(decision.supported).toBe(true);
+    expect(decision.executor).toBe("team_universal_aggregate");
+    expect(decision.data_families).toContain("fixture_stats");
   });
 
   test("unknown filter is preserved instead of becoming filters=[]", () => {

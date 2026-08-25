@@ -43,20 +43,12 @@ function readTeam(record: Record<string, unknown>, side: "home" | "away") {
   }
 
   const id = readNumber(record, [`${side}_team_id`, `${side}_id`]);
-  const name = readString(record, [
-    `${side}_team`,
-    `${side}_team_name`,
-    `${side}_name`,
-  ]);
+  const name = readString(record, [`${side}_team`, `${side}_team_name`, `${side}_name`]);
   return id !== null && name ? { id, name } : null;
 }
 
 function readScore(record: Record<string, unknown>, side: "home" | "away"): number | null {
-  const direct = readNumber(record, [
-    `${side}_score`,
-    `${side}_goals`,
-    `score_${side}`,
-  ]);
+  const direct = readNumber(record, [`${side}_score`, `${side}_goals`, `score_${side}`]);
   if (direct !== null) return direct;
 
   const score = asRecord(record.score) ?? asRecord(record.scores);
@@ -245,11 +237,17 @@ export class BsdFootballV3Provider implements SportsDataProvider {
     const leagueNames = await this.getLeagueNames();
     return fixtures.map(({ leagueId, ...fixture }) => ({
       ...fixture,
-      competition: leagueId === null ? fixture.competition : (leagueNames.get(leagueId) ?? fixture.competition),
+      competition:
+        leagueId === null
+          ? fixture.competition
+          : (leagueNames.get(leagueId) ?? fixture.competition),
     }));
   }
 
-  private async fetchFinishedEvents(teamId: number, daysBack: number): Promise<BsdProviderFixture[]> {
+  private async fetchFinishedEvents(
+    teamId: number,
+    daysBack: number,
+  ): Promise<BsdProviderFixture[]> {
     const dateTo = new Date();
     const dateFrom = new Date(dateTo);
     dateFrom.setUTCDate(dateFrom.getUTCDate() - daysBack);

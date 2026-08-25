@@ -9,14 +9,26 @@ import type {
 } from "@/lib/universal-analysis";
 import type { SportsCacheObserver } from "@/server/sports/cache/cache-observer";
 import { competitionNamesEquivalent } from "@/server/sports/competition-matcher";
-import { getFootballMetricDefinition, type FootballMetric } from "@/server/sports/metric-catalog";
+import type { CompetitionSeason } from "@/server/sports/competition-season-registry";
+import { fixtureStatValue, type NormalizedTeamFixtureStats } from "@/server/sports/fixture-stats";
+import {
+  getFootballMetricDefinition,
+  TEAM_METRIC_KEYS,
+  type FootballMetric,
+  type TeamMetric,
+} from "@/server/sports/metric-catalog";
 import type { ProviderFixture, ResolvedTeam } from "@/server/sports/provider";
 import {
   resolveTeamMetricExecution,
   type TeamMetricExecutionPlan,
 } from "@/server/sports/team-query-capability";
 import { createUniversalFootballSources } from "@/server/sports/universal-provider.server";
-import type { ProviderReadMeta, UniversalFootballSource } from "@/server/sports/universal-football";
+import type {
+  ProviderFixtureScope,
+  ProviderReadMeta,
+  UniversalFootballSource,
+  UniversalProviderName,
+} from "@/server/sports/universal-football";
 
 import { aggregateNumericValues, aggregateRatio } from "./aggregation";
 import { AnalysisPipelineError } from "./errors";
@@ -24,23 +36,16 @@ import {
   MAX_QUERY_MATCHES,
   queryPlanSchema,
   queryPlanSignature,
+  queryScopeSchema,
   type FootballAggregation,
-  type QueryFilter,
   type FootballGroupByField,
+  type QueryFilter,
   type QueryPlan,
   type QueryScope,
-  queryScopeSchema,
 } from "./query-plan";
 
 const DATA_CONCURRENCY = 4;
-const EUROPEAN_SEASON_COMPETITIONS = [
-  "Premier League",
-  "La Liga",
-  "Bundesliga",
-  "UEFA Champions League",
-  "Serie A",
-  "Ligue 1",
-] as const;
+const TEAM_METRIC_SET = new Set<string>(TEAM_METRIC_KEYS);
 
 interface ScoreRow {
   fixture: ProviderFixture;
@@ -54,6 +59,20 @@ interface ScoreRow {
   bothTeamsScored: boolean | null;
   venue: "home" | "away";
   opponent: string;
+}
+
+interface ResolvedRows {
+  team: ResolvedTeam;
+  rows: ScoreRow[];
+  fixtureMeta: ProviderReadMeta;
+  seasonMeta: ProviderReadMeta | null;
+  scope: QueryScope;
+  resolvedSeason: CompetitionSeason | null;
+}
+
+interface SnapshotContext {
+  snapshots: Map<number, NormalizedTeamFixtureStats>;
+  metas: ProviderReadMeta[];
 }
 
 export interface GroupedAggregateRow {
@@ -83,7 +102,7 @@ function canTryNextSource(error: unknown): boolean {
   );
 }
 
-async function firstSuccessful<T>(
+async function firstSuccessful<T extends Phase4cTeamResult>(
   sources: readonly UniversalFootballSource[],
   worker: (source: UniversalFootballSource) => Promise<T>,
 ): Promise<T> {
@@ -94,24 +113,28 @@ async function firstSuccessful<T>(
     );
   }
 
+  const attempted: string[] = [];
   let lastError: unknown = null;
   for (const source of sources) {
+    attempted.push(source.name);
     try {
-      return await worker(source);
+      const result = await worker(source);
+      result.provenance.providers_attempted = [...attempted];
+      result.provenance.fallback_occurred = attempted.length > 1;
+      return result;
     } catch (error) {
       if (!canTryNextSource(error)) throw error;
       lastError = error;
-      console.warn("[phase4c-query] capability-aware fallback", {
+      console.warn("[phase5b-query] conservative fallback", {
         provider: source.name,
         reason: error instanceof AnalysisPipelineError ? error.code : "unknown",
       });
     }
   }
-
   if (lastError instanceof AnalysisPipelineError) throw lastError;
   throw new AnalysisPipelineError(
     "PROVIDER_UNAVAILABLE",
-    "Os providers configurados não conseguiram executar a consulta universal.",
+    "Os providers configurados não conseguiram executar integralmente a consulta.",
   );
 }
 
@@ -177,76 +200,12 @@ function applyOverrides(plan: QueryPlan, overrides?: AnalysisOverrides): QueryPl
   return queryPlanSchema.parse({ ...plan, scope });
 }
 
-function isEuropeanSeasonCompetition(competition: string | undefined): boolean {
-  if (!competition) return false;
-  return EUROPEAN_SEASON_COMPETITIONS.some((candidate) =>
-    competitionNamesEquivalent(candidate, competition),
-  );
-}
-
-function seasonWindow(
-  season: string,
-  competition: string | undefined,
-  now = new Date(),
-): { date_from: string; date_to: string } | null {
-  const value = season.trim().toLowerCase();
-  const european = isEuropeanSeasonCompetition(competition);
-  const currentYear = now.getUTCFullYear();
-  const month = now.getUTCMonth() + 1;
-
-  if (value === "current") {
-    if (european) {
-      const start = month >= 7 ? currentYear : currentYear - 1;
-      return { date_from: `${start}-07-01`, date_to: `${start + 1}-06-30` };
-    }
-    return { date_from: `${currentYear}-01-01`, date_to: `${currentYear}-12-31` };
-  }
-
-  if (value === "previous") {
-    if (european) {
-      const currentStart = month >= 7 ? currentYear : currentYear - 1;
-      const start = currentStart - 1;
-      return { date_from: `${start}-07-01`, date_to: `${start + 1}-06-30` };
-    }
-    const year = currentYear - 1;
-    return { date_from: `${year}-01-01`, date_to: `${year}-12-31` };
-  }
-
-  const calendar = value.match(/^(\d{4})$/);
-  if (calendar) {
-    const year = Number(calendar[1]);
-    return { date_from: `${year}-01-01`, date_to: `${year}-12-31` };
-  }
-
-  const split = value.match(/^(\d{4})\s*[/-]\s*(\d{2}|\d{4})$/);
-  if (split) {
-    const start = Number(split[1]);
-    const end =
-      split[2].length === 2 ? Math.floor(start / 100) * 100 + Number(split[2]) : Number(split[2]);
-    if (end === start + 1) {
-      return { date_from: `${start}-07-01`, date_to: `${end}-06-30` };
-    }
-  }
-
-  return null;
-}
-
-function executionScope(plan: QueryPlan): QueryScope {
-  const status = plan.scope.status ?? "finished";
-  const window = plan.scope.season ? seasonWindow(plan.scope.season, plan.scope.competition) : null;
-  if (plan.scope.season && !window) {
-    throw new AnalysisPipelineError(
-      "UNSUPPORTED_FILTER",
-      `A temporada "${plan.scope.season}" foi compreendida, mas não pôde ser normalizada para um intervalo real de datas.`,
-    );
-  }
-
+function baseExecutionScope(plan: QueryPlan): QueryScope {
   return queryScopeSchema.parse({
     ...plan.scope,
-    status,
-    ...(window && !plan.scope.date_from ? { date_from: window.date_from } : {}),
-    ...(window && !plan.scope.date_to ? { date_to: window.date_to } : {}),
-    // Opponent is resolved to a real provider entity and filtered by ID below.
+    status: plan.scope.status ?? "finished",
+    // Opponent is resolved to an ID and applied locally. Season stays symbolic until the provider
+    // returns a real CompetitionSeason; no calendar heuristic is derived from the label.
     opponent: undefined,
   });
 }
@@ -282,6 +241,7 @@ function fixtureInsideScope(
   row: ScoreRow,
   scope: QueryScope,
   opponent: ResolvedTeam | null,
+  resolvedSeason: CompetitionSeason | null,
 ): boolean {
   if (scope.status && scope.status !== "finished") return false;
   if (scope.venue !== "all" && row.venue !== scope.venue) return false;
@@ -290,6 +250,16 @@ function fixtureInsideScope(
     !competitionNamesEquivalent(scope.competition, row.fixture.competition)
   ) {
     return false;
+  }
+  if (resolvedSeason) {
+    if (row.fixture.competitionId && row.fixture.competitionId !== resolvedSeason.competitionId) {
+      return false;
+    }
+    if (row.fixture.seasonId && row.fixture.seasonId !== resolvedSeason.seasonId) return false;
+    const day = new Date(row.fixture.timestamp * 1000).toISOString().slice(0, 10);
+    if (day < resolvedSeason.startDate.slice(0, 10) || day > resolvedSeason.endDate.slice(0, 10)) {
+      return false;
+    }
   }
   if (opponent) {
     const other = row.venue === "home" ? row.fixture.away : row.fixture.home;
@@ -301,92 +271,7 @@ function fixtureInsideScope(
   return true;
 }
 
-function filterFieldValue(
-  row: ScoreRow,
-  field: QueryFilter["field"],
-): string | number | boolean | null {
-  if (field === "outcome") return row.outcome;
-  if (field === "goals_for") return row.goalsFor;
-  if (field === "goals_against") return row.goalsAgainst;
-  if (field === "goal_difference") return row.goalDifference;
-  if (field === "points") return row.points;
-  if (field === "clean_sheet") return row.cleanSheet;
-  if (field === "failed_to_score") return row.failedToScore;
-  if (field === "both_teams_scored") return row.bothTeamsScored;
-  if (field === "venue") return row.venue;
-  if (field === "competition") return row.fixture.competition;
-  return row.opponent;
-}
-
-function scalarEquals(left: string | number | boolean, right: string | number | boolean): boolean {
-  if (typeof left === "string" && typeof right === "string") {
-    if (competitionNamesEquivalent(left, right)) return true;
-    return normalizeText(left) === normalizeText(right);
-  }
-  return left === right;
-}
-
-function matchesFilter(row: ScoreRow, filter: QueryFilter): boolean {
-  const left = filterFieldValue(row, filter.field);
-  if (left === null) {
-    throw new AnalysisPipelineError(
-      "DATA_INSUFFICIENT",
-      `A partida ${row.fixture.id} não possui o valor necessário para aplicar o filtro ${filter.field}. Null não foi tratado como zero.`,
-    );
-  }
-
-  if (filter.operator === "in") {
-    const values = Array.isArray(filter.value) ? filter.value : [filter.value];
-    return values.some((value) => scalarEquals(left, value));
-  }
-
-  const right = Array.isArray(filter.value) ? filter.value[0] : filter.value;
-  if (filter.operator === "eq") return scalarEquals(left, right);
-  if (filter.operator === "neq") return !scalarEquals(left, right);
-  if (typeof left !== "number" || typeof right !== "number") {
-    throw new AnalysisPipelineError(
-      "UNSUPPORTED_FILTER",
-      `O operador ${filter.operator} exige valores numéricos em ${filter.field}.`,
-    );
-  }
-  if (filter.operator === "gt") return left > right;
-  if (filter.operator === "gte") return left >= right;
-  if (filter.operator === "lt") return left < right;
-  return left <= right;
-}
-
-function applyFilters(rows: readonly ScoreRow[], filters: readonly QueryFilter[]): ScoreRow[] {
-  if (filters.length === 0) return [...rows];
-  return rows.filter((row) => filters.every((filter) => matchesFilter(row, filter)));
-}
-
-function selectScopeRows(
-  rows: readonly ScoreRow[],
-  scope: QueryScope,
-  requestedLastMatches: number | undefined,
-): ScoreRow[] {
-  const ordered = [...rows].sort((a, b) => a.fixture.timestamp - b.fixture.timestamp);
-  if (!requestedLastMatches) {
-    // Whole explicit scope means the whole scope. With no explicit bounded scope, keep a
-    // configurable technical history cap instead of silently choosing five matches.
-    const bounded = Boolean(scope.date_from || scope.date_to || scope.season || scope.competition);
-    return bounded ? ordered : ordered.slice(-MAX_QUERY_MATCHES);
-  }
-
-  const selected = ordered.slice(-requestedLastMatches);
-  if (selected.length < requestedLastMatches) {
-    const finiteScope = Boolean(scope.season || scope.date_from || scope.date_to);
-    if (!finiteScope) {
-      throw new AnalysisPipelineError(
-        "DATA_INSUFFICIENT",
-        `Foram encontradas ${selected.length} de ${requestedLastMatches} partidas dentro do escopo solicitado. Nenhuma competição ou temporada diferente foi usada para completar a amostra.`,
-      );
-    }
-  }
-  return selected;
-}
-
-function metricValue(row: ScoreRow, metric: FootballMetric): number | null {
+function scoreMetricValue(row: ScoreRow, metric: FootballMetric): number | null {
   if (metric === "goals_for") return row.goalsFor;
   if (metric === "goals_against") return row.goalsAgainst;
   if (metric === "goal_difference") return row.goalDifference;
@@ -404,6 +289,268 @@ function metricValue(row: ScoreRow, metric: FootballMetric): number | null {
     return row.bothTeamsScored === null ? null : row.bothTeamsScored ? 1 : 0;
   }
   return null;
+}
+
+function structuralFilterValue(
+  row: ScoreRow,
+  field: QueryFilter["field"],
+): string | number | boolean | null | undefined {
+  if (field === "outcome") return row.outcome;
+  if (field === "venue") return row.venue;
+  if (field === "competition") return row.fixture.competition;
+  if (field === "opponent") return row.opponent;
+  if (field === "clean_sheet") return row.cleanSheet;
+  if (TEAM_METRIC_SET.has(field)) {
+    const execution = resolveTeamMetricExecution(field as TeamMetric);
+    if (execution.kind === "derived") return scoreMetricValue(row, field as TeamMetric);
+  }
+  return undefined;
+}
+
+function scalarEquals(left: string | number | boolean, right: string | number | boolean): boolean {
+  if (typeof left === "string" && typeof right === "string") {
+    if (competitionNamesEquivalent(left, right)) return true;
+    return normalizeText(left) === normalizeText(right);
+  }
+  return left === right;
+}
+
+function compareFilterValue(
+  left: string | number | boolean | null,
+  filter: QueryFilter,
+  fixtureId: number,
+): boolean {
+  if (left === null) {
+    throw new AnalysisPipelineError(
+      "DATA_INSUFFICIENT",
+      `A partida ${fixtureId} não possui o valor necessário para aplicar ${filter.field}. UNKNOWN não foi convertido em zero.`,
+    );
+  }
+  if (filter.operator === "in") {
+    const values = Array.isArray(filter.value) ? filter.value : [filter.value];
+    return values.some((value) => scalarEquals(left, value));
+  }
+  const right = Array.isArray(filter.value) ? filter.value[0] : filter.value;
+  if (filter.operator === "eq") return scalarEquals(left, right);
+  if (filter.operator === "neq") return !scalarEquals(left, right);
+  if (typeof left !== "number" || typeof right !== "number") {
+    throw new AnalysisPipelineError(
+      "UNSUPPORTED_FILTER",
+      `O operador ${filter.operator} exige valores numéricos em ${filter.field}.`,
+    );
+  }
+  if (filter.operator === "gt") return left > right;
+  if (filter.operator === "gte") return left >= right;
+  if (filter.operator === "lt") return left < right;
+  return left <= right;
+}
+
+function splitFilters(filters: readonly QueryFilter[]): {
+  structural: QueryFilter[];
+  statistics: QueryFilter[];
+} {
+  const structural: QueryFilter[] = [];
+  const statistics: QueryFilter[] = [];
+  for (const filter of filters) {
+    const structuralField =
+      ["outcome", "venue", "competition", "opponent", "clean_sheet"].includes(filter.field) ||
+      (TEAM_METRIC_SET.has(filter.field) &&
+        resolveTeamMetricExecution(filter.field as TeamMetric).kind === "derived");
+    (structuralField ? structural : statistics).push(filter);
+  }
+  return { structural, statistics };
+}
+
+function applyStructuralFilters(
+  rows: readonly ScoreRow[],
+  filters: readonly QueryFilter[],
+): ScoreRow[] {
+  if (filters.length === 0) return [...rows];
+  return rows.filter((row) =>
+    filters.every((filter) => {
+      const value = structuralFilterValue(row, filter.field);
+      if (value === undefined) {
+        throw new AnalysisPipelineError(
+          "UNSUPPORTED_FILTER",
+          `O filtro ${filter.field} não é estrutural e não pode ser aplicado sem fixture_stats.`,
+        );
+      }
+      return compareFilterValue(value, filter, row.fixture.id);
+    }),
+  );
+}
+
+function selectScopeRows(
+  rows: readonly ScoreRow[],
+  scope: QueryScope,
+  requestedLastMatches: number | undefined,
+): ScoreRow[] {
+  const ordered = [...rows].sort((a, b) => a.fixture.timestamp - b.fixture.timestamp);
+  if (!requestedLastMatches) {
+    const bounded = Boolean(scope.date_from || scope.date_to || scope.season || scope.competition);
+    return bounded ? ordered.slice(-MAX_QUERY_MATCHES) : ordered.slice(-MAX_QUERY_MATCHES);
+  }
+  const selected = ordered.slice(-requestedLastMatches);
+  if (selected.length < requestedLastMatches) {
+    const finiteScope = Boolean(scope.season || scope.date_from || scope.date_to);
+    if (!finiteScope) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        `Foram encontradas ${selected.length} de ${requestedLastMatches} partidas no escopo. Nenhum jogo de outro escopo foi usado para completar a amostra.`,
+      );
+    }
+  }
+  return selected;
+}
+
+async function resolveRows(params: {
+  source: UniversalFootballSource;
+  plan: QueryPlan;
+}): Promise<ResolvedRows> {
+  const { source, plan } = params;
+  const scope = baseExecutionScope(plan);
+  const team = await source.resolveTeam(plan.entity.name);
+  const opponent = plan.scope.opponent ? await source.resolveTeam(plan.scope.opponent) : null;
+  if (opponent && opponent.id === team.id) {
+    throw new AnalysisPipelineError(
+      "UNSUPPORTED_FILTER",
+      "O adversário do escopo não pode ser a própria entidade principal.",
+    );
+  }
+
+  let resolvedSeason: CompetitionSeason | null = null;
+  let seasonMeta: ProviderReadMeta | null = null;
+  const providerScope: ProviderFixtureScope = { ...scope };
+  if (plan.scope.season) {
+    if (!plan.scope.competition) {
+      throw new AnalysisPipelineError(
+        "UNSUPPORTED_FILTER",
+        "Uma temporada explícita exige competição explícita para resolução provider-backed.",
+      );
+    }
+    if (!source.resolveCompetitionSeason) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        `${source.name} não expõe resolução provider-backed de temporadas.`,
+      );
+    }
+    const seasonRead = await source.resolveCompetitionSeason(
+      plan.scope.competition,
+      plan.scope.season,
+    );
+    resolvedSeason = seasonRead.season;
+    seasonMeta = seasonRead.meta;
+    providerScope.providerCompetitionId = resolvedSeason.competitionId;
+    providerScope.providerSeasonId = resolvedSeason.seasonId;
+    providerScope.date_from = plan.scope.date_from ?? resolvedSeason.startDate.slice(0, 10);
+    providerScope.date_to = plan.scope.date_to ?? resolvedSeason.endDate.slice(0, 10);
+  }
+
+  const read = await source.listTeamFixtures(team, providerScope);
+  const scoped = read.fixtures
+    .map((fixture) => scoreRow(fixture, team))
+    .filter((row) => fixtureInsideScope(row, scope, opponent, resolvedSeason));
+  const selected = selectScopeRows(scoped, scope, plan.scope.last_matches);
+  if (selected.length === 0) {
+    throw new AnalysisPipelineError(
+      "DATA_INSUFFICIENT",
+      "Nenhuma partida concluída foi encontrada para o escopo solicitado. Nenhum jogo fora do escopo foi usado.",
+    );
+  }
+  return { team, rows: selected, fixtureMeta: read.meta, seasonMeta, scope, resolvedSeason };
+}
+
+function rawMetricsNeeded(plan: QueryPlan): TeamMetric[] {
+  const metrics = new Set<TeamMetric>();
+  if (plan.metric && TEAM_METRIC_SET.has(plan.metric)) {
+    const execution = resolveTeamMetricExecution(plan.metric);
+    if (execution.kind === "raw") metrics.add(execution.rawMetric);
+  }
+  for (const filter of plan.filters) {
+    if (!TEAM_METRIC_SET.has(filter.field)) continue;
+    const execution = resolveTeamMetricExecution(filter.field as TeamMetric);
+    if (execution.kind === "raw") metrics.add(execution.rawMetric);
+  }
+  return [...metrics];
+}
+
+async function snapshotsForRows(params: {
+  source: UniversalFootballSource;
+  team: ResolvedTeam;
+  rows: readonly ScoreRow[];
+  requiredMetrics: readonly TeamMetric[];
+}): Promise<SnapshotContext> {
+  if (params.requiredMetrics.length === 0) return { snapshots: new Map(), metas: [] };
+  if (!params.source.getFixtureStats) {
+    throw new AnalysisPipelineError(
+      "DATA_INSUFFICIENT",
+      `${params.source.name} não possui snapshot universal fixture_stats disponível.`,
+    );
+  }
+  const reads = await mapWithConcurrency(params.rows, DATA_CONCURRENCY, (row) =>
+    params.source.getFixtureStats!(row.fixture, params.team.id),
+  );
+  const snapshots = new Map<number, NormalizedTeamFixtureStats>();
+  const metas: ProviderReadMeta[] = [];
+  reads.forEach((read, index) => {
+    const row = params.rows[index];
+    for (const metric of params.requiredMetrics) {
+      if (!read.snapshot.coverage.supported.includes(metric)) {
+        throw new AnalysisPipelineError(
+          "DATA_INSUFFICIENT",
+          `${params.source.name} não suporta ${metric} no snapshot da partida ${row.fixture.id}.`,
+        );
+      }
+    }
+    snapshots.set(row.fixture.id, read.snapshot);
+    metas.push(read.meta);
+  });
+  return { snapshots, metas };
+}
+
+function applyStatisticFilters(
+  rows: readonly ScoreRow[],
+  filters: readonly QueryFilter[],
+  snapshots: ReadonlyMap<number, NormalizedTeamFixtureStats>,
+): ScoreRow[] {
+  if (filters.length === 0) return [...rows];
+  return rows.filter((row) =>
+    filters.every((filter) => {
+      if (!TEAM_METRIC_SET.has(filter.field)) {
+        throw new AnalysisPipelineError(
+          "UNSUPPORTED_FILTER",
+          `O filtro ${filter.field} não possui executor fixture_stats.`,
+        );
+      }
+      const execution = resolveTeamMetricExecution(filter.field as TeamMetric);
+      if (execution.kind !== "raw") {
+        throw new AnalysisPipelineError(
+          "UNSUPPORTED_FILTER",
+          `O filtro ${filter.field} não possui executor fixture_stats raw.`,
+        );
+      }
+      const value = fixtureStatValue(snapshots.get(row.fixture.id), execution.rawMetric);
+      return compareFilterValue(value, filter, row.fixture.id);
+    }),
+  );
+}
+
+function metricValuesForRows(params: {
+  rows: readonly ScoreRow[];
+  metric: FootballMetric;
+  execution: TeamMetricExecutionPlan;
+  snapshots: ReadonlyMap<number, NormalizedTeamFixtureStats>;
+}): (number | null)[] {
+  if (params.execution.kind === "unsupported") {
+    throw new AnalysisPipelineError("UNSUPPORTED_CAPABILITY", params.execution.reason);
+  }
+  if (params.execution.kind === "derived") {
+    return params.rows.map((row) => scoreMetricValue(row, params.metric));
+  }
+  const rawMetric = params.execution.rawMetric;
+  return params.rows.map((row) =>
+    fixtureStatValue(params.snapshots.get(row.fixture.id), rawMetric),
+  );
 }
 
 const INDICATOR_METRICS = new Set<FootballMetric>([
@@ -424,6 +571,8 @@ function aggregateMetric(
 ): { value: number | null; known: number; missing: number } {
   const known = values.filter((value): value is number => value !== null && Number.isFinite(value));
   const missing = values.length - known.length;
+  // Aggregations over fixture metrics are fail-closed: a partially unknown sample is not silently
+  // reduced to the subset that happened to have data.
   if (values.length === 0 || missing > 0) return { value: null, known: known.length, missing };
 
   if (INDICATOR_METRICS.has(metric)) {
@@ -436,169 +585,25 @@ function aggregateMetric(
       return { value: numerator, known: known.length, missing };
     }
   }
-
   if (metric === "points" && (aggregation === "percentage" || aggregation === "rate")) {
     const points = known.reduce((sum, value) => sum + value, 0);
     return {
-      value: aggregateRatio(points, values.length * 3, aggregation).value,
+      value:
+        aggregation === "percentage"
+          ? (points / (values.length * 3)) * 100
+          : points / (values.length * 3),
       known: known.length,
       missing,
     };
   }
-
-  if (aggregation === "percentage" || aggregation === "rate") {
-    throw new AnalysisPipelineError(
-      "UNSUPPORTED_CAPABILITY",
-      `${aggregation} exige um denominador semântico explícito; a métrica ${metric} não define um denominador nessa execução.`,
-    );
+  if (!["average", "median", "minimum", "maximum", "count", "total"].includes(aggregation)) {
+    return { value: null, known: known.length, missing };
   }
-
-  const result = aggregateNumericValues(values, aggregation);
-  return { value: result.value, known: result.coverage.known, missing: result.coverage.missing };
-}
-
-function groupDimensions(
-  row: ScoreRow,
-  fields: readonly FootballGroupByField[],
-  scope: QueryScope,
-) {
-  const dimensions: Partial<Record<FootballGroupByField, string>> = {};
-  for (const field of fields) {
-    if (field === "venue") dimensions[field] = row.venue === "home" ? "Casa" : "Fora";
-    else if (field === "competition") dimensions[field] = row.fixture.competition;
-    else if (field === "opponent") dimensions[field] = row.opponent;
-    else if (field === "outcome") {
-      dimensions[field] =
-        row.outcome === "win" ? "Vitória" : row.outcome === "draw" ? "Empate" : "Derrota";
-    } else if (field === "month") dimensions[field] = row.fixture.date.slice(0, 7);
-    else if (field === "year") dimensions[field] = row.fixture.date.slice(0, 4);
-    else if (field === "season") dimensions[field] = scope.season ?? row.fixture.date.slice(0, 4);
-  }
-  return dimensions;
-}
-
-function groupKey(
-  dimensions: Partial<Record<FootballGroupByField, string>>,
-  fields: readonly FootballGroupByField[],
-) {
-  return fields.map((field) => `${field}:${dimensions[field] ?? "-"}`).join("|");
-}
-
-function formatGroupLabel(
-  dimensions: Partial<Record<FootballGroupByField, string>>,
-  fields: readonly FootballGroupByField[],
-) {
-  return fields.map((field) => dimensions[field] ?? "-").join(" · ");
-}
-
-function fixtureSummary(row: ScoreRow, source: UniversalFootballSource): AnalysisFixtureSummary {
-  return {
-    fixture_id: String(row.fixture.id),
-    date: row.fixture.date,
-    status: row.fixture.status,
-    competition: row.fixture.competition,
-    home_team: { id: String(row.fixture.home.id), name: row.fixture.home.name },
-    away_team: { id: String(row.fixture.away.id), name: row.fixture.away.name },
-    home_goals: row.fixture.goals.home,
-    away_goals: row.fixture.goals.away,
-    opponent: row.opponent,
-    venue: row.venue,
-    result: `${row.fixture.goals.home ?? "-"}-${row.fixture.goals.away ?? "-"}`,
-    outcome:
-      row.outcome === "win"
-        ? "V"
-        : row.outcome === "draw"
-          ? "E"
-          : row.outcome === "loss"
-            ? "D"
-            : null,
-    source: source.name,
-  };
-}
-
-function matchRecord(row: ScoreRow, value: number, source: UniversalFootballSource): MatchRecord {
-  return {
-    id: String(row.fixture.id),
-    date: row.fixture.date,
-    opponent: row.opponent,
-    competition: row.fixture.competition,
-    venue: row.venue,
-    result: `${row.fixture.goals.home ?? "-"}-${row.fixture.goals.away ?? "-"}`,
-    outcome: row.outcome === "win" ? "V" : row.outcome === "draw" ? "E" : "D",
-    value,
-    source: source.name,
-  };
-}
-
-function combineMeta(
-  base: ProviderReadMeta,
-  metricPlan: TeamMetricExecutionPlan,
-): ProviderReadMeta {
-  return {
-    ...base,
-    dataFamily:
-      metricPlan.kind === "derived"
-        ? `${base.dataFamily} + fixture_score`
-        : `${base.dataFamily} + fixture_stats`,
-    endpoint:
-      metricPlan.kind === "derived" ? base.endpoint : `${base.endpoint} + fixture statistics`,
-  };
-}
-
-async function resolveRows(params: { source: UniversalFootballSource; plan: QueryPlan }): Promise<{
-  team: ResolvedTeam;
-  rows: ScoreRow[];
-  meta: ProviderReadMeta;
-  scope: QueryScope;
-}> {
-  const { source, plan } = params;
-  const scope = executionScope(plan);
-  const team = await source.resolveTeam(plan.entity.name);
-  const opponent = plan.scope.opponent ? await source.resolveTeam(plan.scope.opponent) : null;
-  if (opponent && opponent.id === team.id) {
-    throw new AnalysisPipelineError(
-      "UNSUPPORTED_FILTER",
-      "O adversário do escopo não pode ser a própria entidade principal.",
-    );
-  }
-
-  const read = await source.listTeamFixtures(team, scope);
-  const scoped = read.fixtures
-    .map((fixture) => scoreRow(fixture, team))
-    .filter((row) => fixtureInsideScope(row, scope, opponent));
-  const selected = selectScopeRows(
-    scoped,
-    { ...scope, season: plan.scope.season },
-    plan.scope.last_matches,
+  const result = aggregateNumericValues(
+    known,
+    aggregation as "average" | "median" | "minimum" | "maximum" | "count" | "total",
   );
-
-  if (selected.length === 0) {
-    throw new AnalysisPipelineError(
-      "DATA_INSUFFICIENT",
-      "Nenhuma partida concluída foi encontrada para o escopo solicitado. Nenhum jogo fora do escopo foi usado.",
-    );
-  }
-
-  return { team, rows: selected, meta: read.meta, scope: { ...scope, season: plan.scope.season } };
-}
-
-async function metricValuesForRows(params: {
-  source: UniversalFootballSource;
-  team: ResolvedTeam;
-  rows: readonly ScoreRow[];
-  metric: FootballMetric;
-  execution: TeamMetricExecutionPlan;
-}): Promise<(number | null)[]> {
-  if (params.execution.kind === "unsupported") {
-    throw new AnalysisPipelineError("UNSUPPORTED_CAPABILITY", params.execution.reason);
-  }
-  if (params.execution.kind === "derived") {
-    return params.rows.map((row) => metricValue(row, params.metric));
-  }
-  const rawMetric = params.execution.rawMetric;
-  return mapWithConcurrency(params.rows, DATA_CONCURRENCY, (row) =>
-    params.source.getFixtureMetric(row.fixture, params.team.id, rawMetric),
-  );
+  return { value: result.value, known: known.length, missing };
 }
 
 function buildStatistics(values: readonly number[]): AnalysisStatistics {
@@ -623,7 +628,7 @@ function buildStatistics(values: readonly number[]): AnalysisStatistics {
   };
 }
 
-function metricUnit(metric: FootballMetric, aggregation: FootballAggregation): string {
+function metricUnit(metric: FootballMetric, aggregation: FootballAggregation | null): string {
   if (aggregation === "percentage") return "%";
   if (aggregation === "rate") return "taxa";
   const definition = getFootballMetricDefinition(metric, "team");
@@ -633,11 +638,47 @@ function metricUnit(metric: FootballMetric, aggregation: FootballAggregation): s
   return definition.unit === "count" ? "" : definition.unit;
 }
 
+function groupDimensions(
+  row: ScoreRow,
+  fields: readonly FootballGroupByField[],
+  scope: QueryScope,
+  resolvedSeason: CompetitionSeason | null,
+): Partial<Record<FootballGroupByField, string>> {
+  const dimensions: Partial<Record<FootballGroupByField, string>> = {};
+  for (const field of fields) {
+    if (field === "venue") dimensions[field] = row.venue === "home" ? "Casa" : "Fora";
+    else if (field === "competition") dimensions[field] = row.fixture.competition;
+    else if (field === "opponent") dimensions[field] = row.opponent;
+    else if (field === "outcome") dimensions[field] = row.outcome ?? "Desconhecido";
+    else if (field === "month") dimensions[field] = row.fixture.date.slice(0, 7);
+    else if (field === "year") dimensions[field] = row.fixture.date.slice(0, 4);
+    else if (field === "season") {
+      dimensions[field] = resolvedSeason?.label ?? scope.season ?? "Desconhecida";
+    }
+  }
+  return dimensions;
+}
+
+function groupKey(
+  dimensions: Partial<Record<FootballGroupByField, string>>,
+  fields: readonly FootballGroupByField[],
+): string {
+  return fields.map((field) => `${field}:${dimensions[field] ?? "-"}`).join("|");
+}
+
+function groupLabel(
+  dimensions: Partial<Record<FootballGroupByField, string>>,
+  fields: readonly FootballGroupByField[],
+): string {
+  return fields.map((field) => dimensions[field] ?? "-").join(" · ");
+}
+
 function groupRows(params: {
   rows: readonly ScoreRow[];
   values: readonly (number | null)[];
   fields: readonly FootballGroupByField[];
   scope: QueryScope;
+  resolvedSeason: CompetitionSeason | null;
   metric: FootballMetric;
   aggregation: FootballAggregation;
   sort: QueryPlan["sort"];
@@ -649,19 +690,18 @@ function groupRows(params: {
     { dimensions: Partial<Record<FootballGroupByField, string>>; values: (number | null)[] }
   >();
   params.rows.forEach((row, index) => {
-    const dimensions = groupDimensions(row, params.fields, params.scope);
+    const dimensions = groupDimensions(row, params.fields, params.scope, params.resolvedSeason);
     const key = groupKey(dimensions, params.fields);
     const current = grouped.get(key) ?? { dimensions, values: [] };
     current.values.push(params.values[index]);
     grouped.set(key, current);
   });
-
-  const result = [...grouped.values()].map((entry) => {
+  const rows = [...grouped.values()].map((entry) => {
     const aggregate = aggregateMetric(params.metric, params.aggregation, entry.values);
     if (aggregate.value === null) {
       throw new AnalysisPipelineError(
         "DATA_INSUFFICIENT",
-        `${aggregate.known} de ${entry.values.length} partidas possuem a métrica ${params.metric} no grupo ${formatGroupLabel(entry.dimensions, params.fields)}. A agregação não foi estimada.`,
+        `${aggregate.known} de ${entry.values.length} partidas possuem ${params.metric} no grupo ${groupLabel(entry.dimensions, params.fields)}.`,
       );
     }
     return {
@@ -671,25 +711,177 @@ function groupRows(params: {
       sample_size: entry.values.length,
     };
   });
-
   if (params.sort) {
     const direction = params.sort.direction === "asc" ? 1 : -1;
-    result.sort((left, right) => {
+    rows.sort((left, right) => {
       if (params.sort?.field === "sample_size")
         return (left.sample_size - right.sample_size) * direction;
       if (params.sort?.field === "group") return left.key.localeCompare(right.key) * direction;
       return (left.value - right.value) * direction;
     });
-  } else if (params.fields.length === 1 && params.fields[0] === "venue") {
-    result.sort((left, right) => {
-      const order = (item: GroupedAggregateRow) => (item.dimensions.venue === "Casa" ? 0 : 1);
-      return order(left) - order(right);
-    });
   } else {
-    result.sort((left, right) => left.key.localeCompare(right.key));
+    rows.sort((left, right) => left.key.localeCompare(right.key));
   }
+  return params.limit ? rows.slice(0, params.limit) : rows;
+}
 
-  return params.limit ? result.slice(0, params.limit) : result;
+function mergeMetas(metas: readonly ProviderReadMeta[]): {
+  endpoints: string;
+  dataFamilies: string[];
+  fetchedAt: string;
+  cacheStatus: AnalysisProvenance["cache_status"];
+} {
+  const endpoints = [...new Set(metas.map((meta) => meta.endpoint))];
+  const families = [...new Set(metas.map((meta) => meta.dataFamily))];
+  const statuses = [...new Set(metas.map((meta) => meta.cacheStatus))];
+  return {
+    endpoints: endpoints.join(" + "),
+    dataFamilies: families,
+    fetchedAt:
+      metas
+        .map((meta) => meta.fetchedAt)
+        .sort()
+        .at(-1) ?? new Date().toISOString(),
+    cacheStatus: statuses.length === 1 ? statuses[0] : "mixed",
+  };
+}
+
+function coverageSummary(snapshots: ReadonlyMap<number, NormalizedTeamFixtureStats>) {
+  if (snapshots.size === 0) return null;
+  const supported = new Set<string>();
+  const observed = new Map<string, number>();
+  const missing = new Map<string, number>();
+  for (const snapshot of snapshots.values()) {
+    snapshot.coverage.supported.forEach((metric) => supported.add(metric));
+    snapshot.coverage.observed.forEach((metric) => {
+      observed.set(metric, (observed.get(metric) ?? 0) + 1);
+    });
+    snapshot.coverage.missing.forEach((metric) => {
+      missing.set(metric, (missing.get(metric) ?? 0) + 1);
+    });
+  }
+  return {
+    fixtures: snapshots.size,
+    supported: [...supported],
+    observed: Object.fromEntries(observed),
+    missing: Object.fromEntries(missing),
+  };
+}
+
+function provenanceFor(params: {
+  source: UniversalFootballSource;
+  resolved: ResolvedRows;
+  stats: SnapshotContext;
+  sampleSize: number;
+  missingValues: number;
+}): AnalysisProvenance {
+  const merged = mergeMetas([
+    params.resolved.fixtureMeta,
+    ...(params.resolved.seasonMeta ? [params.resolved.seasonMeta] : []),
+    ...params.stats.metas,
+  ]);
+  return {
+    provider: params.source.name,
+    source_endpoint: merged.endpoints,
+    data_family: merged.dataFamilies.join(" + "),
+    data_families: merged.dataFamilies,
+    fetched_at: merged.fetchedAt,
+    cache_status: merged.cacheStatus,
+    sample_size: params.sampleSize,
+    missing_values: params.missingValues,
+    resolved_entity_ids: [String(params.resolved.team.id)],
+    competition: params.resolved.scope.competition ?? null,
+    season: params.resolved.scope.season ?? null,
+    coverage: coverageSummary(params.stats.snapshots),
+    resolved_competition_id: params.resolved.resolvedSeason?.competitionId ?? null,
+    resolved_season_id: params.resolved.resolvedSeason?.seasonId ?? null,
+    resolved_season_label: params.resolved.resolvedSeason?.label ?? null,
+    providers_attempted: [params.source.name],
+    fallback_occurred: false,
+  };
+}
+
+function fixtureSummary(
+  row: ScoreRow,
+  source: UniversalFootballSource,
+  metric?: { key: FootballMetric; value: number },
+): AnalysisFixtureSummary {
+  return {
+    fixture_id: String(row.fixture.id),
+    date: row.fixture.date,
+    status: row.fixture.status,
+    competition: row.fixture.competition,
+    home_team: { id: String(row.fixture.home.id), name: row.fixture.home.name },
+    away_team: { id: String(row.fixture.away.id), name: row.fixture.away.name },
+    home_goals: row.fixture.goals.home,
+    away_goals: row.fixture.goals.away,
+    opponent: row.opponent,
+    venue: row.venue,
+    result: `${row.fixture.goals.home ?? "-"}-${row.fixture.goals.away ?? "-"}`,
+    outcome:
+      row.outcome === "win"
+        ? "V"
+        : row.outcome === "draw"
+          ? "E"
+          : row.outcome === "loss"
+            ? "D"
+            : null,
+    source: source.name,
+    ...(metric
+      ? {
+          metric: {
+            key: metric.key,
+            value: metric.value,
+            unit: metricUnit(metric.key, null),
+            observed: true as const,
+          },
+        }
+      : {}),
+  };
+}
+
+function matchRecord(row: ScoreRow, value: number, source: UniversalFootballSource): MatchRecord {
+  return {
+    id: String(row.fixture.id),
+    date: row.fixture.date,
+    opponent: row.opponent,
+    competition: row.fixture.competition,
+    venue: row.venue,
+    result: `${row.fixture.goals.home ?? "-"}-${row.fixture.goals.away ?? "-"}`,
+    outcome: row.outcome === "win" ? "V" : row.outcome === "draw" ? "E" : "D",
+    value,
+    source: source.name,
+  };
+}
+
+async function prepareFilteredRows(params: {
+  source: UniversalFootballSource;
+  plan: QueryPlan;
+}): Promise<{ resolved: ResolvedRows; filtered: ScoreRow[]; stats: SnapshotContext }> {
+  const resolved = await resolveRows(params);
+  const filters = splitFilters(params.plan.filters);
+  // Score/structural filters are deliberately evaluated before any fixture_stats read.
+  const structural = applyStructuralFilters(resolved.rows, filters.structural);
+  if (structural.length === 0) {
+    throw new AnalysisPipelineError(
+      "DATA_INSUFFICIENT",
+      "Nenhuma partida do escopo satisfez os filtros estruturais/placar solicitados.",
+    );
+  }
+  const stats = await snapshotsForRows({
+    source: params.source,
+    team: resolved.team,
+    rows: structural,
+    requiredMetrics: rawMetricsNeeded(params.plan),
+  });
+  const filtered = applyStatisticFilters(structural, filters.statistics, stats.snapshots);
+  if (filtered.length === 0) {
+    throw new AnalysisPipelineError(
+      "DATA_INSUFFICIENT",
+      "Nenhuma partida do escopo satisfez os filtros fixture_stats solicitados.",
+    );
+  }
+  return { resolved, filtered, stats };
 }
 
 async function analyzeAggregate(params: {
@@ -707,7 +899,7 @@ async function analyzeAggregate(params: {
   if (plan.scope.half !== "full") {
     throw new AnalysisPipelineError(
       "UNSUPPORTED_FILTER",
-      "As métricas de placar desta fase usam placar final. Primeiro/segundo tempo exige a família de dados por período.",
+      "Métricas desta fase usam jogo completo; primeiro/segundo tempo exige outra família.",
     );
   }
   if (plan.scope.status && plan.scope.status !== "finished") {
@@ -716,105 +908,65 @@ async function analyzeAggregate(params: {
       "Aggregate universal desta fase calcula apenas partidas concluídas.",
     );
   }
-
   const execution = resolveTeamMetricExecution(plan.metric);
   if (execution.kind === "unsupported") {
     throw new AnalysisPipelineError("UNSUPPORTED_CAPABILITY", execution.reason);
   }
-
-  const resolved = await resolveRows({ source, plan });
-  const filtered = applyFilters(resolved.rows, plan.filters);
-  if (filtered.length === 0) {
-    throw new AnalysisPipelineError(
-      "DATA_INSUFFICIENT",
-      "Nenhuma partida do escopo satisfez os filtros estruturados solicitados.",
-    );
-  }
-
-  const values = await metricValuesForRows({
-    source,
-    team: resolved.team,
-    rows: filtered,
+  const prepared = await prepareFilteredRows({ source, plan });
+  const values = metricValuesForRows({
+    rows: prepared.filtered,
     metric: plan.metric,
     execution,
+    snapshots: prepared.stats.snapshots,
   });
   const aggregate = aggregateMetric(plan.metric, plan.aggregation, values);
   if (aggregate.value === null) {
     throw new AnalysisPipelineError(
       "DATA_INSUFFICIENT",
-      `${aggregate.known} de ${filtered.length} partidas possuem a métrica ${plan.metric}. Esta fase exige cobertura completa da amostra e não converte null em zero.`,
+      `${aggregate.known} de ${prepared.filtered.length} partidas possuem ${plan.metric}. UNKNOWN permaneceu desconhecido e a consulta falhou fechada.`,
     );
   }
-
   const groups = groupRows({
-    rows: filtered,
+    rows: prepared.filtered,
     values,
     fields: plan.group_by,
-    scope: resolved.scope,
+    scope: prepared.resolved.scope,
+    resolvedSeason: prepared.resolved.resolvedSeason,
     metric: plan.metric,
     aggregation: plan.aggregation,
     sort: plan.sort,
     limit: plan.limit,
   });
-  const knownValues = values.filter((value): value is number => value !== null);
+  const knownValues = values as number[];
   const definition = getFootballMetricDefinition(plan.metric, "team");
   const label = definition?.label ?? plan.metric;
   const unit = metricUnit(plan.metric, plan.aggregation);
-  const scopeParts = [
-    plan.scope.competition ?? null,
-    plan.scope.season ? `temporada ${plan.scope.season}` : null,
-    plan.scope.venue === "home" ? "em casa" : plan.scope.venue === "away" ? "fora" : null,
-  ].filter(Boolean);
   const groupSummary = groups.length
-    ? ` ${groups.map((group) => `${formatGroupLabel(group.dimensions, plan.group_by)}: ${group.value}`).join(" · ")}.`
+    ? ` ${groups.map((group) => `${groupLabel(group.dimensions, plan.group_by)}: ${group.value}`).join(" · ")}.`
     : "";
-  const summary = `${label}: ${aggregate.value}${unit ? ` ${unit}` : ""} em ${filtered.length} partida${filtered.length === 1 ? "" : "s"}${scopeParts.length ? ` (${scopeParts.join(" · ")})` : ""}.${groupSummary}`;
-
+  const summary = `${label}: ${aggregate.value}${unit ? ` ${unit}` : ""} em ${prepared.filtered.length} partida${prepared.filtered.length === 1 ? "" : "s"}.${groupSummary}`;
   const intent: QueryIntent = {
     sport: "football",
     query_kind: "aggregate",
     entity_type: "team",
-    entity_name: resolved.team.name,
-    entity_id: String(resolved.team.id),
+    entity_name: prepared.resolved.team.name,
+    entity_id: String(prepared.resolved.team.id),
     compare_with: null,
     metric: plan.metric,
     metric_label: label,
-    // QueryIntent is the persisted legacy envelope; the exact universal aggregation is
-    // preserved in query_plan and answer. Runtime consumers do not recalculate from this field.
     aggregation: plan.aggregation as QueryIntent["aggregation"],
-    match_count: filtered.length,
+    match_count: prepared.filtered.length,
     competition: plan.scope.competition ?? null,
     venue: plan.scope.venue,
   };
-  const meta = combineMeta(resolved.meta, execution);
-  const provenance: AnalysisProvenance = {
-    provider: source.name,
-    source_endpoint: meta.endpoint,
-    data_family: meta.dataFamily,
-    fetched_at: meta.fetchedAt,
-    cache_status: meta.cacheStatus,
-    sample_size: filtered.length,
-    missing_values: aggregate.missing,
-    resolved_entity_ids: [String(resolved.team.id)],
-    competition: plan.scope.competition ?? null,
-    season: plan.scope.season ?? null,
-  };
-  const cacheKey = `v4c|${source.name}|${resolved.team.id}|${queryPlanSignature(plan)}`;
-  const matches = filtered.map((row, index) => matchRecord(row, knownValues[index], source));
-
-  console.info("[phase4c-query] aggregate", {
-    query_kind: plan.query_kind,
-    metric: plan.metric,
-    aggregation: plan.aggregation,
-    entity_type: plan.entity.type,
-    resolved_entity_id: resolved.team.id,
-    scope: plan.scope,
-    data_family: execution.dataFamily,
-    provider: source.name,
-    cache_status: meta.cacheStatus,
-    sample_size: filtered.length,
+  const provenance = provenanceFor({
+    source,
+    resolved: prepared.resolved,
+    stats: prepared.stats,
+    sampleSize: prepared.filtered.length,
+    missingValues: aggregate.missing,
   });
-
+  const cacheKey = `v5b|${source.name}|${prepared.resolved.team.id}|${queryPlanSignature(plan)}`;
   return {
     result_type: "aggregate",
     result_version: 3,
@@ -830,10 +982,10 @@ async function analyzeAggregate(params: {
       value: aggregate.value,
       unit,
       summary,
-      explanation: `Cálculo determinístico sobre ${filtered.length} partidas. Dados ausentes permanecem null e tornam a amostra insuficiente; nenhuma estatística foi estimada.`,
+      explanation: `Cálculo determinístico sobre ${prepared.filtered.length} partidas. UNKNOWN não vira zero; filtros de placar foram aplicados antes de fixture_stats.`,
     },
     statistics: buildStatistics(knownValues),
-    chart_data: filtered.map((row, index) => ({
+    chart_data: prepared.filtered.map((row, index) => ({
       label: new Date(row.fixture.date).toLocaleDateString("pt-BR", {
         day: "2-digit",
         month: "2-digit",
@@ -842,18 +994,24 @@ async function analyzeAggregate(params: {
       opponent: row.opponent,
       venue: row.venue === "home" ? "Casa" : "Fora",
     })),
-    matches: [...matches].reverse(),
+    matches: [...prepared.filtered]
+      .map((row, index) => matchRecord(row, knownValues[index], source))
+      .reverse(),
     insights: groups.length
       ? groups.map(
           (group) =>
-            `${formatGroupLabel(group.dimensions, plan.group_by)}: ${group.value} (${group.sample_size} jogos).`,
+            `${groupLabel(group.dimensions, plan.group_by)}: ${group.value} (${group.sample_size} jogos).`,
         )
-      : [`A amostra efetiva contém ${filtered.length} partidas após scope e filtros.`],
+      : [`A amostra efetiva contém ${prepared.filtered.length} partidas após scope e filtros.`],
     related: [
-      `Compare ${label.toLowerCase()} de ${resolved.team.name} em casa e fora`,
-      `Mostre os jogos usados nesta análise do ${resolved.team.name}`,
+      `Compare ${label.toLowerCase()} de ${prepared.resolved.team.name} em casa e fora`,
+      `Mostre os jogos usados nesta análise do ${prepared.resolved.team.name}`,
     ],
-    source: { provider: source.name, updated_at: meta.fetchedAt, missing: aggregate.missing },
+    source: {
+      provider: source.name,
+      updated_at: provenance.fetched_at,
+      missing: aggregate.missing,
+    },
     provenance,
     demo: false,
   };
@@ -864,22 +1022,57 @@ async function analyzeMatchList(params: {
   plan: QueryPlan;
   source: UniversalFootballSource;
 }): Promise<MatchListAnalysisResult> {
-  const resolved = await resolveRows({ source: params.source, plan: params.plan });
-  const filtered = applyFilters(resolved.rows, params.plan.filters);
-  const limited = params.plan.limit ? filtered.slice(-params.plan.limit) : filtered;
+  if (params.plan.sort) {
+    throw new AnalysisPipelineError(
+      "UNSUPPORTED_CAPABILITY",
+      "sort em match_list ainda não possui executor determinístico e foi recusado para evitar perda semântica.",
+    );
+  }
+  const prepared = await prepareFilteredRows({ source: params.source, plan: params.plan });
+  const limited = params.plan.limit
+    ? prepared.filtered.slice(-params.plan.limit)
+    : prepared.filtered;
   if (limited.length === 0) {
     throw new AnalysisPipelineError(
       "DATA_INSUFFICIENT",
-      "Nenhuma partida do escopo satisfez os filtros da lista solicitada.",
+      "Nenhuma partida satisfez a lista solicitada.",
     );
   }
-  const summaries = limited.map((row) => fixtureSummary(row, params.source));
+  let values: (number | null)[] | null = null;
+  if (params.plan.metric) {
+    const execution = resolveTeamMetricExecution(params.plan.metric);
+    if (execution.kind === "unsupported") {
+      throw new AnalysisPipelineError("UNSUPPORTED_CAPABILITY", execution.reason);
+    }
+    values = metricValuesForRows({
+      rows: limited,
+      metric: params.plan.metric,
+      execution,
+      snapshots: prepared.stats.snapshots,
+    });
+    const missing = values.filter((value) => value === null).length;
+    if (missing > 0) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        `${missing} partida(s) não possuem ${params.plan.metric}; match_list recusou ocultar a métrica ou inventar zero.`,
+      );
+    }
+  }
+  const summaries = limited.map((row, index) =>
+    fixtureSummary(
+      row,
+      params.source,
+      params.plan.metric && values
+        ? { key: params.plan.metric, value: values[index] as number }
+        : undefined,
+    ),
+  );
   const intent: UniversalAnalysisIntent = {
     sport: "football",
     query_kind: "match_list",
     entity_type: "team",
-    entity_name: resolved.team.name,
-    entity_id: String(resolved.team.id),
+    entity_name: prepared.resolved.team.name,
+    entity_id: String(prepared.resolved.team.id),
     compare_with: null,
     metric: params.plan.metric ?? null,
     aggregation: params.plan.aggregation ?? null,
@@ -888,20 +1081,14 @@ async function analyzeMatchList(params: {
     venue: params.plan.scope.venue,
     status: "finished",
   };
-  const provenance: AnalysisProvenance = {
-    provider: params.source.name,
-    source_endpoint: resolved.meta.endpoint,
-    data_family: resolved.meta.dataFamily,
-    fetched_at: resolved.meta.fetchedAt,
-    cache_status: resolved.meta.cacheStatus,
-    sample_size: limited.length,
-    missing_values: limited.filter((row) => row.goalsFor === null || row.goalsAgainst === null)
-      .length,
-    resolved_entity_ids: [String(resolved.team.id)],
-    competition: params.plan.scope.competition ?? null,
-    season: params.plan.scope.season ?? null,
-  };
-  const cacheKey = `v4c|${params.source.name}|${resolved.team.id}|${queryPlanSignature(params.plan)}`;
+  const provenance = provenanceFor({
+    source: params.source,
+    resolved: prepared.resolved,
+    stats: prepared.stats,
+    sampleSize: limited.length,
+    missingValues: values ? values.filter((value) => value === null).length : 0,
+  });
+  const cacheKey = `v5b|${params.source.name}|${prepared.resolved.team.id}|${queryPlanSignature(params.plan)}`;
   return {
     result_type: "match_list",
     id: `${cacheKey}-${Date.now()}`,
@@ -909,15 +1096,15 @@ async function analyzeMatchList(params: {
     question: params.question,
     created_at: new Date().toISOString(),
     intent: intent as MatchListAnalysisResult["intent"],
-    team: { id: String(resolved.team.id), name: resolved.team.name },
+    team: { id: String(prepared.resolved.team.id), name: prepared.resolved.team.name },
     matches: summaries,
     related: [
-      `Qual foi a média de gols sofridos do ${resolved.team.name} nessa amostra?`,
-      `Em quantos desses jogos o ${resolved.team.name} não sofreu gol?`,
+      `Qual foi a média de gols sofridos do ${prepared.resolved.team.name} nessa amostra?`,
+      `Em quantos desses jogos o ${prepared.resolved.team.name} não sofreu gol?`,
     ],
     source: {
       provider: params.source.name,
-      updated_at: resolved.meta.fetchedAt,
+      updated_at: provenance.fetched_at,
       missing: provenance.missing_values,
     },
     provenance,
@@ -940,7 +1127,7 @@ export async function analyzePhase4cUniversalTeamPlanWithSources(params: {
   if (!isPhase4cUniversalTeamPlan(plan)) {
     throw new AnalysisPipelineError(
       "UNSUPPORTED_CAPABILITY",
-      `A Phase 4C não executa ${plan.entity.type}/${plan.query_kind}.`,
+      `A Phase 5B não executa ${plan.entity.type}/${plan.query_kind} neste executor.`,
     );
   }
   return firstSuccessful<Phase4cTeamResult>(params.sources, (source) =>
@@ -955,9 +1142,10 @@ export async function analyzePhase4cUniversalTeamPlan(params: {
   plan: QueryPlan;
   overrides?: AnalysisOverrides;
   observer?: SportsCacheObserver;
+  allowedProviders?: readonly UniversalProviderName[];
 }): Promise<Phase4cTeamResult> {
   return analyzePhase4cUniversalTeamPlanWithSources({
     ...params,
-    sources: createUniversalFootballSources(params.observer),
+    sources: createUniversalFootballSources(params.observer, params.allowedProviders),
   });
 }

@@ -17,12 +17,7 @@ import type {
 const corinthians: ResolvedTeam = { id: 1, name: "Corinthians", country: "Brazil" };
 const opponent: ResolvedTeam = { id: 2, name: "Adversário", country: "Brazil" };
 
-function fixture(
-  id: number,
-  date: string,
-  homeGoals: number,
-  awayGoals: number,
-): ProviderFixture {
+function fixture(id: number, date: string, homeGoals: number, awayGoals: number): ProviderFixture {
   return {
     id,
     date: `${date}T20:00:00.000Z`,
@@ -193,7 +188,8 @@ describe("Phase 4C recent-fixture freshness fallback", () => {
       ...recentPlan(),
       scope: {
         last_matches: 3,
-        season: "2026",
+        date_from: "2026-01-01",
+        date_to: "2026-12-31",
         venue: "all",
         half: "full",
         status: "finished",

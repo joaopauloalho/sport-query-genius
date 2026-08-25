@@ -1,6 +1,10 @@
-import { getFootballMetricDefinition, type FootballMetric } from "./metric-catalog";
+import {
+  getFootballMetricDefinition,
+  type FootballMetric,
+  type TeamMetric,
+} from "./metric-catalog";
 
-export type ExecutableTeamRawMetric = "corners" | "shots" | "shots_on_target" | "cards";
+export type ExecutableTeamRawMetric = TeamMetric;
 
 export type TeamMetricExecutionPlan =
   | {
@@ -9,13 +13,15 @@ export type TeamMetricExecutionPlan =
       dataFamily: "fixture_score";
       rawMetric: null;
       providers: readonly string[];
+      conditionalCoverage: boolean;
     }
   | {
       kind: "raw";
-      metric: FootballMetric;
+      metric: TeamMetric;
       dataFamily: "fixture_stats";
       rawMetric: ExecutableTeamRawMetric;
       providers: readonly string[];
+      conditionalCoverage: boolean;
     }
   | {
       kind: "unsupported";
@@ -41,16 +47,17 @@ const SCORE_DERIVED_TEAM_METRICS = new Set<FootballMetric>([
   "both_teams_scored",
 ]);
 
-const EXECUTABLE_RAW_TEAM_METRICS: Partial<Record<FootballMetric, ExecutableTeamRawMetric>> = {
-  corners: "corners",
-  shots: "shots",
-  shots_on_target: "shots_on_target",
-  cards: "cards",
-};
+function providerName(value: string): string {
+  return value === "API_FOOTBALL" ? "API-FOOTBALL" : value;
+}
 
 export function resolveTeamMetricExecution(metric: FootballMetric): TeamMetricExecutionPlan {
   const definition = getFootballMetricDefinition(metric, "team");
-  const providers = definition ? Object.keys(definition.providers) : [];
+  const providers = definition
+    ? Object.entries(definition.providers)
+        .filter(([, mapping]) => mapping?.dataFamily === "fixture_stats")
+        .map(([provider]) => providerName(provider))
+    : [];
 
   if (!definition) {
     return {
@@ -69,18 +76,24 @@ export function resolveTeamMetricExecution(metric: FootballMetric): TeamMetricEx
       metric,
       dataFamily: "fixture_score",
       rawMetric: null,
-      providers,
+      providers: ["BSD", "API-FOOTBALL"],
+      conditionalCoverage: false,
     };
   }
 
-  const rawMetric = EXECUTABLE_RAW_TEAM_METRICS[metric];
-  if (rawMetric) {
+  const fixtureStatsMappings = Object.values(definition.providers).filter(
+    (mapping) => mapping?.dataFamily === "fixture_stats",
+  );
+  if (fixtureStatsMappings.length > 0) {
     return {
       kind: "raw",
-      metric,
+      metric: metric as TeamMetric,
       dataFamily: "fixture_stats",
-      rawMetric,
+      rawMetric: metric as TeamMetric,
       providers,
+      conditionalCoverage: fixtureStatsMappings.some(
+        (mapping) => mapping?.coverage === "conditional",
+      ),
     };
   }
 
@@ -91,10 +104,25 @@ export function resolveTeamMetricExecution(metric: FootballMetric): TeamMetricEx
     dataFamily: family,
     rawMetric: null,
     providers,
-    reason: `A métrica ${metric} está no catálogo e possui mapeamento de provider, mas o adapter universal dessa família ainda não foi validado para execução determinística.`,
+    reason: `A métrica ${metric} está no catálogo, mas não possui mapping fixture_stats validado para execução universal por partida.`,
   };
 }
 
 export function isScoreDerivedTeamMetric(metric: FootballMetric): boolean {
   return SCORE_DERIVED_TEAM_METRICS.has(metric);
+}
+
+export function providersForTeamMetrics(metrics: readonly TeamMetric[]): string[] {
+  const rawPlans = metrics
+    .map(resolveTeamMetricExecution)
+    .filter(
+      (plan): plan is Extract<TeamMetricExecutionPlan, { kind: "raw" }> => plan.kind === "raw",
+    );
+  if (rawPlans.length === 0) return ["BSD", "API-FOOTBALL"];
+  return rawPlans
+    .slice(1)
+    .reduce(
+      (providers, plan) => providers.filter((provider) => plan.providers.includes(provider)),
+      [...rawPlans[0].providers],
+    );
 }

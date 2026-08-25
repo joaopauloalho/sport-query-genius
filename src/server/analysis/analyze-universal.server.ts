@@ -1,4 +1,5 @@
 import type {
+  AnalysisProvenance,
   HeadToHeadAnalysisResult,
   MatchListAnalysisResult,
   TeamEventListAnalysisResult,
@@ -7,12 +8,16 @@ import type {
 import type { AnalysisOverrides } from "@/lib/analysis-request";
 import type { SportsCacheObserver } from "@/server/sports/cache/cache-observer";
 import type { ProviderFixture, ResolvedTeam } from "@/server/sports/provider";
+import { fixtureStatValue, type NormalizedTeamFixtureStats } from "@/server/sports/fixture-stats";
+import { resolveTeamMetricExecution } from "@/server/sports/team-query-capability";
 import { createUniversalFootballSources } from "@/server/sports/universal-provider.server";
 import {
   incidentToTeamEvent,
+  type ProviderFixtureScope,
   type ProviderReadMeta,
   type TeamFootballEvent,
   type UniversalFootballSource,
+  type UniversalProviderName,
 } from "@/server/sports/universal-football";
 
 import { aggregateNumericValues, aggregateRatio } from "./aggregation";
@@ -32,7 +37,7 @@ function canTryNextSource(error: unknown): boolean {
   );
 }
 
-async function firstSuccessful<T>(
+async function firstSuccessful<T extends { provenance: AnalysisProvenance }>(
   sources: readonly UniversalFootballSource[],
   worker: (source: UniversalFootballSource) => Promise<T>,
 ): Promise<T> {
@@ -42,10 +47,15 @@ async function firstSuccessful<T>(
       "Nenhum provider universal de futebol está configurado no servidor.",
     );
   }
+  const attempted: string[] = [];
   let lastError: unknown = null;
   for (const source of sources) {
+    attempted.push(source.name);
     try {
-      return await worker(source);
+      const result = await worker(source);
+      result.provenance.providers_attempted = [...attempted];
+      result.provenance.fallback_occurred = attempted.length > 1;
+      return result;
     } catch (error) {
       if (!canTryNextSource(error)) throw error;
       lastError = error;
@@ -447,51 +457,63 @@ async function h2hMetricValues(params: {
   fixtures: readonly ProviderFixture[];
   primary: ResolvedTeam;
   metric: QueryPlan["metric"];
-}): Promise<(number | null)[]> {
+}): Promise<{
+  values: (number | null)[];
+  metas: ProviderReadMeta[];
+  snapshots: NormalizedTeamFixtureStats[];
+}> {
   const { metric } = params;
-  if (!metric) return [];
-  if (metric === "both_teams_scored") {
-    return params.fixtures.map((fixture) =>
-      fixture.goals.home === null || fixture.goals.away === null
-        ? null
-        : fixture.goals.home > 0 && fixture.goals.away > 0
-          ? 1
-          : 0,
-    );
+  if (!metric) return { values: [], metas: [], snapshots: [] };
+
+  const execution = resolveTeamMetricExecution(metric);
+  if (execution.kind === "unsupported") {
+    throw new AnalysisPipelineError("UNSUPPORTED_CAPABILITY", execution.reason);
   }
-  if (["wins", "draws", "losses"].includes(metric)) {
-    return params.fixtures.map((fixture) => {
-      const outcome = h2hOutcome(fixture, params.primary);
-      if (outcome === null) return null;
-      if (metric === "wins") return outcome === "a" ? 1 : 0;
-      if (metric === "draws") return outcome === "draw" ? 1 : 0;
-      return outcome === "b" ? 1 : 0;
-    });
-  }
-  if (["goals_for", "goals_against", "goal_difference"].includes(metric)) {
-    return params.fixtures.map((fixture) => {
+  if (execution.kind === "derived") {
+    const values = params.fixtures.map((fixture) => {
       const primaryHome = fixture.home.id === params.primary.id;
       const goalsFor = primaryHome ? fixture.goals.home : fixture.goals.away;
       const goalsAgainst = primaryHome ? fixture.goals.away : fixture.goals.home;
       if (goalsFor === null || goalsAgainst === null) return null;
+      const outcome = goalsFor > goalsAgainst ? "win" : goalsFor < goalsAgainst ? "loss" : "draw";
       if (metric === "goals_for") return goalsFor;
       if (metric === "goals_against") return goalsAgainst;
-      return goalsFor - goalsAgainst;
+      if (metric === "goal_difference") return goalsFor - goalsAgainst;
+      if (metric === "wins" || metric === "win_rate") return outcome === "win" ? 1 : 0;
+      if (metric === "draws") return outcome === "draw" ? 1 : 0;
+      if (metric === "losses") return outcome === "loss" ? 1 : 0;
+      if (metric === "points") return outcome === "win" ? 3 : outcome === "draw" ? 1 : 0;
+      if (metric === "unbeaten_rate") return outcome !== "loss" ? 1 : 0;
+      if (metric === "clean_sheets") return goalsAgainst === 0 ? 1 : 0;
+      if (metric === "failed_to_score") return goalsFor === 0 ? 1 : 0;
+      if (metric === "both_teams_scored") return goalsFor > 0 && goalsAgainst > 0 ? 1 : 0;
+      return null;
     });
+    return { values, metas: [], snapshots: [] };
   }
-  const legacyMetric =
-    metric === "corners" || metric === "cards" || metric === "shots" || metric === "shots_on_target"
-      ? metric
-      : null;
-  if (!legacyMetric) {
+
+  if (!params.source.getFixtureStats) {
     throw new AnalysisPipelineError(
-      "UNSUPPORTED_CAPABILITY",
-      `A métrica ${metric} está no catálogo universal, mas ainda não possui execução H2H determinística na Phase 4B.`,
+      "DATA_INSUFFICIENT",
+      `${params.source.name} não possui snapshot fixture_stats para H2H.`,
     );
   }
-  return mapWithConcurrency(params.fixtures, EVENT_CONCURRENCY, (fixture) =>
-    params.source.getFixtureMetric(fixture, params.primary.id, legacyMetric),
+  const reads = await mapWithConcurrency(params.fixtures, EVENT_CONCURRENCY, (fixture) =>
+    params.source.getFixtureStats!(fixture, params.primary.id),
   );
+  for (const read of reads) {
+    if (!read.snapshot.coverage.supported.includes(execution.rawMetric)) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        `${params.source.name} não suporta ${execution.rawMetric} em todos os snapshots H2H.`,
+      );
+    }
+  }
+  return {
+    values: reads.map((read) => fixtureStatValue(read.snapshot, execution.rawMetric)),
+    metas: reads.map((read) => read.meta),
+    snapshots: reads.map((read) => read.snapshot),
+  };
 }
 
 async function analyzeHeadToHead(params: {
@@ -517,11 +539,42 @@ async function analyzeHeadToHead(params: {
     );
   }
   const count = matchCount(plan);
-  const fixturesRead = await source.listTeamFixtures(primary, {
+  const providerScope: ProviderFixtureScope = {
     ...plan.scope,
     status: "finished",
     opponent: undefined,
-  });
+  };
+  let seasonMeta: ProviderReadMeta | null = null;
+  let resolvedSeasonId: string | null = null;
+  let resolvedCompetitionId: string | null = null;
+  let resolvedSeasonLabel: string | null = null;
+  if (plan.scope.season) {
+    if (!plan.scope.competition) {
+      throw new AnalysisPipelineError(
+        "UNSUPPORTED_FILTER",
+        "H2H com temporada exige competição explícita para resolução provider-backed.",
+      );
+    }
+    if (!source.resolveCompetitionSeason) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        `${source.name} não expõe resolução provider-backed de temporadas para H2H.`,
+      );
+    }
+    const seasonRead = await source.resolveCompetitionSeason(
+      plan.scope.competition,
+      plan.scope.season,
+    );
+    seasonMeta = seasonRead.meta;
+    providerScope.providerCompetitionId = seasonRead.season.competitionId;
+    providerScope.providerSeasonId = seasonRead.season.seasonId;
+    providerScope.date_from = plan.scope.date_from ?? seasonRead.season.startDate.slice(0, 10);
+    providerScope.date_to = plan.scope.date_to ?? seasonRead.season.endDate.slice(0, 10);
+    resolvedSeasonId = seasonRead.season.seasonId;
+    resolvedCompetitionId = seasonRead.season.competitionId;
+    resolvedSeasonLabel = seasonRead.season.label;
+  }
+  const fixturesRead = await source.listTeamFixtures(primary, providerScope);
   const meetings = fixturesRead.fixtures
     .filter(
       (fixture) =>
@@ -566,12 +619,13 @@ async function analyzeHeadToHead(params: {
     );
   }
 
-  const metricValues = await h2hMetricValues({
+  const metricRead = await h2hMetricValues({
     source,
     fixtures: meetings,
     primary,
     metric: plan.metric,
   });
+  const metricValues = metricRead.values;
   let requestedValue: number | null = null;
   let metricMissing = 0;
   let metricSample = 0;
@@ -676,23 +730,61 @@ async function analyzeHeadToHead(params: {
       updated_at: fixturesRead.meta.fetchedAt,
       missing: plan.metric ? metricMissing : scoreMissing,
     },
-    provenance: {
-      provider: source.name,
-      source_endpoint:
-        plan.metric && ["corners", "cards", "shots", "shots_on_target"].includes(plan.metric)
-          ? `${fixturesRead.meta.endpoint} + fixture statistics`
-          : fixturesRead.meta.endpoint,
-      data_family: plan.metric
-        ? `${fixturesRead.meta.dataFamily} + head_to_head_metrics`
-        : fixturesRead.meta.dataFamily,
-      fetched_at: fixturesRead.meta.fetchedAt,
-      cache_status: fixturesRead.meta.cacheStatus,
-      sample_size: meetings.length,
-      missing_values: plan.metric ? metricMissing : scoreMissing,
-      resolved_entity_ids: [String(primary.id), String(compare.id)],
-      competition: plan.scope.competition ?? null,
-      season: plan.scope.season ?? null,
-    },
+    provenance: (() => {
+      const metas = [fixturesRead.meta, ...(seasonMeta ? [seasonMeta] : []), ...metricRead.metas];
+      const endpoints = [...new Set(metas.map((meta) => meta.endpoint))];
+      const dataFamilies = [
+        ...new Set([
+          fixturesRead.meta.dataFamily,
+          ...(plan.metric
+            ? [
+                resolveTeamMetricExecution(plan.metric).kind === "raw"
+                  ? "fixture_stats"
+                  : "fixture_score",
+              ]
+            : []),
+          ...(seasonMeta ? [seasonMeta.dataFamily] : []),
+        ]),
+      ];
+      const cacheStatuses = [...new Set(metas.map((meta) => meta.cacheStatus))];
+      const supported = new Set<string>();
+      const observed: Record<string, number> = {};
+      const missing: Record<string, number> = {};
+      for (const snapshot of metricRead.snapshots) {
+        snapshot.coverage.supported.forEach((metric) => supported.add(metric));
+        snapshot.coverage.observed.forEach((metric) => {
+          observed[metric] = (observed[metric] ?? 0) + 1;
+        });
+        snapshot.coverage.missing.forEach((metric) => {
+          missing[metric] = (missing[metric] ?? 0) + 1;
+        });
+      }
+      return {
+        provider: source.name,
+        source_endpoint: endpoints.join(" + "),
+        data_family: dataFamilies.join(" + "),
+        data_families: dataFamilies,
+        fetched_at:
+          metas
+            .map((meta) => meta.fetchedAt)
+            .sort()
+            .at(-1) ?? fixturesRead.meta.fetchedAt,
+        cache_status: cacheStatuses.length === 1 ? cacheStatuses[0] : "mixed",
+        sample_size: meetings.length,
+        missing_values: plan.metric ? metricMissing : scoreMissing,
+        resolved_entity_ids: [String(primary.id), String(compare.id)],
+        competition: plan.scope.competition ?? null,
+        season: plan.scope.season ?? null,
+        coverage: metricRead.snapshots.length
+          ? { fixtures: metricRead.snapshots.length, supported: [...supported], observed, missing }
+          : null,
+        resolved_competition_id: resolvedCompetitionId,
+        resolved_season_id: resolvedSeasonId,
+        resolved_season_label: resolvedSeasonLabel,
+        providers_attempted: [source.name],
+        fallback_occurred: false,
+      } satisfies AnalysisProvenance;
+    })(),
     demo: false,
   };
 }
@@ -734,9 +826,10 @@ export async function analyzeUniversalQueryPlan(params: {
   plan: QueryPlan;
   overrides?: AnalysisOverrides;
   observer?: SportsCacheObserver;
+  allowedProviders?: readonly UniversalProviderName[];
 }): Promise<TeamEventListAnalysisResult | MatchListAnalysisResult | HeadToHeadAnalysisResult> {
   return analyzeUniversalQueryPlanWithSources({
     ...params,
-    sources: createUniversalFootballSources(params.observer),
+    sources: createUniversalFootballSources(params.observer, params.allowedProviders),
   });
 }

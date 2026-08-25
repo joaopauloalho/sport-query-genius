@@ -1,7 +1,15 @@
 import { AnalysisPipelineError } from "../analysis/errors";
-import type { QueryScope } from "../analysis/query-plan";
 import { AliasAwareTeamProvider } from "./alias-aware-provider.server";
 import { FOOTBALL_CACHE_FAMILIES } from "./capability-registry";
+import {
+  canonicalizeCompetitionName,
+  competitionAliases,
+  getCompetitionDefinition,
+  normalizeCompetitionText,
+  selectProviderSeason,
+  type CompetitionSeason,
+} from "./competition-season-registry";
+import { normalizeApiFootballFixtureStats, normalizeBsdFixtureStats } from "./fixture-stats";
 import type { SportsCacheObserver } from "./cache/cache-observer";
 import { getSportsCacheRepository, withSportsCache } from "./cache/sports-cache.server";
 import { FilteredSportsDataProvider } from "./filtered-provider.server";
@@ -28,6 +36,9 @@ import {
   readNumber,
   readString,
   type FootballIncident,
+  type ProviderFixtureScope,
+  type UniversalCompetitionSeasonRead,
+  type UniversalFixtureStatsRead,
   type ProviderReadMeta,
   type UniversalFootballSource,
   type UniversalFixtureRead,
@@ -122,6 +133,17 @@ function parseBsdFixture(
     timestamp: when.timestamp,
     status: (readString(record, ["status"]) ?? "").toLowerCase(),
     competition,
+    competitionId: leagueId === null ? null : String(leagueId),
+    seasonId: (() => {
+      const season = nested(record, ["season"]);
+      const value =
+        readNumber(record, ["season_id"]) ??
+        (season ? readNumber(season, ["id", "season_id", "year"]) : null);
+      return value === null ? null : String(value);
+    })(),
+    country:
+      (league ? readString(league, ["country", "country_name"]) : null) ??
+      readString(record, ["country", "country_name"]),
     home,
     away,
     goals: { home: fixtureScore(record, "home"), away: fixtureScore(record, "away") },
@@ -154,6 +176,9 @@ function parseApiFixture(record: Record<string, unknown>): ProviderFixture | nul
       readString(fixture, ["status"]) ??
       "",
     competition: (league ? readString(league, ["name"]) : null) ?? "Competição",
+    competitionId: league ? String(readNumber(league, ["id"]) ?? "") || null : null,
+    seasonId: league ? String(readNumber(league, ["season"]) ?? "") || null : null,
+    country: league ? readString(league, ["country"]) : null,
     home: { id: homeId, name: homeName },
     away: { id: awayId, name: awayName },
     goals: {
@@ -161,6 +186,131 @@ function parseApiFixture(record: Record<string, unknown>): ProviderFixture | nul
       away: goals ? readNumber(goals, ["away"]) : null,
     },
   };
+}
+
+function truthyBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (value === 1 || value === "1" || value === "true") return true;
+  if (value === 0 || value === "0" || value === "false") return false;
+  return null;
+}
+
+function countryName(record: Record<string, unknown>): string | null {
+  const country = asRecord(record.country);
+  return (
+    (country ? readString(country, ["name", "country_name"]) : null) ??
+    readString(record, ["country_name", "country"])
+  );
+}
+
+function matchesCompetitionName(candidate: string, requested: string): boolean {
+  const wanted = new Set(competitionAliases(requested).map(normalizeCompetitionText));
+  return wanted.has(normalizeCompetitionText(candidate));
+}
+
+function chooseCompetitionRow(
+  rows: readonly Record<string, unknown>[],
+  requested: string,
+): Record<string, unknown> | null {
+  const definition = getCompetitionDefinition(requested);
+  const matches = rows.filter((row) => {
+    const league = asRecord(row.league) ?? row;
+    const name = readString(league, ["name", "league_name", "competition_name"]);
+    if (!name || !matchesCompetitionName(name, requested)) return false;
+    if (!definition?.countryHint) return true;
+    const country = countryName(row) ?? countryName(league);
+    return (
+      country === null ||
+      normalizeCompetitionText(country) === normalizeCompetitionText(definition.countryHint)
+    );
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function providerSeasonLabel(startDate: string, endDate: string, fallback: string): string {
+  const start = startDate.slice(0, 4);
+  const end = endDate.slice(0, 4);
+  if (/^\d{4}$/.test(start) && /^\d{4}$/.test(end)) {
+    return start === end ? start : `${start}/${end.slice(2)}`;
+  }
+  return fallback;
+}
+
+function flattenCoverage(
+  value: unknown,
+  prefix = "",
+  result: Record<string, boolean | null> = {},
+): Record<string, boolean | null> {
+  const record = asRecord(value);
+  if (!record) return result;
+  for (const [key, child] of Object.entries(record)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const boolean = truthyBoolean(child);
+    if (boolean !== null) result[path] = boolean;
+    else if (child === null) result[path] = null;
+    else if (asRecord(child)) flattenCoverage(child, path, result);
+  }
+  return result;
+}
+
+function parseBsdSeasons(
+  payload: unknown,
+  competitionId: string,
+  competition: string,
+  country: string | null,
+): CompetitionSeason[] {
+  return extractPayloadList(payload, ["results", "seasons", "items"])
+    .map((row): CompetitionSeason | null => {
+      const id = readNumber(row, ["id", "season_id", "year"]);
+      const startDate = readString(row, ["start_date", "start", "date_start"]);
+      const endDate = readString(row, ["end_date", "end", "date_end"]);
+      if (id === null || !startDate || !endDate) return null;
+      const rawLabel = readString(row, ["name", "label"]) ?? String(id);
+      return {
+        provider: "BSD",
+        competitionId,
+        seasonId: String(id),
+        label: providerSeasonLabel(startDate, endDate, rawLabel),
+        startDate,
+        endDate,
+        current: truthyBoolean(row.is_current ?? row.current) === true,
+        country,
+        coverage: flattenCoverage(row.coverage),
+        competition,
+      };
+    })
+    .filter((season): season is CompetitionSeason => season !== null);
+}
+
+function parseApiSeasons(
+  row: Record<string, unknown>,
+  competitionId: string,
+  competition: string,
+): CompetitionSeason[] {
+  const country = countryName(row);
+  const seasons = Array.isArray(row.seasons) ? row.seasons : [];
+  return seasons
+    .map(asRecord)
+    .filter((season): season is Record<string, unknown> => season !== null)
+    .map((season): CompetitionSeason | null => {
+      const year = readNumber(season, ["year"]);
+      const startDate = readString(season, ["start"]);
+      const endDate = readString(season, ["end"]);
+      if (year === null || !startDate || !endDate) return null;
+      return {
+        provider: "API-FOOTBALL",
+        competitionId,
+        seasonId: String(year),
+        label: providerSeasonLabel(startDate, endDate, String(year)),
+        startDate,
+        endDate,
+        current: truthyBoolean(season.current) === true,
+        country,
+        coverage: flattenCoverage(season.coverage),
+        competition,
+      };
+    })
+    .filter((season): season is CompetitionSeason => season !== null);
 }
 
 function cacheKey(path: string, params: Record<string, string | number>): string {
@@ -278,7 +428,10 @@ abstract class BaseUniversalSource implements UniversalFootballSource {
     return this.identityProvider.resolveTeam(name);
   }
 
-  abstract listTeamFixtures(team: ResolvedTeam, scope: QueryScope): Promise<UniversalFixtureRead>;
+  abstract listTeamFixtures(
+    team: ResolvedTeam,
+    scope: ProviderFixtureScope,
+  ): Promise<UniversalFixtureRead>;
   abstract getFixtureIncidents(fixture: ProviderFixture): Promise<UniversalIncidentRead>;
   abstract enrichGoalEvents(
     fixture: ProviderFixture,
@@ -311,6 +464,10 @@ abstract class BaseUniversalSource implements UniversalFootballSource {
 export class BsdUniversalFootballSource extends BaseUniversalSource {
   readonly name = "BSD" as const;
   private leagueNamesPromise: Promise<Map<number, string>> | null = null;
+  private fixtureStatsReads = new Map<
+    number,
+    Promise<{ payload: unknown; meta: ProviderReadMeta }>
+  >();
 
   private async request(
     path: string,
@@ -381,7 +538,102 @@ export class BsdUniversalFootballSource extends BaseUniversalSource {
     return this.leagueNamesPromise;
   }
 
-  async listTeamFixtures(team: ResolvedTeam, scope: QueryScope): Promise<UniversalFixtureRead> {
+  async resolveCompetitionSeason(
+    competition: string,
+    season: string,
+  ): Promise<UniversalCompetitionSeasonRead> {
+    const leagueParams = { limit: 200, offset: 0 };
+    const leagueRead = await cachedRead({
+      repository: this.payloadCache,
+      observer: this.observer,
+      provider: this.name,
+      endpoint: "/leagues/",
+      dataFamily: "league_season",
+      key: cacheKey("/leagues/", leagueParams),
+      ttlMs: FOOTBALL_CACHE_FAMILIES.league_season.ttlMs,
+      load: () => this.request("/leagues/", leagueParams),
+    });
+    const row = chooseCompetitionRow(
+      extractPayloadList(leagueRead.payload, ["results", "leagues", "items"]),
+      competition,
+    );
+    if (!row) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        `A BSD não resolveu de forma inequívoca a competição "${competition}".`,
+      );
+    }
+    const league = asRecord(row.league) ?? row;
+    const leagueId = readNumber(league, ["id", "league_id"]);
+    if (leagueId === null) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        "A BSD não informou o ID real da competição.",
+      );
+    }
+    const canonical = canonicalizeCompetitionName(competition);
+    const country = countryName(row) ?? countryName(league);
+    const endpoint = `/leagues/${leagueId}/seasons/`;
+    const read = await cachedRead({
+      repository: this.payloadCache,
+      observer: this.observer,
+      provider: this.name,
+      endpoint,
+      dataFamily: "league_season",
+      key: endpoint,
+      ttlMs: FOOTBALL_CACHE_FAMILIES.league_season.ttlMs,
+      load: () => this.request(endpoint),
+    });
+    const seasons = parseBsdSeasons(read.payload, String(leagueId), canonical, country);
+    const resolved = selectProviderSeason(seasons, season);
+    if (!resolved) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        `A BSD não confirmou a temporada "${season}" de ${canonical}; nenhuma janela de calendário foi inferida.`,
+      );
+    }
+    return { season: resolved, meta: read.meta };
+  }
+
+  private fixtureStatsPayload(
+    fixture: ProviderFixture,
+  ): Promise<{ payload: unknown; meta: ProviderReadMeta }> {
+    const existing = this.fixtureStatsReads.get(fixture.id);
+    if (existing) return existing;
+    const endpoint = `/events/${fixture.id}/stats/`;
+    const ttlMs =
+      normalizeFixtureStatus(fixture.status) === "finished"
+        ? FOOTBALL_CACHE_FAMILIES.finished_match_detail.ttlMs
+        : FOOTBALL_CACHE_FAMILIES.team_stats.ttlMs;
+    const read = cachedRead({
+      repository: this.payloadCache,
+      observer: this.observer,
+      provider: this.name,
+      endpoint,
+      dataFamily: "fixture_stats",
+      key: endpoint,
+      ttlMs,
+      load: () => this.request(endpoint),
+    });
+    this.fixtureStatsReads.set(fixture.id, read);
+    return read;
+  }
+
+  async getFixtureStats(
+    fixture: ProviderFixture,
+    teamId: number,
+  ): Promise<UniversalFixtureStatsRead> {
+    const read = await this.fixtureStatsPayload(fixture);
+    return {
+      snapshot: normalizeBsdFixtureStats(read.payload, fixture, teamId, read.meta.fetchedAt),
+      meta: read.meta,
+    };
+  }
+
+  async listTeamFixtures(
+    team: ResolvedTeam,
+    scope: ProviderFixtureScope,
+  ): Promise<UniversalFixtureRead> {
     const now = new Date();
     const status = scope.status ?? "finished";
     const from = scope.date_from
@@ -402,6 +654,8 @@ export class BsdUniversalFootballSource extends BaseUniversalSource {
       limit: MAX_FIXTURES,
       offset: 0,
     };
+    if (scope.providerCompetitionId) params.league_id = scope.providerCompetitionId;
+    if (scope.providerSeasonId) params.season_id = scope.providerSeasonId;
     const read = await cachedRead({
       repository: this.payloadCache,
       observer: this.observer,
@@ -448,22 +702,8 @@ export class BsdUniversalFootballSource extends BaseUniversalSource {
     if (!incidents.some((incident) => incident.eventType === "goal")) {
       return { incidents: [...incidents], meta: null };
     }
-    const endpoint = `/events/${fixture.id}/stats/`;
-    const ttlMs =
-      normalizeFixtureStatus(fixture.status) === "finished"
-        ? FOOTBALL_CACHE_FAMILIES.finished_match_detail.ttlMs
-        : FOOTBALL_CACHE_FAMILIES.team_stats.ttlMs;
     try {
-      const read = await cachedRead({
-        repository: this.payloadCache,
-        observer: this.observer,
-        provider: this.name,
-        endpoint,
-        dataFamily: "shotmap",
-        key: endpoint,
-        ttlMs,
-        load: () => this.request(endpoint),
-      });
+      const read = await this.fixtureStatsPayload(fixture);
       return {
         incidents: enrichBsdGoalsWithShotmap(incidents, read.payload, fixture),
         meta: read.meta,
@@ -496,6 +736,10 @@ function apiPayloadHasErrors(payload: unknown): boolean {
 
 export class ApiFootballUniversalSource extends BaseUniversalSource {
   readonly name = "API-FOOTBALL" as const;
+  private fixtureStatsReads = new Map<
+    number,
+    Promise<{ payload: unknown; meta: ProviderReadMeta }>
+  >();
 
   private async request(
     path: string,
@@ -566,34 +810,109 @@ export class ApiFootballUniversalSource extends BaseUniversalSource {
     return result.payload;
   }
 
-  private async loadFixturesForSeason(
-    team: ResolvedTeam,
-    scope: QueryScope,
-    season: number,
-  ): Promise<{ fixtures: ProviderFixture[]; meta: ProviderReadMeta }> {
-    const now = new Date();
-    const status = scope.status ?? "finished";
-    const from = scope.date_from ?? formatDate(new Date(Date.UTC(season, 0, 1)));
-    const currentYear = now.getUTCFullYear();
-    const defaultTo =
-      season < currentYear
-        ? formatDate(new Date(Date.UTC(season, 11, 31, 23, 59, 59)))
-        : status === "upcoming"
-          ? formatDate(new Date(Date.UTC(season, 11, 31, 23, 59, 59)))
-          : formatDate(now);
-    const to = scope.date_to ?? defaultTo;
-    const params: Record<string, string | number> = {
-      team: team.id,
-      season,
-      from,
-      to,
-      status:
-        status === "finished"
-          ? "FT-AET-PEN"
-          : status === "upcoming"
-            ? "NS-TBD"
-            : "1H-HT-2H-ET-BT-P",
+  async resolveCompetitionSeason(
+    competition: string,
+    season: string,
+  ): Promise<UniversalCompetitionSeasonRead> {
+    const canonical = canonicalizeCompetitionName(competition);
+    const params = { search: canonical };
+    const read = await cachedRead({
+      repository: this.payloadCache,
+      observer: this.observer,
+      provider: this.name,
+      endpoint: "/leagues",
+      dataFamily: "league_season",
+      key: cacheKey("/leagues", params),
+      ttlMs: FOOTBALL_CACHE_FAMILIES.league_season.ttlMs,
+      load: () => this.request("/leagues", params),
+    });
+    const row = chooseCompetitionRow(
+      extractPayloadList(read.payload, ["response", "results"]),
+      competition,
+    );
+    if (!row) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        `A API-FOOTBALL não resolveu de forma inequívoca a competição "${competition}".`,
+      );
+    }
+    const league = asRecord(row.league) ?? row;
+    const leagueId = readNumber(league, ["id"]);
+    if (leagueId === null) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        "A API-FOOTBALL não informou o ID real da competição.",
+      );
+    }
+    const seasons = parseApiSeasons(row, String(leagueId), canonical);
+    const resolved = selectProviderSeason(seasons, season);
+    if (!resolved) {
+      throw new AnalysisPipelineError(
+        "DATA_INSUFFICIENT",
+        `A API-FOOTBALL não confirmou a temporada "${season}" de ${canonical}; nenhuma janela de calendário foi inferida.`,
+      );
+    }
+    return { season: resolved, meta: read.meta };
+  }
+
+  private fixtureStatsPayload(
+    fixture: ProviderFixture,
+  ): Promise<{ payload: unknown; meta: ProviderReadMeta }> {
+    const existing = this.fixtureStatsReads.get(fixture.id);
+    if (existing) return existing;
+    const endpoint = "/fixtures/statistics";
+    const params = { fixture: fixture.id };
+    const ttlMs =
+      normalizeFixtureStatus(fixture.status) === "finished"
+        ? FOOTBALL_CACHE_FAMILIES.finished_match_detail.ttlMs
+        : FOOTBALL_CACHE_FAMILIES.team_stats.ttlMs;
+    const read = cachedRead({
+      repository: this.payloadCache,
+      observer: this.observer,
+      provider: this.name,
+      endpoint,
+      dataFamily: "fixture_stats",
+      key: cacheKey(endpoint, params),
+      ttlMs,
+      load: () => this.request(endpoint, params),
+    });
+    this.fixtureStatsReads.set(fixture.id, read);
+    return read;
+  }
+
+  async getFixtureStats(
+    fixture: ProviderFixture,
+    teamId: number,
+  ): Promise<UniversalFixtureStatsRead> {
+    const read = await this.fixtureStatsPayload(fixture);
+    return {
+      snapshot: normalizeApiFootballFixtureStats(
+        read.payload,
+        fixture,
+        teamId,
+        read.meta.fetchedAt,
+      ),
+      meta: read.meta,
     };
+  }
+
+  async listTeamFixtures(
+    team: ResolvedTeam,
+    scope: ProviderFixtureScope,
+  ): Promise<UniversalFixtureRead> {
+    const status = scope.status ?? "finished";
+    const params: Record<string, string | number> = { team: team.id };
+    if (scope.providerCompetitionId) params.league = scope.providerCompetitionId;
+    if (scope.providerSeasonId) params.season = scope.providerSeasonId;
+    if (scope.date_from) params.from = scope.date_from;
+    if (scope.date_to) params.to = scope.date_to;
+    if (!scope.date_from && !scope.date_to && !scope.providerSeasonId) {
+      if (status === "upcoming") params.next = MAX_FIXTURES;
+      else if (status === "finished") params.last = MAX_FIXTURES;
+    }
+    params.status =
+      status === "finished" ? "FT-AET-PEN" : status === "upcoming" ? "NS-TBD" : "1H-HT-2H-ET-BT-P";
+
     const read = await cachedRead({
       repository: this.payloadCache,
       observer: this.observer,
@@ -607,35 +926,10 @@ export class ApiFootballUniversalSource extends BaseUniversalSource {
     const fixtures = extractPayloadList(read.payload, ["response", "results"])
       .map(parseApiFixture)
       .filter((fixture): fixture is ProviderFixture => fixture !== null)
-      .filter((fixture) => fixtureMatchesScope(fixture, team, { ...scope, status }));
-    return { fixtures, meta: read.meta };
-  }
-
-  async listTeamFixtures(team: ResolvedTeam, scope: QueryScope): Promise<UniversalFixtureRead> {
-    const requestedSeason =
-      scope.season && /^\d{4}$/.test(scope.season) ? Number(scope.season) : null;
-    const currentSeason = requestedSeason ?? new Date().getUTCFullYear();
-    const current = await this.loadFixturesForSeason(team, scope, currentSeason);
-    let fixtures = current.fixtures;
-    let meta = current.meta;
-
-    if ((scope.status ?? "finished") === "finished" && !scope.date_from && !requestedSeason) {
-      try {
-        const previous = await this.loadFixturesForSeason(team, scope, currentSeason - 1);
-        const byId = new Map<number, ProviderFixture>();
-        for (const fixture of [...previous.fixtures, ...fixtures]) byId.set(fixture.id, fixture);
-        fixtures = [...byId.values()];
-        if (previous.meta.cacheStatus !== meta.cacheStatus) {
-          meta = { ...meta, cacheStatus: "mixed" };
-        }
-      } catch {
-        // Current-season data remains valid; a prior-season entitlement failure must not erase it.
-      }
-    }
-
-    fixtures.sort((a, b) => a.timestamp - b.timestamp);
+      .filter((fixture) => fixtureMatchesScope(fixture, team, { ...scope, status }))
+      .sort((left, right) => left.timestamp - right.timestamp);
     await this.persistFixtures(fixtures);
-    return { fixtures, meta };
+    return { fixtures, meta: read.meta };
   }
 
   async getFixtureIncidents(fixture: ProviderFixture): Promise<UniversalIncidentRead> {
@@ -667,9 +961,12 @@ export class ApiFootballUniversalSource extends BaseUniversalSource {
 
 export function createUniversalFootballSources(
   observer?: SportsCacheObserver,
+  allowedProviders?: readonly UniversalProviderName[],
 ): UniversalFootballSource[] {
   const sources: UniversalFootballSource[] = [];
-  if (process.env.BSD_FOOTBALL_KEY) {
+  const allowed = (name: UniversalProviderName) =>
+    !allowedProviders || allowedProviders.includes(name);
+  if (process.env.BSD_FOOTBALL_KEY && allowed("BSD")) {
     sources.push(
       new BsdUniversalFootballSource(
         wrapIdentityProvider(new BsdFootballV3Provider(), observer),
@@ -677,7 +974,7 @@ export function createUniversalFootballSources(
       ),
     );
   }
-  if (process.env.API_FOOTBALL_KEY) {
+  if (process.env.API_FOOTBALL_KEY && allowed("API-FOOTBALL")) {
     sources.push(
       new ApiFootballUniversalSource(
         wrapIdentityProvider(new SafeApiFootballProvider(), observer),

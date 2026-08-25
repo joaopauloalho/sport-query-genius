@@ -63,7 +63,12 @@ export function SourceBadge({
 
 export function MethodologyNote({ className }: { className?: string }) {
   return (
-    <p className={cn("flex items-start gap-2 text-xs leading-relaxed text-muted-foreground", className)}>
+    <p
+      className={cn(
+        "flex items-start gap-2 text-xs leading-relaxed text-muted-foreground",
+        className,
+      )}
+    >
       <Info className="mt-0.5 size-3.5 shrink-0" />
       {DATA_SOURCE.methodologyNote}
     </p>

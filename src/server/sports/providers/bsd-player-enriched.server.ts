@@ -2,10 +2,7 @@ import { AnalysisPipelineError } from "../../analysis/errors.ts";
 import type { PlayerFixtureStat, ResolvedPlayer } from "../player-provider.ts";
 import type { ProviderFixture } from "../provider.ts";
 
-import {
-  bsdPlayerStatTeamId,
-  hydrateBsdPlayerStatRows,
-} from "./bsd-player-enrichment.ts";
+import { bsdPlayerStatTeamId, hydrateBsdPlayerStatRows } from "./bsd-player-enrichment.ts";
 import { BsdFootballV3Provider } from "./bsd-football-v3.server.ts";
 import { BsdPlayerProvider as BaseBsdPlayerProvider } from "./bsd-player.server.ts";
 
@@ -40,9 +37,7 @@ function readNumber(
 function extractRows(payload: unknown): Record<string, unknown>[] {
   const root = asRecord(payload);
   if (!root || !Array.isArray(root.results)) return [];
-  return root.results
-    .map(asRecord)
-    .filter((row): row is Record<string, unknown> => row !== null);
+  return root.results.map(asRecord).filter((row): row is Record<string, unknown> => row !== null);
 }
 
 export class BsdPlayerProvider extends BaseBsdPlayerProvider {
@@ -127,9 +122,7 @@ export class BsdPlayerProvider extends BaseBsdPlayerProvider {
     ).slice(0, MAX_RECENT_TEAMS);
 
     const fixtureGroups = await Promise.all(
-      teamIds.map((teamId) =>
-        this.football.getRecentTeamFixtures(teamId, TEAM_FIXTURE_HISTORY),
-      ),
+      teamIds.map((teamId) => this.football.getRecentTeamFixtures(teamId, TEAM_FIXTURE_HISTORY)),
     );
     const fixturesById = new Map<number, ProviderFixture>();
     for (const fixture of fixtureGroups.flat()) fixturesById.set(fixture.id, fixture);

@@ -129,6 +129,7 @@ export async function analyzeQuestionServer(
         plan: queryPlan,
         overrides: request.overrides,
         observer,
+        allowedProviders: executionPlan.negotiation.providers as ("BSD" | "API-FOOTBALL")[],
       });
       if (result.result_type === "aggregate") {
         result.statistics.trend = calculateDeterministicTrend(
@@ -163,6 +164,7 @@ export async function analyzeQuestionServer(
         plan: queryPlan,
         overrides: request.overrides,
         observer,
+        allowedProviders: executionPlan.negotiation.providers as ("BSD" | "API-FOOTBALL")[],
       });
       return { ok: true, result };
     }

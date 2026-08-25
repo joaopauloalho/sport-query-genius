@@ -12,12 +12,14 @@ const TIMEOUT_MS = 15_000;
 const teamsSchema = z
   .object({
     results: z.array(
-      z.object({
-        id: z.number().int().positive(),
-        name: z.string(),
-        country: z.string().nullable().optional(),
-        country_code: z.string().nullable().optional(),
-      }).passthrough(),
+      z
+        .object({
+          id: z.number().int().positive(),
+          name: z.string(),
+          country: z.string().nullable().optional(),
+          country_code: z.string().nullable().optional(),
+        })
+        .passthrough(),
     ),
   })
   .passthrough();

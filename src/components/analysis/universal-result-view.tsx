@@ -45,7 +45,8 @@ function EventList({ result }: { result: TeamEventListAnalysisResult }) {
     <>
       <section className="surface-card border-primary/30 bg-primary/5 p-6">
         <p className="font-display text-xl leading-snug font-semibold text-balance sm:text-2xl">
-          {result.events.length} {result.events.length === 1 ? labels.singular : labels.plural} comprovados
+          {result.events.length} {result.events.length === 1 ? labels.singular : labels.plural}{" "}
+          comprovados
         </p>
         <p className="mt-3 text-sm text-muted-foreground">
           Cada item abaixo é um evento individual retornado pela fonte. Eventos distintos na mesma
@@ -56,7 +57,9 @@ function EventList({ result }: { result: TeamEventListAnalysisResult }) {
       <section className="surface-card p-5">
         <h2 className="mb-4 text-sm font-semibold">Linha do tempo</h2>
         {result.events.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum evento desse tipo foi encontrado na amostra.</p>
+          <p className="text-sm text-muted-foreground">
+            Nenhum evento desse tipo foi encontrado na amostra.
+          </p>
         ) : (
           <div className="space-y-3">
             {result.events.map((event, index) => (
@@ -119,7 +122,8 @@ function MatchList({ result }: { result: MatchListAnalysisResult }) {
           {upcoming ? "Próximas partidas" : "Partidas recentes"} de {result.team.name}
         </p>
         <p className="mt-3 text-sm text-muted-foreground">
-          {result.matches.length} partida{result.matches.length === 1 ? "" : "s"} na janela solicitada.
+          {result.matches.length} partida{result.matches.length === 1 ? "" : "s"} na janela
+          solicitada.
         </p>
       </section>
 
@@ -161,7 +165,8 @@ function H2H({ result }: { result: HeadToHeadAnalysisResult }) {
         </p>
         {result.summary.requested_metric && (
           <p className="mt-3 text-sm text-muted-foreground">
-            {result.summary.requested_metric} · {result.summary.requested_aggregation ?? "total"}: {value ?? "dados insuficientes"}
+            {result.summary.requested_metric} · {result.summary.requested_aggregation ?? "total"}:{" "}
+            {value ?? "dados insuficientes"}
           </p>
         )}
       </section>
@@ -276,7 +281,11 @@ export function UniversalResultView({
             className="gap-1.5"
             onClick={() => {
               void onToggleSaved()
-                .then(() => toast.success(saved ? "Análise removida dos salvos." : "Análise salva na sua conta."))
+                .then(() =>
+                  toast.success(
+                    saved ? "Análise removida dos salvos." : "Análise salva na sua conta.",
+                  ),
+                )
                 .catch(() => toast.error("Não foi possível atualizar as análises salvas."));
             }}
           >
@@ -322,7 +331,9 @@ export function UniversalResultView({
           <span>Valores/eventos incompletos: {result.provenance.missing_values}</span>
           <span>Família: {result.provenance.data_family}</span>
           <span>Cache: {result.provenance.cache_status}</span>
-          <span className="sm:col-span-2 break-all">Fonte técnica: {result.provenance.source_endpoint}</span>
+          <span className="sm:col-span-2 break-all">
+            Fonte técnica: {result.provenance.source_endpoint}
+          </span>
         </div>
         <SourceBadge provider={result.source.provider} updatedAt={result.source.updated_at} />
         <MethodologyNote />

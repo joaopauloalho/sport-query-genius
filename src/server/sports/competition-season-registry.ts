@@ -1,29 +1,30 @@
 import type { SemanticQuery } from "../analysis/semantic-plan";
 
-export type CompetitionProvider = "BSD" | "API_FOOTBALL";
+export type CompetitionProvider = "BSD" | "API-FOOTBALL";
 
 export interface CompetitionProviderRef {
   provider: CompetitionProvider;
-  competition_id: string;
+  competitionId: string;
 }
 
 export interface CompetitionDefinition {
-  canonical_name: string;
+  canonicalName: string;
   aliases: readonly string[];
-  provider_refs: readonly CompetitionProviderRef[];
+  countryHint: string | null;
+  providerRefs: readonly CompetitionProviderRef[];
 }
 
 export interface CompetitionSeason {
-  competition: string;
   provider: CompetitionProvider;
-  provider_competition_id: string;
-  provider_season_id: string;
-  season_label: string;
-  start_date: string;
-  end_date: string;
+  competitionId: string;
+  seasonId: string;
+  label: string;
+  startDate: string;
+  endDate: string;
   current: boolean;
   country: string | null;
   coverage: Readonly<Record<string, boolean | null>>;
+  competition: string;
 }
 
 export interface CompetitionSeasonResolver {
@@ -36,7 +37,7 @@ export interface CompetitionSeasonResolver {
 
 const DEFINITIONS: CompetitionDefinition[] = [
   {
-    canonical_name: "Brasileirão Série A",
+    canonicalName: "Brasileirão Série A",
     aliases: [
       "brasileirao",
       "brasileirao serie a",
@@ -45,38 +46,48 @@ const DEFINITIONS: CompetitionDefinition[] = [
       "brasileiro",
       "brazilian serie a",
     ],
-    provider_refs: [],
+    countryHint: "Brazil",
+    providerRefs: [],
   },
   {
-    canonical_name: "Premier League",
+    canonicalName: "Premier League",
     aliases: ["premier", "premier league"],
-    // API-Football documents league id 39 for the Premier League.
-    provider_refs: [{ provider: "API_FOOTBALL", competition_id: "39" }],
+    countryHint: "England",
+    providerRefs: [],
   },
   {
-    canonical_name: "La Liga",
+    canonicalName: "La Liga",
     aliases: ["la liga", "laliga", "primera division"],
-    provider_refs: [],
+    countryHint: "Spain",
+    providerRefs: [],
   },
   {
-    canonical_name: "Bundesliga",
+    canonicalName: "Bundesliga",
     aliases: ["bundesliga", "bundesliga alema"],
-    provider_refs: [],
+    countryHint: "Germany",
+    providerRefs: [],
   },
   {
-    canonical_name: "UEFA Champions League",
+    canonicalName: "UEFA Champions League",
     aliases: ["champions", "champions league", "uefa champions league", "ucl"],
-    provider_refs: [],
+    countryHint: null,
+    providerRefs: [],
   },
-  { canonical_name: "Copa do Brasil", aliases: ["copa do brasil"], provider_refs: [] },
   {
-    canonical_name: "Copa Libertadores",
+    canonicalName: "Copa do Brasil",
+    aliases: ["copa do brasil"],
+    countryHint: "Brazil",
+    providerRefs: [],
+  },
+  {
+    canonicalName: "Copa Libertadores",
     aliases: ["libertadores", "copa libertadores", "conmebol libertadores"],
-    provider_refs: [],
+    countryHint: null,
+    providerRefs: [],
   },
 ];
 
-function normalize(value: string): string {
+export function normalizeCompetitionText(value: string): string {
   return value
     .toLowerCase()
     .normalize("NFD")
@@ -87,42 +98,104 @@ function normalize(value: string): string {
 }
 
 export function getCompetitionDefinition(value: string): CompetitionDefinition | null {
-  const normalized = normalize(value);
+  const normalized = normalizeCompetitionText(value);
   return (
     DEFINITIONS.find(
       (definition) =>
-        normalize(definition.canonical_name) === normalized ||
-        definition.aliases.some((alias) => normalize(alias) === normalized),
+        normalizeCompetitionText(definition.canonicalName) === normalized ||
+        definition.aliases.some((alias) => normalizeCompetitionText(alias) === normalized),
     ) ?? null
   );
 }
 
 export function canonicalizeCompetitionName(value: string): string {
-  return getCompetitionDefinition(value)?.canonical_name ?? value.trim();
+  return getCompetitionDefinition(value)?.canonicalName ?? value.trim();
 }
 
 export function competitionAliases(value: string): readonly string[] {
   const definition = getCompetitionDefinition(value);
   return definition
-    ? Array.from(new Set([definition.canonical_name, ...definition.aliases]))
+    ? Array.from(new Set([definition.canonicalName, ...definition.aliases]))
     : [value.trim()];
 }
 
-export type SeasonTruthStatus =
-  | { executable: true; status: "not_requested"; reason: null }
-  | { executable: false; status: "provider_resolution_required"; reason: string };
+function normalizeSeason(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "").replace("-", "/");
+}
+
+function seasonDateLabel(season: CompetitionSeason): string[] {
+  const startYear = season.startDate.slice(0, 4);
+  const endYear = season.endDate.slice(0, 4);
+  const labels = new Set<string>([season.label, season.seasonId]);
+  if (/^\d{4}$/.test(startYear) && /^\d{4}$/.test(endYear)) {
+    if (startYear === endYear) labels.add(startYear);
+    else {
+      labels.add(`${startYear}/${endYear}`);
+      labels.add(`${startYear}/${endYear.slice(2)}`);
+    }
+  }
+  return [...labels];
+}
 
 /**
- * Phase 5A never turns a season label into dates by heuristic. Any scope.season must first be
- * resolved to a real provider CompetitionSeason (competition id, season id, dates and coverage).
- * Explicit date_from/date_to queries remain available when they are requested without a season.
+ * Resolve only from provider-returned seasons. Dates are used for matching labels, never inferred
+ * from the requested text. In particular, "current" requires provider current=true and
+ * "previous" is defined only relative to that real current season.
  */
+export function selectProviderSeason(
+  seasons: readonly CompetitionSeason[],
+  requested: string,
+): CompetitionSeason | null {
+  const selector = normalizeSeason(requested);
+  if (selector === "current" || selector === "atual") {
+    const current = seasons.filter((season) => season.current);
+    return current.length === 1 ? current[0] : null;
+  }
+
+  if (selector === "previous" || selector === "anterior") {
+    const current = seasons.filter((season) => season.current);
+    if (current.length !== 1) return null;
+    const ordered = [...seasons].sort((left, right) => {
+      const byStart = left.startDate.localeCompare(right.startDate);
+      return byStart || left.seasonId.localeCompare(right.seasonId);
+    });
+    const index = ordered.findIndex(
+      (season) =>
+        season.seasonId === current[0].seasonId &&
+        season.competitionId === current[0].competitionId,
+    );
+    return index > 0 ? ordered[index - 1] : null;
+  }
+
+  const matches = seasons.filter((season) =>
+    seasonDateLabel(season).some((label) => normalizeSeason(label) === selector),
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+
+export type SeasonTruthStatus =
+  | { executable: true; status: "not_requested" | "runtime_provider_resolution"; reason: null }
+  | { executable: false; status: "provider_resolution_required"; reason: string };
+
 export function seasonTruthStatus(query: SemanticQuery): SeasonTruthStatus {
   if (!query.scope.season) return { executable: true, status: "not_requested", reason: null };
+  if (!query.scope.competition) {
+    return {
+      executable: false,
+      status: "provider_resolution_required",
+      reason: `A temporada "${query.scope.season}" exige uma competição explícita para resolver um CompetitionSeason real sem ambiguidade.`,
+    };
+  }
+  if (
+    query.entity.type === "team" &&
+    ["aggregate", "match_list", "head_to_head"].includes(query.query_kind)
+  ) {
+    return { executable: true, status: "runtime_provider_resolution", reason: null };
+  }
   return {
     executable: false,
     status: "provider_resolution_required",
-    reason: `A temporada "${query.scope.season}" foi compreendida, mas ainda exige resolução real de CompetitionSeason no provider (competition id, season id, início, fim e coverage). Nenhuma janela de calendário será inferida; use um intervalo de datas explícito sem season enquanto o resolver provider-backed não estiver conectado.`,
+    reason: `A temporada "${query.scope.season}" foi preservada, mas esse executor ainda não possui resolução provider-backed de CompetitionSeason. Nenhuma janela de calendário será inferida.`,
   };
 }
 

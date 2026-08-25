@@ -14,7 +14,11 @@ export function ProcessingSteps({ className }: { className?: string }) {
   }, []);
 
   return (
-    <div className={cn("surface-card mx-auto w-full max-w-lg p-6", className)} role="status" aria-live="polite">
+    <div
+      className={cn("surface-card mx-auto w-full max-w-lg p-6", className)}
+      role="status"
+      aria-live="polite"
+    >
       <div className="flex items-center gap-2 text-sm font-medium">
         <Loader2 className="size-4 animate-spin text-primary" />
         Processando sua análise
@@ -31,7 +35,11 @@ export function ProcessingSteps({ className }: { className?: string }) {
             <span
               className={cn(
                 "size-1.5 rounded-full",
-                i < step ? "bg-lime" : i === step ? "animate-pulse-soft bg-primary" : "bg-muted-foreground",
+                i < step
+                  ? "bg-lime"
+                  : i === step
+                    ? "animate-pulse-soft bg-primary"
+                    : "bg-muted-foreground",
               )}
             />
             {label}
@@ -56,7 +64,9 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("surface-card flex flex-col items-center px-6 py-12 text-center", className)}>
+    <div
+      className={cn("surface-card flex flex-col items-center px-6 py-12 text-center", className)}
+    >
       <span className="grid size-11 place-items-center rounded-2xl bg-muted text-muted-foreground">
         <SearchX className="size-5" />
       </span>

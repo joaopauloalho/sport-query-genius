@@ -9,8 +9,17 @@ import {
 import type { SemanticPlan, SemanticQuery } from "../analysis/semantic-plan";
 import { seasonTruthStatus } from "./competition-season-registry";
 import { resolveFootballCapability, type CapabilityResolution } from "./capability-registry";
-import { FOOTBALL_METRIC_KEYS, type FootballMetric } from "./metric-catalog";
-import { resolveTeamMetricExecution } from "./team-query-capability";
+import {
+  FOOTBALL_METRIC_KEYS,
+  TEAM_METRIC_KEYS,
+  type FootballMetric,
+  type TeamMetric,
+} from "./metric-catalog";
+import {
+  providersForTeamMetrics,
+  resolveTeamMetricExecution,
+  type TeamMetricExecutionPlan,
+} from "./team-query-capability";
 
 export interface CapabilityCheck {
   name: string;
@@ -35,6 +44,7 @@ const TEAM_FILTERS = new Set<string>(FOOTBALL_FILTER_FIELDS);
 const GROUPS = new Set<string>(FOOTBALL_GROUP_BY_FIELDS);
 const SORTS = new Set<string>(FOOTBALL_SORT_FIELDS);
 const METRICS = new Set<string>(FOOTBALL_METRIC_KEYS);
+const TEAM_METRICS = new Set<string>(TEAM_METRIC_KEYS);
 const RATIO_TEAM_METRICS = new Set<FootballMetric>([
   "wins",
   "draws",
@@ -56,7 +66,7 @@ function failure(
   return {
     supported: false,
     error_code: code,
-    reason,
+    reason: reason,
     checks,
     query_plan: null,
     capability,
@@ -130,6 +140,21 @@ function scopeLossRisk(query: SemanticQuery): string | null {
   return null;
 }
 
+function normalizedProvider(value: string): string {
+  return value === "API_FOOTBALL" ? "API-FOOTBALL" : value;
+}
+
+function teamMetricPlans(queryPlan: QueryPlan): TeamMetricExecutionPlan[] {
+  if (queryPlan.entity.type !== "team") return [];
+  const metrics = new Set<TeamMetric>();
+  if (queryPlan.metric && TEAM_METRICS.has(queryPlan.metric))
+    metrics.add(queryPlan.metric as TeamMetric);
+  for (const filter of queryPlan.filters) {
+    if (TEAM_METRICS.has(filter.field)) metrics.add(filter.field as TeamMetric);
+  }
+  return [...metrics].map(resolveTeamMetricExecution);
+}
+
 export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityNegotiation {
   const checks: CapabilityCheck[] = [];
   if (semantic.preservation_issues.length > 0) {
@@ -184,6 +209,40 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
     );
   }
 
+  const metricPlans = teamMetricPlans(queryPlan);
+  for (const filter of queryPlan.filters) {
+    if (!TEAM_METRICS.has(filter.field)) continue;
+    const filterPlan = resolveTeamMetricExecution(filter.field as TeamMetric);
+    add(
+      checks,
+      `filter_metric_executor:${filter.field}`,
+      filterPlan.kind !== "unsupported",
+      filterPlan.kind === "unsupported" ? filterPlan.reason : null,
+    );
+    if (filterPlan.kind === "unsupported") {
+      return failure(
+        checks,
+        "UNSUPPORTED_FILTER",
+        `O filtro ${filter.field} foi compreendido, mas não pode ser executado sem perda semântica: ${filterPlan.reason}`,
+        capability,
+      );
+    }
+  }
+
+  const rawMetricPlans = metricPlans.filter(
+    (plan): plan is Extract<TeamMetricExecutionPlan, { kind: "raw" }> => plan.kind === "raw",
+  );
+  const requiredRawMetrics = rawMetricPlans.map((plan) => plan.metric);
+  const metricProviders = providersForTeamMetrics(requiredRawMetrics);
+  if (rawMetricPlans.length > 0 && metricProviders.length === 0) {
+    return failure(
+      checks,
+      "UNSUPPORTED_CAPABILITY",
+      "As métricas solicitadas são executáveis isoladamente, mas nenhum provider consegue fornecer todas as famílias necessárias sem descartar filtros.",
+      capability,
+    );
+  }
+
   let executor: string | null = null;
   if (queryPlan.entity.type === "team" && queryPlan.query_kind === "aggregate") {
     if (!queryPlan.metric)
@@ -210,6 +269,26 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
     }
     executor = "team_universal_aggregate";
   } else if (queryPlan.entity.type === "team" && queryPlan.query_kind === "match_list") {
+    if (queryPlan.sort) {
+      return failure(
+        checks,
+        "UNSUPPORTED_CAPABILITY",
+        "sort em match_list foi compreendido, mas ainda não possui executor determinístico; a consulta foi recusada para evitar semantic loss.",
+        capability,
+      );
+    }
+    if (queryPlan.metric) {
+      const metricPlan = resolveTeamMetricExecution(queryPlan.metric);
+      add(
+        checks,
+        "match_list_metric_output",
+        metricPlan.kind !== "unsupported",
+        metricPlan.kind === "unsupported" ? metricPlan.reason : null,
+      );
+      if (metricPlan.kind === "unsupported") {
+        return failure(checks, "UNSUPPORTED_CAPABILITY", metricPlan.reason, capability);
+      }
+    }
     executor = "team_universal_match_list";
   } else if (
     queryPlan.entity.type === "team" &&
@@ -274,22 +353,39 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
   }
 
   add(checks, "deterministic_executor", true);
-  const providers = Array.from(new Set(capability.sources.map((source) => source.provider)));
-  const families = Array.from(new Set(capability.sources.map((source) => source.dataFamily)));
+  const capabilityProviders = Array.from(
+    new Set(capability.sources.map((source) => normalizedProvider(source.provider))),
+  );
+  const providers =
+    rawMetricPlans.length > 0
+      ? metricProviders.filter((provider) => capabilityProviders.includes(provider))
+      : capabilityProviders;
+  const families = new Set<string>(["fixtures"]);
+  const structuralScoreFilters = queryPlan.filters.some((filter) => {
+    if (["outcome", "clean_sheet"].includes(filter.field)) return true;
+    if (!TEAM_METRICS.has(filter.field)) return false;
+    return resolveTeamMetricExecution(filter.field as TeamMetric).kind === "derived";
+  });
+  if (metricPlans.some((plan) => plan.kind === "derived") || structuralScoreFilters) {
+    families.add("fixture_score");
+  }
+  if (rawMetricPlans.length > 0) families.add("fixture_stats");
+  if (queryPlan.scope.season) families.add("league_season");
   add(
     checks,
     "provider_registered",
     providers.length > 0,
-    providers.length ? null : "Nenhum provider registrado.",
+    providers.length ? null : "Nenhum provider registrado para todas as métricas necessárias.",
   );
   if (!providers.length) {
     return failure(
       checks,
       "PROVIDER_UNAVAILABLE",
-      "Nenhum provider registrado para a capability.",
+      "Nenhum provider registrado consegue executar integralmente a consulta.",
       capability,
     );
   }
+  add(checks, "data_family_dedupe", true);
 
   return {
     supported: true,
@@ -299,10 +395,12 @@ export function negotiateFootballCapability(semantic: SemanticPlan): CapabilityN
     query_plan: queryPlan,
     capability,
     providers,
-    data_families: families,
+    data_families: [...families],
     executor,
-    coverage: capability.sources.some((source) => source.conditionalCoverage)
-      ? "runtime"
-      : "not_required",
+    coverage:
+      rawMetricPlans.some((plan) => plan.conditionalCoverage) ||
+      capability.sources.some((source) => source.conditionalCoverage)
+        ? "runtime"
+        : "not_required",
   };
 }

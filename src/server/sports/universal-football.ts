@@ -1,5 +1,7 @@
 import type { FootballEventType, QueryScope } from "../analysis/query-plan";
 import type { ProviderFixture, ResolvedTeam } from "./provider";
+import type { NormalizedTeamFixtureStats } from "./fixture-stats";
+import type { CompetitionSeason } from "./competition-season-registry";
 
 export type UniversalProviderName = "BSD" | "API-FOOTBALL";
 export type UniversalCacheStatus = "hit" | "miss" | "mixed" | "disabled";
@@ -64,6 +66,11 @@ export interface ProviderReadMeta {
   cacheStatus: UniversalCacheStatus;
 }
 
+export interface ProviderFixtureScope extends QueryScope {
+  providerCompetitionId?: string;
+  providerSeasonId?: string;
+}
+
 export interface UniversalFixtureRead {
   fixtures: ProviderFixture[];
   meta: ProviderReadMeta;
@@ -74,15 +81,31 @@ export interface UniversalIncidentRead {
   meta: ProviderReadMeta;
 }
 
+export interface UniversalFixtureStatsRead {
+  snapshot: NormalizedTeamFixtureStats;
+  meta: ProviderReadMeta;
+}
+
+export interface UniversalCompetitionSeasonRead {
+  season: CompetitionSeason;
+  meta: ProviderReadMeta;
+}
+
 export interface UniversalFootballSource {
   readonly name: UniversalProviderName;
   resolveTeam(name: string): Promise<ResolvedTeam>;
-  listTeamFixtures(team: ResolvedTeam, scope: QueryScope): Promise<UniversalFixtureRead>;
+  listTeamFixtures(team: ResolvedTeam, scope: ProviderFixtureScope): Promise<UniversalFixtureRead>;
   getFixtureIncidents(fixture: ProviderFixture): Promise<UniversalIncidentRead>;
   enrichGoalEvents(
     fixture: ProviderFixture,
     incidents: readonly FootballIncident[],
   ): Promise<{ incidents: FootballIncident[]; meta: ProviderReadMeta | null }>;
+  getFixtureStats?(fixture: ProviderFixture, teamId: number): Promise<UniversalFixtureStatsRead>;
+  resolveCompetitionSeason?(
+    competition: string,
+    season: string,
+  ): Promise<UniversalCompetitionSeasonRead>;
+  /** Legacy compatibility for pre-5B test doubles. Production sources use getFixtureStats. */
   getFixtureMetric(
     fixture: ProviderFixture,
     teamId: number,
@@ -165,7 +188,7 @@ function normalize(value: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s_-]/g, " ")
+    .replace(/[^a-z0-9\s_]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

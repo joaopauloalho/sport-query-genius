@@ -1,7 +1,10 @@
 import type { AnalysisOverrides } from "@/lib/analysis-request";
 import type { SportsCacheObserver } from "@/server/sports/cache/cache-observer";
 import { createUniversalFootballSources } from "@/server/sports/universal-provider.server";
-import type { UniversalFootballSource } from "@/server/sports/universal-football";
+import type {
+  UniversalFootballSource,
+  UniversalProviderName,
+} from "@/server/sports/universal-football";
 
 import {
   analyzePhase4cUniversalTeamPlanWithSources,
@@ -66,9 +69,11 @@ export async function analyzePhase4cWithFreshnessFallback(params: {
   overrides?: AnalysisOverrides;
   observer?: SportsCacheObserver;
   sources?: readonly UniversalFootballSource[];
+  allowedProviders?: readonly UniversalProviderName[];
   now?: Date;
 }): Promise<Phase4cTeamResult> {
-  const sources = params.sources ?? createUniversalFootballSources(params.observer);
+  const sources =
+    params.sources ?? createUniversalFootballSources(params.observer, params.allowedProviders);
   const initial = await analyzePhase4cUniversalTeamPlanWithSources({
     question: params.question,
     plan: params.plan,
@@ -149,8 +154,7 @@ export async function analyzePhase4cWithFreshnessFallback(params: {
         newestResultFixtureTimestamp(initial) === null
           ? null
           : new Date(newestResultFixtureTimestamp(initial)!).toISOString(),
-      selected_newest_fixture_at:
-        bestNewest === null ? null : new Date(bestNewest).toISOString(),
+      selected_newest_fixture_at: bestNewest === null ? null : new Date(bestNewest).toISOString(),
     });
   }
 

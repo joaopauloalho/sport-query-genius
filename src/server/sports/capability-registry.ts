@@ -129,7 +129,7 @@ const CAPABILITIES: FootballCapabilityDefinition[] = [
     queryKind: "match_list",
     stage: "implemented",
     cacheFamily: "fixtures",
-    sources: [bsdEvents, apiFixtures],
+    sources: [bsdEvents, bsdStats, apiFixtures, apiStats],
   },
   {
     entityType: "team",
@@ -147,7 +147,9 @@ const CAPABILITIES: FootballCapabilityDefinition[] = [
       source("BSD", "/events/?team_id=… + resolved-opponent filter", "fixtures", {
         conditionalCoverage: false,
       }),
+      bsdStats,
       source("API_FOOTBALL", "/fixtures?team=… + resolved-opponent filter", "fixtures"),
+      apiStats,
     ],
     note: "Phase 4B resolves both teams conservatively, filters fixture history by provider IDs, and calculates H2H deterministically. Dedicated provider H2H endpoints remain an optional future optimization.",
   },
