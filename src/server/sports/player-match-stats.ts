@@ -1,10 +1,10 @@
-import type { ProviderFixture } from "./provider";
 import {
   getFootballMetricDefinition,
   PLAYER_METRIC_KEYS,
   type MetricProvider,
   type PlayerMetricKey,
 } from "./metric-catalog";
+import type { ProviderFixture } from "./provider";
 
 export interface NormalizedPlayerMatchStatValue {
   value: number | null;
@@ -18,7 +18,9 @@ export interface NormalizedPlayerMatchStats {
   fixtureId: number;
   playerId: number;
   teamId: number;
+  teamName: string;
   opponentId: number;
+  opponentName: string;
   competitionId?: string | null;
   competitionName: string;
   seasonId?: string | null;
@@ -53,7 +55,7 @@ const asRecord = (value: unknown): JsonRecord | null =>
     ? (value as JsonRecord)
     : null;
 
-function pathValue(record: JsonRecord, path: string): unknown {
+function at(record: JsonRecord, path: string): unknown {
   let cursor: unknown = record;
   for (const part of path.split(".")) {
     const current = asRecord(cursor);
@@ -63,31 +65,26 @@ function pathValue(record: JsonRecord, path: string): unknown {
   return cursor;
 }
 
-function numeric(value: unknown): number | null {
+function numberValue(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const parsed = Number(trimmed.replace("%", "").trim());
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Number(value.trim().replace("%", ""));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function readFirstNumber(
-  record: JsonRecord,
-  paths: readonly string[],
-): { value: number | null; observed: boolean; rawLabel: string | null } {
+function firstNumber(record: JsonRecord, paths: readonly string[]) {
   for (const path of paths) {
-    const raw = pathValue(record, path);
+    const raw = at(record, path);
     if (raw === undefined || raw === null || raw === "") continue;
-    const value = numeric(raw);
-    if (value !== null) return { value, observed: true, rawLabel: path };
+    const value = numberValue(raw);
+    if (value !== null) return { value, observed: true as const, rawLabel: path };
   }
-  return { value: null, observed: false, rawLabel: null };
+  return { value: null, observed: false as const, rawLabel: null };
 }
 
-function readBoolean(record: JsonRecord, paths: readonly string[]): boolean | null {
+function firstBoolean(record: JsonRecord, paths: readonly string[]): boolean | null {
   for (const path of paths) {
-    const value = pathValue(record, path);
+    const value = at(record, path);
     if (typeof value === "boolean") return value;
     if (value === 1 || value === "1" || value === "true") return true;
     if (value === 0 || value === "0" || value === "false") return false;
@@ -164,36 +161,33 @@ const API_PATHS: Partial<Record<PlayerMetricKey, readonly string[]>> = {
   saves: ["goals.saves"],
 };
 
-function sourceName(provider: MetricProvider): "BSD" | "API-FOOTBALL" {
+function providerName(provider: MetricProvider): "BSD" | "API-FOOTBALL" {
   return provider === "API_FOOTBALL" ? "API-FOOTBALL" : "BSD";
 }
 
-function observedValue(
+function unknown(provider: MetricProvider, metric: PlayerMetricKey): NormalizedPlayerMatchStatValue {
+  return {
+    value: null,
+    observed: false,
+    source: providerName(provider),
+    unit: getFootballMetricDefinition(metric, "player")?.unit ?? "count",
+    rawLabel: null,
+  };
+}
+
+function rawValue(
   provider: MetricProvider,
   metric: PlayerMetricKey,
   record: JsonRecord,
 ): NormalizedPlayerMatchStatValue {
   const paths = provider === "BSD" ? BSD_PATHS[metric] ?? [] : API_PATHS[metric] ?? [];
-  const read = readFirstNumber(record, paths);
+  const read = firstNumber(record, paths);
   return {
     value: read.value,
     observed: read.observed,
-    source: sourceName(provider),
+    source: providerName(provider),
     unit: getFootballMetricDefinition(metric, "player")?.unit ?? "count",
     rawLabel: read.rawLabel,
-  };
-}
-
-function unknownValue(
-  provider: MetricProvider,
-  metric: PlayerMetricKey,
-): NormalizedPlayerMatchStatValue {
-  return {
-    value: null,
-    observed: false,
-    source: sourceName(provider),
-    unit: getFootballMetricDefinition(metric, "player")?.unit ?? "count",
-    rawLabel: null,
   };
 }
 
@@ -201,50 +195,14 @@ export function playerMatchStatValue(
   snapshot: NormalizedPlayerMatchStats,
   metric: PlayerMetricKey,
 ): NormalizedPlayerMatchStatValue {
-  const direct = snapshot.metrics[metric];
-  if (metric === "goal_contributions") {
-    const goals = playerMatchStatValue(snapshot, "goals");
-    const assists = playerMatchStatValue(snapshot, "assists");
-    if (!goals.observed || !assists.observed || goals.value === null || assists.value === null) {
-      return unknownValue(snapshot.provenance.provider === "BSD" ? "BSD" : "API_FOOTBALL", metric);
-    }
-    return {
-      value: goals.value + assists.value,
-      observed: true,
-      source: snapshot.provenance.provider,
-      unit: "count",
-      rawLabel: `${goals.rawLabel ?? "goals"}+${assists.rawLabel ?? "assists"}`,
-    };
-  }
-  if (metric === "cards" && (!direct || !direct.observed)) {
-    const yellow = playerMatchStatValue(snapshot, "yellow_cards");
-    const red = playerMatchStatValue(snapshot, "red_cards");
-    if (!yellow.observed || !red.observed || yellow.value === null || red.value === null) {
-      return unknownValue(snapshot.provenance.provider === "BSD" ? "BSD" : "API_FOOTBALL", metric);
-    }
-    return {
-      value: yellow.value + red.value,
-      observed: true,
-      source: snapshot.provenance.provider,
-      unit: "count",
-      rawLabel: `${yellow.rawLabel ?? "yellow_cards"}+${red.rawLabel ?? "red_cards"}`,
-    };
-  }
-  return direct ?? unknownValue(snapshot.provenance.provider === "BSD" ? "BSD" : "API_FOOTBALL", metric);
+  return snapshot.metrics[metric] ??
+    unknown(snapshot.provenance.provider === "BSD" ? "BSD" : "API_FOOTBALL", metric);
 }
 
-function calculateOutcome(fixture: ProviderFixture, teamId: number): "win" | "draw" | "loss" | null {
-  const isHome = fixture.home.id === teamId;
-  const own = isHome ? fixture.goals.home : fixture.goals.away;
-  const other = isHome ? fixture.goals.away : fixture.goals.home;
-  if (own === null || other === null) return null;
-  return own > other ? "win" : own < other ? "loss" : "draw";
-}
-
-function isParticipated(metrics: Partial<Record<PlayerMetricKey, NormalizedPlayerMatchStatValue>>): boolean {
+function participated(metrics: Partial<Record<PlayerMetricKey, NormalizedPlayerMatchStatValue>>): boolean {
   const minutes = metrics.minutes;
   if (minutes?.observed && minutes.value !== null && minutes.value > 0) return true;
-  const evidence: PlayerMetricKey[] = [
+  return ([
     "goals",
     "assists",
     "shots",
@@ -257,11 +215,18 @@ function isParticipated(metrics: Partial<Record<PlayerMetricKey, NormalizedPlaye
     "red_cards",
     "saves",
     "xg",
-  ];
-  return evidence.some((metric) => {
+  ] as const).some((metric) => {
     const value = metrics[metric];
     return value?.observed === true && value.value !== null && value.value > 0;
   });
+}
+
+function resultOutcome(fixture: ProviderFixture, teamId: number) {
+  const home = fixture.home.id === teamId;
+  const own = home ? fixture.goals.home : fixture.goals.away;
+  const other = home ? fixture.goals.away : fixture.goals.home;
+  if (own === null || other === null) return null;
+  return own > other ? ("win" as const) : own < other ? ("loss" as const) : ("draw" as const);
 }
 
 function buildSnapshot(params: {
@@ -275,30 +240,26 @@ function buildSnapshot(params: {
   started?: boolean | null;
   substitute?: boolean | null;
 }): NormalizedPlayerMatchStats | null {
-  const { fixture, teamId } = params;
-  const isHome = fixture.home.id === teamId;
-  const isAway = fixture.away.id === teamId;
-  if (!isHome && !isAway) return null;
+  const { fixture, teamId, provider, record } = params;
+  const home = fixture.home.id === teamId;
+  if (!home && fixture.away.id !== teamId) return null;
 
-  const supported = PLAYER_METRIC_KEYS.filter((metric) => {
-    const definition = getFootballMetricDefinition(metric, "player");
-    return Boolean(definition?.providers[params.provider]);
-  });
+  const supported = PLAYER_METRIC_KEYS.filter((metric) =>
+    Boolean(getFootballMetricDefinition(metric, "player")?.providers[provider]),
+  );
   const metrics: Partial<Record<PlayerMetricKey, NormalizedPlayerMatchStatValue>> = {};
   for (const metric of supported) {
-    if (metric === "goal_contributions") continue;
-    metrics[metric] = observedValue(params.provider, metric, params.record);
+    if (metric !== "goal_contributions") metrics[metric] = rawValue(provider, metric, record);
   }
 
-  const directCards = metrics.cards;
-  if (!directCards?.observed) {
+  if (!metrics.cards?.observed) {
     const yellow = metrics.yellow_cards;
     const red = metrics.red_cards;
     if (yellow?.observed && red?.observed && yellow.value !== null && red.value !== null) {
       metrics.cards = {
         value: yellow.value + red.value,
         observed: true,
-        source: sourceName(params.provider),
+        source: providerName(provider),
         unit: "count",
         rawLabel: `${yellow.rawLabel ?? "yellow_cards"}+${red.rawLabel ?? "red_cards"}`,
       };
@@ -310,42 +271,44 @@ function buildSnapshot(params: {
     metrics.goal_contributions = {
       value: goals.value + assists.value,
       observed: true,
-      source: sourceName(params.provider),
+      source: providerName(provider),
       unit: "count",
       rawLabel: `${goals.rawLabel ?? "goals"}+${assists.rawLabel ?? "assists"}`,
     };
   }
 
-  const observed = supported.filter((metric) => playerMatchStatValue({ metrics } as NormalizedPlayerMatchStats, metric).observed);
+  const observed = supported.filter((metric) => metrics[metric]?.observed === true);
   const missing = supported.filter((metric) => !observed.includes(metric));
   const rawLabels = observed
     .map((metric) => metrics[metric]?.rawLabel)
     .filter((value): value is string => Boolean(value));
-  const opponent = isHome ? fixture.away : fixture.home;
-  const own = isHome ? fixture.home : fixture.away;
-  const participated = isParticipated(metrics);
+  const own = home ? fixture.home : fixture.away;
+  const opponent = home ? fixture.away : fixture.home;
+  const didParticipate = participated(metrics);
 
   return {
     fixtureId: fixture.id,
     playerId: params.playerId,
     teamId,
+    teamName: own.name,
     opponentId: opponent.id,
+    opponentName: opponent.name,
     competitionId: fixture.competitionId ?? null,
     competitionName: fixture.competition,
     seasonId: fixture.seasonId ?? null,
-    seasonLabel: fixture.seasonLabel ?? null,
+    seasonLabel: fixture.seasonId ?? null,
     date: fixture.date,
     timestamp: fixture.timestamp,
-    venue: isHome ? "home" : "away",
+    venue: home ? "home" : "away",
     result: `${fixture.goals.home ?? "-"}-${fixture.goals.away ?? "-"}`,
-    outcome: calculateOutcome(fixture, own.id),
-    participated,
-    started: participated ? (params.started ?? null) : false,
-    substitute: participated ? (params.substitute ?? null) : false,
+    outcome: resultOutcome(fixture, teamId),
+    participated: didParticipate,
+    started: didParticipate ? (params.started ?? null) : false,
+    substitute: didParticipate ? (params.substitute ?? null) : false,
     metrics,
     coverage: { supported: [...supported], observed, missing },
     provenance: {
-      provider: sourceName(params.provider),
+      provider: providerName(provider),
       rawLabels: [...new Set(rawLabels)],
       fetchedAt: params.fetchedAt,
       endpoint: params.endpoint,
@@ -354,14 +317,34 @@ function buildSnapshot(params: {
   };
 }
 
-function fixtureIdFromBsdRow(row: JsonRecord): number | null {
-  const direct = readFirstNumber(row, ["event_id", "fixture_id", "match_id"]);
-  if (direct.observed) return direct.value;
-  return readFirstNumber(row, ["event.id", "fixture.id", "match.id"]).value;
+function fixtureId(row: JsonRecord): number | null {
+  return firstNumber(row, ["event_id", "fixture_id", "match_id", "event.id", "fixture.id", "match.id"]).value;
 }
 
-function teamIdFromBsdRow(row: JsonRecord): number | null {
-  return readFirstNumber(row, ["team_id", "club_id", "team.id", "club.id"]).value;
+function teamId(row: JsonRecord): number | null {
+  return firstNumber(row, ["team_id", "club_id", "team.id", "club.id"]).value;
+}
+
+export function extractBsdPlayerStatRows(payload: unknown): JsonRecord[] {
+  if (Array.isArray(payload)) return payload.map(asRecord).filter((row): row is JsonRecord => row !== null);
+  const root = asRecord(payload);
+  if (!root) return [];
+  for (const key of ["results", "stats", "items", "matches", "player_stats"]) {
+    if (Array.isArray(root[key])) {
+      return (root[key] as unknown[]).map(asRecord).filter((row): row is JsonRecord => row !== null);
+    }
+  }
+  return [];
+}
+
+export function bsdPlayerStatTeamIds(payload: unknown, fallback?: number | null): number[] {
+  const ids = new Set<number>();
+  if (fallback !== null && fallback !== undefined) ids.add(fallback);
+  for (const row of extractBsdPlayerStatRows(payload)) {
+    const id = teamId(row);
+    if (id !== null) ids.add(id);
+  }
+  return [...ids];
 }
 
 export function normalizeBsdPlayerMatchRows(params: {
@@ -372,26 +355,23 @@ export function normalizeBsdPlayerMatchRows(params: {
   fetchedAt?: string;
 }): NormalizedPlayerMatchStats[] {
   const fixtures = new Map(params.fixtures.map((fixture) => [fixture.id, fixture]));
-  const byFixture = new Map<number, NormalizedPlayerMatchStats>();
-  const fetchedAt = params.fetchedAt ?? new Date().toISOString();
+  const snapshots = new Map<number, NormalizedPlayerMatchStats>();
   for (const row of params.rows) {
-    const fixtureId = fixtureIdFromBsdRow(row);
-    const teamId = teamIdFromBsdRow(row) ?? params.fallbackTeamId ?? null;
-    if (fixtureId === null || teamId === null) continue;
-    const fixture = fixtures.get(fixtureId);
-    if (!fixture) continue;
+    const fixture = fixtures.get(fixtureId(row) ?? -1);
+    const rowTeamId = teamId(row) ?? params.fallbackTeamId ?? null;
+    if (!fixture || rowTeamId === null) continue;
     const snapshot = buildSnapshot({
       provider: "BSD",
       record: asRecord(row.statistics) ?? asRecord(row.stats) ?? row,
       fixture,
       playerId: params.playerId,
-      teamId,
-      fetchedAt,
+      teamId: rowTeamId,
+      fetchedAt: params.fetchedAt ?? new Date().toISOString(),
       endpoint: "/players/{player_id}/stats/",
     });
-    if (snapshot) byFixture.set(snapshot.fixtureId, snapshot);
+    if (snapshot) snapshots.set(snapshot.fixtureId, snapshot);
   }
-  return [...byFixture.values()].sort((a, b) => a.timestamp - b.timestamp);
+  return [...snapshots.values()].sort((a, b) => a.timestamp - b.timestamp);
 }
 
 export function normalizeApiFootballFixturePlayers(params: {
@@ -401,28 +381,27 @@ export function normalizeApiFootballFixturePlayers(params: {
 }): NormalizedPlayerMatchStats[] {
   const root = asRecord(params.payload);
   const response = root && Array.isArray(root.response) ? root.response : [];
-  const fetchedAt = params.fetchedAt ?? new Date().toISOString();
   const snapshots: NormalizedPlayerMatchStats[] = [];
   for (const rawTeam of response) {
     const teamBlock = asRecord(rawTeam);
     const team = teamBlock ? asRecord(teamBlock.team) : null;
-    const teamId = team ? readFirstNumber(team, ["id"]).value : null;
-    if (teamId === null || !Array.isArray(teamBlock?.players)) continue;
+    const teamIdValue = team ? firstNumber(team, ["id"]).value : null;
+    if (teamIdValue === null || !Array.isArray(teamBlock?.players)) continue;
     for (const rawPlayer of teamBlock.players) {
       const playerBlock = asRecord(rawPlayer);
       const player = playerBlock ? asRecord(playerBlock.player) : null;
-      const playerId = player ? readFirstNumber(player, ["id"]).value : null;
+      const playerId = player ? firstNumber(player, ["id"]).value : null;
       const statistics = playerBlock && Array.isArray(playerBlock.statistics) ? playerBlock.statistics : [];
       const stat = asRecord(statistics[0]);
       if (playerId === null || !stat) continue;
-      const substitute = readBoolean(stat, ["games.substitute"]);
+      const substitute = firstBoolean(stat, ["games.substitute"]);
       const snapshot = buildSnapshot({
         provider: "API_FOOTBALL",
         record: stat,
         fixture: params.fixture,
         playerId,
-        teamId,
-        fetchedAt,
+        teamId: teamIdValue,
+        fetchedAt: params.fetchedAt ?? new Date().toISOString(),
         endpoint: "/fixtures/players",
         substitute,
         started: substitute === null ? null : !substitute,
@@ -431,25 +410,4 @@ export function normalizeApiFootballFixturePlayers(params: {
     }
   }
   return snapshots.sort((a, b) => a.playerId - b.playerId);
-}
-
-export function extractBsdPlayerStatRows(payload: unknown): JsonRecord[] {
-  if (Array.isArray(payload)) return payload.map(asRecord).filter((row): row is JsonRecord => row !== null);
-  const root = asRecord(payload);
-  if (!root) return [];
-  for (const key of ["results", "stats", "items", "matches", "player_stats"]) {
-    if (!Array.isArray(root[key])) continue;
-    return (root[key] as unknown[]).map(asRecord).filter((row): row is JsonRecord => row !== null);
-  }
-  return [];
-}
-
-export function bsdPlayerStatTeamIds(payload: unknown, fallback?: number | null): number[] {
-  const ids = new Set<number>();
-  if (fallback !== null && fallback !== undefined) ids.add(fallback);
-  for (const row of extractBsdPlayerStatRows(payload)) {
-    const id = teamIdFromBsdRow(row);
-    if (id !== null) ids.add(id);
-  }
-  return [...ids];
 }
