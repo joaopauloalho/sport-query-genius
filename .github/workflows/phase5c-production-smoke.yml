@@ -1,0 +1,140 @@
+name: Phase 5C Production Smoke
+
+on:
+  push:
+    branches:
+      - ops/phase5c-production-smoke
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout smoke harness branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install isolated Playwright
+        shell: bash
+        run: |
+          mkdir -p /tmp/phase5c-smoke
+          npm install --prefix /tmp/phase5c-smoke --no-save playwright@1.55.0
+          /tmp/phase5c-smoke/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run six authenticated production questions
+        shell: bash
+        env:
+          PROD_URL: https://sport-query-genius.vercel.app
+        run: |
+          cat > /tmp/phase5c-smoke/smoke.cjs <<'NODE'
+          const { chromium } = require('/tmp/phase5c-smoke/node_modules/playwright');
+          const crypto = require('node:crypto');
+
+          const PROD_URL = process.env.PROD_URL;
+          const questions = [
+            'Qual foi a média de passes do Yuri Alberto nos últimos 10 jogos?',
+            'Quantos gols o Yuri Alberto marcou nos últimos 10 jogos?',
+            'Quantas participações em gols o Yuri Alberto teve nos últimos 10 jogos?',
+            'Qual foi a média de passes do Yuri Alberto fora de casa nos últimos 10 jogos?',
+            'Qual foi a média de gols do Yuri Alberto nos jogos em que finalizou pelo menos 4 vezes?',
+            'Liste os últimos 10 jogos do Yuri Alberto mostrando os passes dele.',
+          ];
+
+          const errorTitles = [
+            'Resposta inválida do DeepSeek',
+            'Dados insuficientes',
+            'Jogador não encontrado',
+            'Entidade ambígua',
+            'Pergunta não compreendida',
+            'Métrica não suportada',
+            'Filtro não suportado',
+            'Consulta ainda não suportada',
+            'Limite do provider atingido',
+            'Provider indisponível',
+            'DeepSeek indisponível',
+            'Sessão expirada',
+            'Muitas solicitações',
+            'Limite de uso atingido',
+            'Proteção de uso indisponível',
+            'Não foi possível analisar',
+          ];
+
+          function classify(body) {
+            for (const title of errorTitles) {
+              if (body.includes(title)) return title;
+            }
+            if (body.includes('Dados reais') || body.includes('Fonte') || body.includes('Amostra')) {
+              return 'SUCCESS_RESULT';
+            }
+            return 'RESULT_RENDERED';
+          }
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const context = await browser.newContext({ locale: 'pt-BR' });
+            const page = await context.newPage();
+            const email = `phase5c-closeout-${Date.now()}@example.com`;
+            const password = `P5c!${crypto.randomUUID()}Aa9`;
+            const results = [];
+
+            try {
+              await page.goto(`${PROD_URL}/login`, { waitUntil: 'networkidle', timeout: 60000 });
+              await page.getByRole('button', { name: 'Criar conta' }).click();
+              await page.getByLabel('Nome').fill('Phase5C Production Smoke');
+              await page.getByLabel('E-mail').fill(email);
+              await page.getByLabel('Senha').fill(password);
+              await page.locator('form button[type="submit"]').click();
+
+              await Promise.race([
+                page.waitForURL(/\/app(?:\/|$)/, { timeout: 30000 }),
+                page.getByText(/Confirme seu e-mail/i).waitFor({ state: 'visible', timeout: 30000 }).then(() => {
+                  throw new Error('SIGNUP_REQUIRES_EMAIL_CONFIRMATION');
+                }),
+              ]);
+
+              console.log(`PHASE5C_SMOKE_EMAIL=${email}`);
+
+              for (let i = 0; i < questions.length; i += 1) {
+                const question = questions[i];
+                await page.goto(`${PROD_URL}/app`, { waitUntil: 'networkidle', timeout: 60000 });
+                if (page.url().includes('/login')) throw new Error(`AUTH_LOST_BEFORE_CASE_${i + 1}`);
+
+                const input = page.getByLabel('Pergunta de análise esportiva').first();
+                await input.fill(question);
+                await page.getByRole('button', { name: 'Analisar' }).first().click();
+                await page.waitForURL(/\/app\/resultado/, { timeout: 30000 });
+
+                const processing = page.getByText('Processando sua análise');
+                if (await processing.count()) {
+                  await processing.waitFor({ state: 'hidden', timeout: 90000 });
+                }
+                await page.waitForTimeout(800);
+
+                if (page.url().includes('/login')) throw new Error(`AUTH_LOST_DURING_CASE_${i + 1}`);
+                const body = await page.locator('body').innerText();
+                const classification = classify(body);
+                const invalidDeepSeek = body.includes('Resposta inválida do DeepSeek');
+                const excerpt = body.replace(/\s+/g, ' ').slice(0, 900);
+                results.push({ case: i + 1, question, classification, invalidDeepSeek, excerpt });
+                console.log(`PHASE5C_SMOKE_CASE_${i + 1}=${JSON.stringify(results.at(-1))}`);
+              }
+
+              console.log(`PHASE5C_SMOKE_RESULTS=${JSON.stringify(results)}`);
+              if (results.some((item) => item.invalidDeepSeek)) process.exitCode = 2;
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => {
+            console.error(`PHASE5C_SMOKE_FATAL=${error instanceof Error ? error.message : String(error)}`);
+            process.exitCode = 1;
+          });
+          NODE
+
+          node /tmp/phase5c-smoke/smoke.cjs
