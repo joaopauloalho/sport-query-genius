@@ -78,6 +78,8 @@ jobs:
           src/routes/index.tsx
           tests/genius/benchmark.ts
           tests/genius/truth-gate.test.ts
+          tests/genius/phase5c-benchmark.ts
+          tests/genius/phase5c-truth-gate.test.ts
           tests/phase5b/fixture-stats.test.ts
           tests/phase5b/engine.test.ts
           tests/phase5b/helpers.ts
