@@ -547,14 +547,14 @@ const PLAYER_DEFINITIONS: FootballMetricDefinition[] = [
     providers: playerProviders(["rating"], ["games.rating"]),
   }),
   definition("passes", ["player"], "Passes", ["passes", "passes tentados"], {
-    providers: playerProviders(["passes", "total_passes"], ["passes.total"]),
+    providers: playerProviders(["passes", "total_pass", "total_passes"], ["passes.total"]),
   }),
   definition(
     "accurate_passes",
     ["player"],
     "Passes certos",
     ["passes certos", "passes completos", "passes precisos"],
-    { providers: playerProviders(["accurate_passes"]) },
+    { providers: playerProviders(["accurate_passes", "accurate_pass"]) },
   ),
   definition(
     "pass_accuracy",
@@ -564,16 +564,16 @@ const PLAYER_DEFINITIONS: FootballMetricDefinition[] = [
     { unit: "percentage", providers: playerProviders(["pass_accuracy"], ["passes.accuracy"]) },
   ),
   definition("key_passes", ["player"], "Passes decisivos", ["passes decisivos", "key passes"], {
-    providers: playerProviders(["key_passes"], ["passes.key"]),
+    providers: playerProviders(["key_passes", "key_pass"], ["passes.key"]),
   }),
   definition("crosses", ["player"], "Cruzamentos", ["cruzamentos"], {
-    providers: playerProviders(["crosses"]),
+    providers: playerProviders(["crosses", "total_cross"]),
   }),
   definition("accurate_crosses", ["player"], "Cruzamentos certos", ["cruzamentos certos"], {
-    providers: playerProviders(["accurate_crosses"]),
+    providers: playerProviders(["accurate_crosses", "accurate_cross"]),
   }),
   definition("long_balls", ["player"], "Bolas longas", ["bolas longas", "lancamentos longos"], {
-    providers: playerProviders(["long_balls"]),
+    providers: playerProviders(["long_balls", "total_long_balls"]),
   }),
   definition(
     "accurate_long_balls",
@@ -586,7 +586,7 @@ const PLAYER_DEFINITIONS: FootballMetricDefinition[] = [
     providers: playerProviders(["duels"], ["duels.total"]),
   }),
   definition("duels_won", ["player"], "Duelos ganhos", ["duelos ganhos", "duelos vencidos"], {
-    providers: playerProviders(["duels_won"], ["duels.won"]),
+    providers: playerProviders(["duels_won", "duel_won"], ["duels.won"]),
   }),
   definition("ground_duels", ["player"], "Duelos no chão", ["duelos no chao", "duelos no chão"], {
     providers: playerProviders(["ground_duels"]),
@@ -606,39 +606,39 @@ const PLAYER_DEFINITIONS: FootballMetricDefinition[] = [
     ["player"],
     "Duelos aéreos ganhos",
     ["duelos aereos ganhos", "duelos aéreos ganhos"],
-    { providers: playerProviders(["aerial_duels_won"]) },
+    { providers: playerProviders(["aerial_duels_won", "aerial_won"]) },
   ),
   definition("dribbles", ["player"], "Dribles", ["dribles", "tentativas de drible"], {
-    providers: playerProviders(["dribbles"], ["dribbles.attempts"]),
+    providers: playerProviders(["dribbles", "total_contest"], ["dribbles.attempts"]),
   }),
   definition(
     "successful_dribbles",
     ["player"],
     "Dribles certos",
     ["dribles certos", "dribles completos"],
-    { providers: playerProviders(["successful_dribbles"], ["dribbles.success"]) },
+    { providers: playerProviders(["successful_dribbles", "won_contest"], ["dribbles.success"]) },
   ),
   definition("dispossessed", ["player"], "Perdas de posse", ["perdas de posse", "desarmado"], {
     providers: playerProviders(["dispossessed"]),
   }),
   definition("tackles", ["player"], "Desarmes", ["desarmes", "tackles"], {
-    providers: playerProviders(["tackles"], ["tackles.total"]),
+    providers: playerProviders(["tackles", "total_tackle"], ["tackles.total"]),
   }),
   definition("tackles_won", ["player"], "Desarmes ganhos", ["desarmes certos", "tackles won"], {
-    providers: playerProviders(["tackles_won"]),
+    providers: playerProviders(["tackles_won", "won_tackle"]),
   }),
   definition("interceptions", ["player"], "Interceptações", ["interceptacoes", "interceptações"], {
-    providers: playerProviders(["interceptions"], ["tackles.interceptions"]),
+    providers: playerProviders(["interceptions", "interception"], ["tackles.interceptions"]),
   }),
   definition("clearances", ["player"], "Cortes", ["cortes", "afastamentos", "clearances"], {
-    providers: playerProviders(["clearances"]),
+    providers: playerProviders(["clearances", "total_clearance"]),
   }),
   definition(
     "recoveries",
     ["player"],
     "Recuperações",
     ["recuperacoes", "recuperações", "recuperações de bola"],
-    { providers: playerProviders(["recoveries"]) },
+    { providers: playerProviders(["recoveries", "ball_recovery"]) },
   ),
   definition("fouls", ["player"], "Faltas cometidas", ["faltas cometidas", "faltas"], {
     providers: playerProviders(["fouls", "fouls_committed"], ["fouls.committed"]),
@@ -692,7 +692,7 @@ const PLAYER_DEFINITIONS: FootballMetricDefinition[] = [
     ["player"],
     "Grandes chances perdidas",
     ["grandes chances perdidas"],
-    { providers: playerProviders(["big_chances_missed"]) },
+    { providers: playerProviders(["big_chances_missed", "big_chance_missed"]) },
   ),
   definition("saves", ["player"], "Defesas", ["defesas", "saves"], {
     providers: playerProviders(["saves", "goalkeeper_saves"], ["goals.saves"]),
