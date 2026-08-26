@@ -1,0 +1,184 @@
+name: Phase 5C BSD Contract Patcher V2
+
+on:
+  push:
+    branches:
+      - fix/phase5c-bsd-player-contract
+    paths:
+      - .github/workflows/phase5c-bsd-contract-patch-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Patch BSD v2 player contract and regression
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly 1 match, got {count}")
+              return text.replace(old, new, 1)
+
+          stats_path = Path("src/server/sports/player-match-stats.ts")
+          stats = stats_path.read_text()
+          for old, new, label in [
+              ('blocked_shots: ["blocked_shots", "shots.blocked"],', 'blocked_shots: ["blocked_shots", "blocked_scoring_attempt", "shots.blocked"],', 'blocked_shots'),
+              ('passes: ["passes", "total_passes", "passes.total"],', 'passes: ["passes", "total_pass", "total_passes", "passes.total"],', 'passes'),
+              ('accurate_passes: ["accurate_passes", "passes.accurate"],', 'accurate_passes: ["accurate_passes", "accurate_pass", "passes.accurate"],', 'accurate_passes'),
+              ('key_passes: ["key_passes", "passes.key"],', 'key_passes: ["key_passes", "key_pass", "passes.key"],', 'key_passes'),
+              ('crosses: ["crosses"],', 'crosses: ["crosses", "total_cross"],', 'crosses'),
+              ('accurate_crosses: ["accurate_crosses"],', 'accurate_crosses: ["accurate_crosses", "accurate_cross"],', 'accurate_crosses'),
+              ('long_balls: ["long_balls"],', 'long_balls: ["long_balls", "total_long_balls"],', 'long_balls'),
+              ('duels_won: ["duels_won", "duels.won"],', 'duels_won: ["duels_won", "duel_won", "duels.won"],', 'duels_won'),
+              ('aerial_duels_won: ["aerial_duels_won"],', 'aerial_duels_won: ["aerial_duels_won", "aerial_won"],', 'aerial_duels_won'),
+              ('dribbles: ["dribbles", "dribbles.attempts"],', 'dribbles: ["dribbles", "total_contest", "dribbles.attempts"],', 'dribbles'),
+              ('successful_dribbles: ["successful_dribbles", "dribbles.success"],', 'successful_dribbles: ["successful_dribbles", "won_contest", "dribbles.success"],', 'successful_dribbles'),
+              ('tackles: ["tackles", "tackles.total"],', 'tackles: ["tackles", "total_tackle", "tackles.total"],', 'tackles'),
+              ('tackles_won: ["tackles_won"],', 'tackles_won: ["tackles_won", "won_tackle"],', 'tackles_won'),
+              ('interceptions: ["interceptions", "tackles.interceptions"],', 'interceptions: ["interceptions", "interception", "tackles.interceptions"],', 'interceptions'),
+              ('clearances: ["clearances"],', 'clearances: ["clearances", "total_clearance"],', 'clearances'),
+              ('recoveries: ["recoveries"],', 'recoveries: ["recoveries", "ball_recovery"],', 'recoveries'),
+              ('big_chances_missed: ["big_chances_missed"],', 'big_chances_missed: ["big_chances_missed", "big_chance_missed"],', 'big_chances_missed'),
+          ]:
+              stats = replace_once(stats, old, new, label)
+          stats_path.write_text(stats)
+
+          catalog_path = Path("src/server/sports/metric-catalog.ts")
+          catalog = catalog_path.read_text()
+          for old, new, label in [
+              ('playerProviders(["passes", "total_passes"], ["passes.total"])', 'playerProviders(["passes", "total_pass", "total_passes"], ["passes.total"])', 'catalog passes'),
+              ('playerProviders(["accurate_passes"])', 'playerProviders(["accurate_passes", "accurate_pass"])', 'catalog accurate_passes'),
+              ('playerProviders(["key_passes"], ["passes.key"])', 'playerProviders(["key_passes", "key_pass"], ["passes.key"])', 'catalog key_passes'),
+              ('playerProviders(["crosses"])', 'playerProviders(["crosses", "total_cross"])', 'catalog crosses'),
+              ('playerProviders(["accurate_crosses"])', 'playerProviders(["accurate_crosses", "accurate_cross"])', 'catalog accurate_crosses'),
+              ('playerProviders(["long_balls"])', 'playerProviders(["long_balls", "total_long_balls"])', 'catalog long_balls'),
+              ('playerProviders(["duels_won"], ["duels.won"])', 'playerProviders(["duels_won", "duel_won"], ["duels.won"])', 'catalog duels_won'),
+              ('playerProviders(["aerial_duels_won"])', 'playerProviders(["aerial_duels_won", "aerial_won"])', 'catalog aerial_duels_won'),
+              ('playerProviders(["dribbles"], ["dribbles.attempts"])', 'playerProviders(["dribbles", "total_contest"], ["dribbles.attempts"])', 'catalog dribbles'),
+              ('playerProviders(["successful_dribbles"], ["dribbles.success"])', 'playerProviders(["successful_dribbles", "won_contest"], ["dribbles.success"])', 'catalog successful_dribbles'),
+              ('playerProviders(["tackles"], ["tackles.total"])', 'playerProviders(["tackles", "total_tackle"], ["tackles.total"])', 'catalog tackles'),
+              ('playerProviders(["tackles_won"])', 'playerProviders(["tackles_won", "won_tackle"])', 'catalog tackles_won'),
+              ('playerProviders(["interceptions"], ["tackles.interceptions"])', 'playerProviders(["interceptions", "interception"], ["tackles.interceptions"])', 'catalog interceptions'),
+              ('playerProviders(["clearances"])', 'playerProviders(["clearances", "total_clearance"])', 'catalog clearances'),
+              ('playerProviders(["recoveries"])', 'playerProviders(["recoveries", "ball_recovery"])', 'catalog recoveries'),
+              ('playerProviders(["big_chances_missed"])', 'playerProviders(["big_chances_missed", "big_chance_missed"])', 'catalog big_chances_missed'),
+          ]:
+              catalog = replace_once(catalog, old, new, label)
+          catalog_path.write_text(catalog)
+
+          universal_path = Path("src/server/sports/universal-player.server.ts")
+          universal = universal_path.read_text()
+          universal = replace_once(
+              universal,
+              'const normalizedKey = `player:${player.id}:normalized-v1`;',
+              'const normalizedKey = `player:${player.id}:normalized-v2`;',
+              'normalized cache version',
+          )
+          universal_path.write_text(universal)
+
+          test_path = Path("tests/phase5c/normalization.test.ts")
+          tests = test_path.read_text()
+          marker = '\n});\n\ndescribe("Phase 5C API-Football /fixtures/players contract normalization"'
+          if tests.count(marker) != 1:
+              raise SystemExit(f"test insertion marker: expected 1 match, got {tests.count(marker)}")
+          regression = '''
+
+  test("real BSD v2 top-level player field names remain observed", () => {
+    const [snapshot] = normalizeBsdPlayerMatchRows({
+      playerId: 1146,
+      fixtures: [fixture],
+      rows: [
+        {
+          event_id: 9001,
+          team_id: 167,
+          minutes_played: 88,
+          goals: 0,
+          goal_assist: 0,
+          total_shots: 5,
+          shots_on_target: 2,
+          blocked_scoring_attempt: 1,
+          rating: 6.3,
+          total_pass: 27,
+          accurate_pass: 20,
+          key_pass: 2,
+          total_cross: 3,
+          accurate_cross: 1,
+          total_long_balls: 4,
+          accurate_long_balls: 2,
+          duel_won: 5,
+          aerial_won: 2,
+          total_contest: 3,
+          won_contest: 1,
+          total_tackle: 1,
+          won_tackle: 1,
+          interception: 0,
+          total_clearance: 2,
+          ball_recovery: 4,
+          big_chance_missed: 0,
+        },
+      ],
+    });
+
+    expect(playerMatchStatValue(snapshot, "passes")).toMatchObject({ value: 27, observed: true });
+    expect(playerMatchStatValue(snapshot, "accurate_passes")).toMatchObject({ value: 20, observed: true });
+    expect(playerMatchStatValue(snapshot, "key_passes")).toMatchObject({ value: 2, observed: true });
+    expect(playerMatchStatValue(snapshot, "blocked_shots")).toMatchObject({ value: 1, observed: true });
+    expect(playerMatchStatValue(snapshot, "crosses")).toMatchObject({ value: 3, observed: true });
+    expect(playerMatchStatValue(snapshot, "accurate_crosses")).toMatchObject({ value: 1, observed: true });
+    expect(playerMatchStatValue(snapshot, "long_balls")).toMatchObject({ value: 4, observed: true });
+    expect(playerMatchStatValue(snapshot, "duels_won")).toMatchObject({ value: 5, observed: true });
+    expect(playerMatchStatValue(snapshot, "aerial_duels_won")).toMatchObject({ value: 2, observed: true });
+    expect(playerMatchStatValue(snapshot, "dribbles")).toMatchObject({ value: 3, observed: true });
+    expect(playerMatchStatValue(snapshot, "successful_dribbles")).toMatchObject({ value: 1, observed: true });
+    expect(playerMatchStatValue(snapshot, "tackles")).toMatchObject({ value: 1, observed: true });
+    expect(playerMatchStatValue(snapshot, "tackles_won")).toMatchObject({ value: 1, observed: true });
+    expect(playerMatchStatValue(snapshot, "interceptions")).toMatchObject({ value: 0, observed: true });
+    expect(playerMatchStatValue(snapshot, "clearances")).toMatchObject({ value: 2, observed: true });
+    expect(playerMatchStatValue(snapshot, "recoveries")).toMatchObject({ value: 4, observed: true });
+    expect(playerMatchStatValue(snapshot, "big_chances_missed")).toMatchObject({ value: 0, observed: true });
+  });
+'''
+          tests = tests.replace(marker, regression + marker, 1)
+          test_path.write_text(tests)
+          PY
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun 1.4.0
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Frozen install
+        run: bun install --frozen-lockfile
+
+      - name: Format touched files
+        run: bun x prettier --write src/server/sports/player-match-stats.ts src/server/sports/metric-catalog.ts src/server/sports/universal-player.server.ts tests/phase5c/normalization.test.ts
+
+      - name: Phase 5C focused tests
+        run: bun run test:phase5c
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/server/sports/player-match-stats.ts src/server/sports/metric-catalog.ts src/server/sports/universal-player.server.ts tests/phase5c/normalization.test.ts
+          git commit -m "fix: align BSD v2 player stats contract"
+          git push
