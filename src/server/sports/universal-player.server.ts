@@ -203,7 +203,7 @@ export class BsdUniversalPlayerSource {
   }
 
   async listPlayerSnapshots(player: ResolvedPlayer): Promise<PlayerSnapshotRead> {
-    const normalizedKey = `player:${player.id}:normalized-v1`;
+    const normalizedKey = `player:${player.id}:normalized-v2`;
     const cached = await this.cache?.get<CachedSnapshots>(
       "BSD",
       "player_match_stats",

@@ -122,6 +122,97 @@ describe("Phase 5C BSD player contract normalization", () => {
     });
     expect(snapshot.participated).toBe(false);
   });
+
+  test("real BSD v2 top-level player field names remain observed", () => {
+    const [snapshot] = normalizeBsdPlayerMatchRows({
+      playerId: 1146,
+      fixtures: [fixture],
+      rows: [
+        {
+          event_id: 9001,
+          team_id: 167,
+          minutes_played: 88,
+          goals: 0,
+          goal_assist: 0,
+          total_shots: 5,
+          shots_on_target: 2,
+          blocked_scoring_attempt: 1,
+          rating: 6.3,
+          total_pass: 27,
+          accurate_pass: 20,
+          key_pass: 2,
+          total_cross: 3,
+          accurate_cross: 1,
+          total_long_balls: 4,
+          accurate_long_balls: 2,
+          duel_won: 5,
+          aerial_won: 2,
+          total_contest: 3,
+          won_contest: 1,
+          total_tackle: 1,
+          won_tackle: 1,
+          interception: 0,
+          total_clearance: 2,
+          ball_recovery: 4,
+          big_chance_missed: 0,
+        },
+      ],
+    });
+
+    expect(playerMatchStatValue(snapshot, "passes")).toMatchObject({ value: 27, observed: true });
+    expect(playerMatchStatValue(snapshot, "accurate_passes")).toMatchObject({
+      value: 20,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "key_passes")).toMatchObject({
+      value: 2,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "blocked_shots")).toMatchObject({
+      value: 1,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "crosses")).toMatchObject({ value: 3, observed: true });
+    expect(playerMatchStatValue(snapshot, "accurate_crosses")).toMatchObject({
+      value: 1,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "long_balls")).toMatchObject({
+      value: 4,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "duels_won")).toMatchObject({ value: 5, observed: true });
+    expect(playerMatchStatValue(snapshot, "aerial_duels_won")).toMatchObject({
+      value: 2,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "dribbles")).toMatchObject({ value: 3, observed: true });
+    expect(playerMatchStatValue(snapshot, "successful_dribbles")).toMatchObject({
+      value: 1,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "tackles")).toMatchObject({ value: 1, observed: true });
+    expect(playerMatchStatValue(snapshot, "tackles_won")).toMatchObject({
+      value: 1,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "interceptions")).toMatchObject({
+      value: 0,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "clearances")).toMatchObject({
+      value: 2,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "recoveries")).toMatchObject({
+      value: 4,
+      observed: true,
+    });
+    expect(playerMatchStatValue(snapshot, "big_chances_missed")).toMatchObject({
+      value: 0,
+      observed: true,
+    });
+  });
 });
 
 describe("Phase 5C API-Football /fixtures/players contract normalization", () => {
